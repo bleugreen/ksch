@@ -23,3 +23,4 @@ def test_compile_writes_project(tmp_path: Path) -> None:
     assert result.exit_code == 0
     assert (tmp_path / "demo.kicad_pro").exists()
     assert (tmp_path / "demo.kicad_sch").exists()
+    assert (tmp_path / "sym-lib-table").exists()

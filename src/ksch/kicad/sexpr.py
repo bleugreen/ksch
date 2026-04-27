@@ -1,9 +1,9 @@
 from pathlib import Path
 from typing import Any
 
-from sexpdata import Symbol, loads  # type: ignore[import-untyped]
+from sexpdata import Symbol, dumps, loads  # type: ignore[import-untyped]
 
-Sexpr = list[Any] | str | int | float | Symbol
+type Sexpr = list[Any] | str | int | float | Symbol
 
 
 def load_sexpr_file(path: Path) -> list[Any]:
@@ -17,3 +17,7 @@ def atom(value: Any) -> str:
     if isinstance(value, Symbol):
         return str(value.value())
     return str(value)
+
+
+def dump_sexpr(value: Sexpr) -> str:
+    return str(dumps(value))

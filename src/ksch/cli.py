@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from rich.console import Console
 
 from ksch import __version__
-from ksch.authoring import load_symbol_libraries, symbol_info_lines
+from ksch.authoring import index_symbol_libraries, load_symbol_libraries, symbol_info_lines
 from ksch.emit import write_project
 from ksch.errors import KschError
 from ksch.expand import load_project_ir
@@ -53,9 +53,14 @@ def _load_and_validate_project(path: Path) -> None:
 
 def _compile_project(path: Path, out: Path, symbol_library: list[str]) -> None:
     project = load_project_ir(path)
-    symbols = load_symbol_libraries(symbol_library)
+    indexes = index_symbol_libraries(symbol_library)
+    symbols = {}
+    symbol_libraries = {}
+    for nickname, index in indexes.items():
+        symbols.update(index.symbols)
+        symbol_libraries[nickname] = index.path
     resolved = resolve_project(project, LibraryContext(symbols=symbols, footprints={}))
-    write_project(resolved, out)
+    write_project(resolved, out, symbol_libraries=symbol_libraries)
 
 
 @app.callback(invoke_without_command=True)

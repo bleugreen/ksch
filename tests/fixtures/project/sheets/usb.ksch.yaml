@@ -14,3 +14,6 @@ nets:
     - U2.VBUS_DET
   USB_UP_DP:
     - U2.USBDP_UP
+no_connects:
+  - U2.USBDM_UP
+  - U2.GND/all

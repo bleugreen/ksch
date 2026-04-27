@@ -19,6 +19,7 @@ class SymbolInfo:
     name: str
     footprint: str | None
     pins: list[SymbolPin] = field(default_factory=list)
+    definition: list[Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -90,5 +91,6 @@ def index_symbol_library(nickname: str, path: Path) -> SymbolLibraryIndex:
             name=name,
             footprint=_property_value(item, "Footprint"),
             pins=_collect_pins(item),
+            definition=item,
         )
     return SymbolLibraryIndex(nickname=nickname, path=path, symbols=symbols)

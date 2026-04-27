@@ -29,6 +29,7 @@ def test_write_project_emits_kicad_required_symbol_sections(tmp_path: Path) -> N
     write_project(_resolved(), tmp_path)
     schematic = (tmp_path / "demo.kicad_sch").read_text()
 
+    assert "(lib_symbols\n    (symbol \"Test:USB_C\"" in schematic
     assert "(lib_id \"Test:USB_C\")" in schematic
     assert "(pin \"A6\"" in schematic
     assert "(instances" in schematic
@@ -42,3 +43,24 @@ def test_write_project_emits_sheet_pins_and_sheet_instances(tmp_path: Path) -> N
     assert "(pin \"VBUS\" passive" in schematic
     assert "(pin \"USB_UP_DP\" bidirectional" in schematic
     assert "(sheet_instances" in schematic
+
+
+def test_write_project_emits_visible_net_labels_and_wires(tmp_path: Path) -> None:
+    write_project(_resolved(), tmp_path)
+    root = (tmp_path / "demo.kicad_sch").read_text()
+    child = (tmp_path / "sheets" / "usb.kicad_sch").read_text()
+
+    assert "(wire" in root
+    assert "(label \"+5V\"" in root
+    assert "(label \"USB_UP_DP\"" in root
+    assert "(hierarchical_label \"VBUS\"" in child
+    assert "(label \"VBUS\"" in child
+
+
+def test_write_project_emits_no_connect_markers(tmp_path: Path) -> None:
+    write_project(_resolved(), tmp_path)
+    root = (tmp_path / "demo.kicad_sch").read_text()
+    child = (tmp_path / "sheets" / "usb.kicad_sch").read_text()
+
+    assert root.count("(no_connect") == 2
+    assert child.count("(no_connect") == 3
