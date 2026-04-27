@@ -2,7 +2,7 @@
 
 Canonical, text-first schematic authoring for KiCad.
 
-This project is an idea-stage design for a compiler-oriented KiCad workflow. The goal is to make the schematic's durable source of truth a structured text schema that defines symbols, pins, nets, fields, footprints, no-connects, and sheet grouping. KiCad `.kicad_sch` files become generated artifacts.
+This project is a compiler-oriented KiCad workflow. The goal is to make the schematic's durable source of truth a structured text schema that defines symbols, pins, nets, fields, footprints, no-connects, interfaces, and sheet hierarchy. KiCad `.kicad_sch` files are generated artifacts.
 
 ## Core Decision
 
@@ -18,6 +18,13 @@ That means:
 - Verification compares schema intent against generated KiCad output through netlist export, ERC, and assertions.
 
 The project is not intended to be just an MCP server. It should have a core compiler and CLI that work without an agent session. MCP is an adapter for agent-assisted authoring.
+
+## Current Docs
+
+- [Schema v1](docs/schema-v1.md)
+- [CLI](docs/cli.md)
+- [Compiler design spec](docs/superpowers/specs/2026-04-27-kicad-schema-compiler-design.md)
+- [Implementation plan](docs/superpowers/plans/2026-04-27-kicad-schema-compiler.md)
 
 ## What The Schema Should Be
 
@@ -233,17 +240,10 @@ Observed files:
 
 One caution: the current working tree appears mid-edit, and `server.py` contains an invalid split assignment around datasheet field extraction. That should be fixed in `kicad-mcp` before reusing it directly.
 
-## First Implementation Target
+## Current Implementation Plan
 
-The smallest valuable prototype is not a full schematic generator.
+The project design is captured in
+[`docs/superpowers/specs/2026-04-27-kicad-schema-compiler-design.md`](docs/superpowers/specs/2026-04-27-kicad-schema-compiler-design.md).
 
-Build this first:
-
-1. Project/global KiCad symbol and footprint indexer.
-2. CLI lookup commands for symbols, footprints, pins, and pads.
-3. Minimal canonical schema parser for symbols and nets.
-4. Endpoint resolver with useful errors.
-5. Netlist-intent verifier against a generated or existing KiCad netlist.
-
-That gives the agent enough grounding to stop guessing symbol names and pins. The layout solver can follow after the authoring oracle and resolver are solid.
-
+Implementation is tracked in
+[`docs/superpowers/plans/2026-04-27-kicad-schema-compiler.md`](docs/superpowers/plans/2026-04-27-kicad-schema-compiler.md).
