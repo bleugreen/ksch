@@ -20,6 +20,7 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 symbol_app = typer.Typer(help="Inspect KiCad symbol libraries.", no_args_is_help=True)
+symbols_app = typer.Typer(help="Search KiCad symbol libraries.", no_args_is_help=True)
 console = Console()
 err_console = Console(stderr=True)
 
@@ -155,6 +156,51 @@ def compile_command(
     console.print(f"wrote {out}")
 
 
+@symbols_app.command("search")
+def symbols_search(
+    query: Annotated[str, typer.Argument(help="Case-insensitive symbol search query.")],
+    library: Annotated[
+        list[str] | None,
+        typer.Option("--library", "-L", help="Symbol library as NICKNAME=PATH."),
+    ] = None,
+) -> None:
+    """Search indexed symbols by library id."""
+    try:
+        symbols = _load_symbol_libraries(library or [])
+    except (KschError, OSError) as exc:
+        _exit_error(_format_error(exc))
+
+    query_lower = query.lower()
+    for lib_id in sorted(symbols):
+        if query_lower in lib_id.lower():
+            console.print(lib_id)
+
+
+@app.command("pin-search")
+def pin_search(
+    symbol_id: Annotated[str, typer.Argument(help="Symbol library id, such as Device:R.")],
+    query: Annotated[str, typer.Argument(help="Case-insensitive pin name or number query.")],
+    library: Annotated[
+        list[str] | None,
+        typer.Option("--library", "-L", help="Symbol library as NICKNAME=PATH."),
+    ] = None,
+) -> None:
+    """Search pins on one symbol."""
+    try:
+        symbols = _load_symbol_libraries(library or [])
+    except (KschError, OSError) as exc:
+        _exit_error(_format_error(exc))
+
+    symbol = symbols.get(symbol_id)
+    if symbol is None:
+        _exit_error(f"symbol '{symbol_id}' not found")
+
+    query_lower = query.lower()
+    for pin in symbol.pins:
+        if query_lower in pin.name.lower() or query_lower in pin.number.lower():
+            console.print(f"{pin.name}@{pin.number} {pin.electrical_type}")
+
+
 @symbol_app.command("info")
 def symbol_info(
     lib_id: Annotated[str, typer.Argument(help="Symbol library id, such as Device:R.")],
@@ -187,3 +233,4 @@ def symbol_info(
 
 
 app.add_typer(symbol_app, name="symbol")
+app.add_typer(symbols_app, name="symbols")
