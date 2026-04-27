@@ -39,6 +39,7 @@
 **Files:**
 - Create: `pyproject.toml`
 - Create: `src/ksch/__init__.py`
+- Create: `src/ksch/cli.py`
 - Create: `tests/test_package.py`
 
 - [ ] **Step 1: Write failing package smoke test**
@@ -46,12 +47,40 @@
 Create `tests/test_package.py`:
 
 ```python
+import tomllib
+from pathlib import Path
+
+from typer.testing import CliRunner
+
 import ksch
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+runner = CliRunner()
+
+
 def test_package_exports_version() -> None:
-    assert isinstance(ksch.__version__, str)
-    assert ksch.__version__
+    metadata = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text())
+
+    assert ksch.__version__ == metadata["project"]["version"]
+
+
+def test_cli_reports_version() -> None:
+    from ksch.cli import app
+
+    result = runner.invoke(app, ["--version"])
+
+    assert result.exit_code == 0
+    assert result.output.strip() == f"ksch {ksch.__version__}"
+
+
+def test_cli_help_is_available() -> None:
+    from ksch.cli import app
+
+    result = runner.invoke(app, ["--help"])
+
+    assert result.exit_code == 0
+    assert "Usage" in result.output
 ```
 
 - [ ] **Step 2: Run smoke test to verify it fails**
@@ -60,7 +89,7 @@ Run: `uv run pytest tests/test_package.py -v`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'ksch'`.
 
-- [ ] **Step 3: Create package metadata and version export**
+- [ ] **Step 3: Create package metadata, version export, and CLI stub**
 
 Create `pyproject.toml`:
 
@@ -129,6 +158,44 @@ Create `src/ksch/__init__.py`:
 __version__ = "0.1.0"
 ```
 
+Create `src/ksch/cli.py`:
+
+```python
+from typing import Annotated
+
+import typer
+
+from ksch import __version__
+
+
+app = typer.Typer(
+    add_completion=False,
+    help="Canonical text-first schematic compiler for KiCad.",
+    no_args_is_help=True,
+)
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"ksch {__version__}")
+        raise typer.Exit()
+
+
+@app.callback(invoke_without_command=True)
+def main(
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            callback=_version_callback,
+            help="Show the version and exit.",
+            is_eager=True,
+        ),
+    ] = False,
+) -> None:
+    """Canonical text-first schematic compiler for KiCad."""
+```
+
 - [ ] **Step 4: Run smoke test to verify it passes**
 
 Run: `uv run pytest tests/test_package.py -v`
@@ -138,7 +205,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit scaffold**
 
 ```bash
-git add pyproject.toml src/ksch/__init__.py tests/test_package.py
+git add pyproject.toml src/ksch/__init__.py src/ksch/cli.py tests/test_package.py
 git commit -m "feat: scaffold kicad-schema package"
 ```
 
@@ -1860,7 +1927,7 @@ git commit -m "feat: compare schema intent to netlist"
 ## Task 11: CLI Commands
 
 **Files:**
-- Create: `src/ksch/cli.py`
+- Modify: `src/ksch/cli.py`
 - Create: `tests/test_cli.py`
 
 - [ ] **Step 1: Write failing CLI tests**
@@ -1908,11 +1975,11 @@ def test_cli_symbol_info_uses_fixture_library() -> None:
 
 Run: `uv run pytest tests/test_cli.py -v`
 
-Expected: FAIL with missing `ksch.cli`.
+Expected: FAIL with missing `validate`, `expand`, and `symbol info` CLI commands.
 
 - [ ] **Step 3: Implement CLI surface**
 
-Create `src/ksch/cli.py`:
+Modify `src/ksch/cli.py`:
 
 ```python
 from pathlib import Path
