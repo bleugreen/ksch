@@ -35,6 +35,7 @@ class ResolvedSheet:
 class ResolvedProject:
     name: str
     source: ProjectIR
+    symbol_library: dict[str, SymbolInfo] = field(default_factory=dict)
     sheets: dict[str, ResolvedSheet] = field(default_factory=dict)
 
 
@@ -79,7 +80,7 @@ def _resolve_symbol_pin(
 
 
 def resolve_project(project: ProjectIR, libraries: LibraryContext) -> ResolvedProject:
-    resolved = ResolvedProject(name=project.name, source=project)
+    resolved = ResolvedProject(name=project.name, source=project, symbol_library=libraries.symbols)
     for sheet_path, sheet in project.sheets.items():
         resolved_sheet = ResolvedSheet(path=sheet_path)
         for net_name, endpoint_texts in sheet.nets.items():

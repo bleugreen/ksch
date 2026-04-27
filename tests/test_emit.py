@@ -23,3 +23,22 @@ def test_write_project_creates_schematic_files(tmp_path: Path) -> None:
     assert (tmp_path / "demo.kicad_sch").exists()
     assert (tmp_path / "sheets" / "usb.kicad_sch").exists()
     assert "(generator \"kicad-schema\")" in (tmp_path / "demo.kicad_sch").read_text()
+
+
+def test_write_project_emits_kicad_required_symbol_sections(tmp_path: Path) -> None:
+    write_project(_resolved(), tmp_path)
+    schematic = (tmp_path / "demo.kicad_sch").read_text()
+
+    assert "(lib_id \"Test:USB_C\")" in schematic
+    assert "(pin \"A6\"" in schematic
+    assert "(instances" in schematic
+    assert "(reference \"J1\")" in schematic
+
+
+def test_write_project_emits_sheet_pins_and_sheet_instances(tmp_path: Path) -> None:
+    write_project(_resolved(), tmp_path)
+    schematic = (tmp_path / "demo.kicad_sch").read_text()
+
+    assert "(pin \"VBUS\" passive" in schematic
+    assert "(pin \"USB_UP_DP\" bidirectional" in schematic
+    assert "(sheet_instances" in schematic
