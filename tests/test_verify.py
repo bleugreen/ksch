@@ -1,6 +1,8 @@
+from pathlib import Path
+
 from ksch.model.endpoint import EndpointKind
 from ksch.resolver import ResolvedEndpoint, ResolvedProject, ResolvedSheet
-from ksch.verify import NetlistNet, compare_connectivity
+from ksch.verify import NetlistNet, compare_connectivity, compare_dirs
 
 
 def test_compare_connectivity_reports_missing_pin() -> None:
@@ -44,3 +46,22 @@ def test_compare_connectivity_accepts_matching_pin() -> None:
     )
     exported = {"USB_DP": NetlistNet(name="USB_DP", connections={("J1", "A6")})}
     assert compare_connectivity(project, exported) == []
+
+
+def test_compare_dirs_reports_missing_unexpected_and_different_files(tmp_path: Path) -> None:
+    expected = tmp_path / "expected"
+    actual = tmp_path / "actual"
+    (expected / "sheets").mkdir(parents=True)
+    (actual / "sheets").mkdir(parents=True)
+    (expected / "same.txt").write_text("same", encoding="utf-8")
+    (actual / "same.txt").write_text("same", encoding="utf-8")
+    (expected / "missing.txt").write_text("missing", encoding="utf-8")
+    (actual / "unexpected.txt").write_text("unexpected", encoding="utf-8")
+    (expected / "sheets" / "changed.txt").write_text("before", encoding="utf-8")
+    (actual / "sheets" / "changed.txt").write_text("after", encoding="utf-8")
+
+    assert compare_dirs(expected, actual) == [
+        "missing generated file missing.txt",
+        "unexpected generated file unexpected.txt",
+        "generated file differs sheets/changed.txt",
+    ]

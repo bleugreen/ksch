@@ -1,3 +1,4 @@
+import tempfile
 from pathlib import Path
 from typing import Annotated, NoReturn
 
@@ -13,6 +14,7 @@ from ksch.expand import load_project_ir
 from ksch.resolver import LibraryContext, resolve_project
 from ksch.schema.formatter import format_schema_text
 from ksch.schema.loader import load_yaml_file
+from ksch.verify import compare_dirs
 
 app = typer.Typer(
     add_completion=False,
@@ -47,6 +49,13 @@ def _format_error(exc: Exception) -> str:
 def _load_and_validate_project(path: Path) -> None:
     load_yaml_file(path)
     load_project_ir(path)
+
+
+def _compile_project(path: Path, out: Path, symbol_library: list[str]) -> None:
+    project = load_project_ir(path)
+    symbols = load_symbol_libraries(symbol_library)
+    resolved = resolve_project(project, LibraryContext(symbols=symbols, footprints={}))
+    write_project(resolved, out)
 
 
 @app.callback(invoke_without_command=True)
@@ -124,14 +133,36 @@ def compile_command(
 ) -> None:
     """Compile a schema project into KiCad project files."""
     try:
-        project = load_project_ir(path)
-        symbols = load_symbol_libraries(symbol_library or [])
-        resolved = resolve_project(project, LibraryContext(symbols=symbols, footprints={}))
-        write_project(resolved, out)
+        _compile_project(path, out, symbol_library or [])
     except (KschError, ValidationError, ValueError, OSError) as exc:
         _exit_error(_format_error(exc))
 
     console.print(f"wrote {out}")
+
+
+@app.command("check")
+def check_command(
+    path: Annotated[Path, typer.Argument(help="Root .ksch.yaml project file.")],
+    out: Annotated[Path, typer.Option("--out", help="Generated KiCad project directory.")],
+    symbol_library: Annotated[
+        list[str] | None,
+        typer.Option("--symbol-library", help="Symbol library as NICKNAME=PATH."),
+    ] = None,
+) -> None:
+    """Regenerate a project and report drift from an output directory."""
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        try:
+            _compile_project(path, tmp_path, symbol_library or [])
+            findings = compare_dirs(tmp_path, out)
+        except (KschError, ValidationError, ValueError, OSError) as exc:
+            _exit_error(_format_error(exc))
+
+    if findings:
+        for finding in findings:
+            console.print(finding)
+        raise typer.Exit(1)
+    console.print("generated output matches schema")
 
 
 @symbols_app.command("search")

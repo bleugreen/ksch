@@ -1,5 +1,6 @@
 import subprocess
 from dataclasses import dataclass
+from filecmp import dircmp
 from pathlib import Path
 
 from ksch.model.endpoint import EndpointKind
@@ -24,6 +25,24 @@ def compare_connectivity(project: ResolvedProject, exported: dict[str, NetlistNe
                 expected = (endpoint.ref or "", endpoint.pin_number or "")
                 if expected not in exported_connections:
                     findings.append(f"{net_name} missing {expected[0]}.{expected[1]}")
+    return findings
+
+
+def compare_dirs(expected: Path, actual: Path) -> list[str]:
+    comparison = dircmp(expected, actual)
+    findings: list[str] = []
+
+    def walk(cmp: dircmp, prefix: Path) -> None:
+        for name in cmp.left_only:
+            findings.append(f"missing generated file {(prefix / name).as_posix()}")
+        for name in cmp.right_only:
+            findings.append(f"unexpected generated file {(prefix / name).as_posix()}")
+        for name in cmp.diff_files:
+            findings.append(f"generated file differs {(prefix / name).as_posix()}")
+        for name, child in cmp.subdirs.items():
+            walk(child, prefix / name)
+
+    walk(comparison, Path("."))
     return findings
 
 
