@@ -6,9 +6,11 @@ from pydantic import ValidationError
 from rich.console import Console
 
 from ksch import __version__
+from ksch.emit import write_project
 from ksch.errors import KschError
 from ksch.expand import load_project_ir
-from ksch.kicad.symbols import SymbolLibraryIndex, index_symbol_library
+from ksch.kicad.symbols import SymbolInfo, SymbolLibraryIndex, index_symbol_library
+from ksch.resolver import LibraryContext, resolve_project
 from ksch.schema.formatter import format_schema_text
 from ksch.schema.loader import load_yaml_file
 
@@ -59,6 +61,13 @@ def _index_libraries(library_specs: list[str]) -> dict[str, SymbolLibraryIndex]:
         nickname, path = _parse_library(spec)
         indexes[nickname] = index_symbol_library(nickname, path)
     return indexes
+
+
+def _load_symbol_libraries(library_specs: list[str]) -> dict[str, SymbolInfo]:
+    symbols: dict[str, SymbolInfo] = {}
+    for index in _index_libraries(library_specs).values():
+        symbols.update(index.symbols)
+    return symbols
 
 
 @app.callback(invoke_without_command=True)
@@ -123,6 +132,27 @@ def expand(path: Annotated[Path, typer.Argument(help="Root .ksch.yaml project fi
 
     for sheet_path in sorted(project.sheets):
         console.print(sheet_path)
+
+
+@app.command("compile")
+def compile_command(
+    path: Annotated[Path, typer.Argument(help="Root .ksch.yaml project file.")],
+    out: Annotated[Path, typer.Option("--out", help="Output KiCad project directory.")],
+    symbol_library: Annotated[
+        list[str] | None,
+        typer.Option("--symbol-library", help="Symbol library as NICKNAME=PATH."),
+    ] = None,
+) -> None:
+    """Compile a schema project into KiCad project files."""
+    try:
+        project = load_project_ir(path)
+        symbols = _load_symbol_libraries(symbol_library or [])
+        resolved = resolve_project(project, LibraryContext(symbols=symbols, footprints={}))
+        write_project(resolved, out)
+    except (KschError, ValidationError, ValueError, OSError) as exc:
+        _exit_error(_format_error(exc))
+
+    console.print(f"wrote {out}")
 
 
 @symbol_app.command("info")
