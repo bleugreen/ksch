@@ -2,6 +2,7 @@ import json
 import uuid
 from pathlib import Path
 
+from ksch.layout import layout_sheet_symbols
 from ksch.resolver import ResolvedProject
 
 UUID_NAMESPACE = uuid.UUID("7d91d76e-4e61-4c8c-a1b7-4a5f2d7d6f4b")
@@ -40,18 +41,22 @@ def _schematic_text(project: ResolvedProject, sheet_path: str) -> str:
         "  (paper \"A4\")",
         "  (lib_symbols)",
     ]
+    positions = layout_sheet_symbols(list(sheet.symbols))
     for ref, symbol in sorted(sheet.symbols.items()):
+        position = positions[ref]
+        x = position.x
+        y = position.y
         lines.extend(
             [
                 f"  (symbol \"{symbol.lib}\"",
-                "    (at 50 50 0)",
+                f"    (at {x} {y} 0)",
                 "    (unit 1)",
                 "    (in_bom yes)",
                 "    (on_board yes)",
                 f"    (uuid {stable_uuid(sheet_path + '/' + ref)})",
-                f"    (property \"Reference\" \"{ref}\" (at 50 47.46 0))",
-                f"    (property \"Value\" \"{symbol.value or ref}\" (at 50 52.54 0))",
-                f"    (property \"Footprint\" \"{symbol.footprint or ''}\" (at 50 55.08 0))",
+                f"    (property \"Reference\" \"{ref}\" (at {x} {y - 2.54} 0))",
+                f"    (property \"Value\" \"{symbol.value or ref}\" (at {x} {y + 2.54} 0))",
+                f"    (property \"Footprint\" \"{symbol.footprint or ''}\" (at {x} {y + 5.08} 0))",
                 "  )",
             ]
         )
