@@ -6,10 +6,10 @@ from pydantic import ValidationError
 from rich.console import Console
 
 from ksch import __version__
+from ksch.authoring import load_symbol_libraries, symbol_info_lines
 from ksch.emit import write_project
 from ksch.errors import KschError
 from ksch.expand import load_project_ir
-from ksch.kicad.symbols import SymbolInfo, SymbolLibraryIndex, index_symbol_library
 from ksch.resolver import LibraryContext, resolve_project
 from ksch.schema.formatter import format_schema_text
 from ksch.schema.loader import load_yaml_file
@@ -47,28 +47,6 @@ def _format_error(exc: Exception) -> str:
 def _load_and_validate_project(path: Path) -> None:
     load_yaml_file(path)
     load_project_ir(path)
-
-
-def _parse_library(value: str) -> tuple[str, Path]:
-    nickname, separator, path_text = value.partition("=")
-    if not separator or not nickname or not path_text:
-        raise typer.BadParameter("expected NICKNAME=PATH")
-    return nickname, Path(path_text)
-
-
-def _index_libraries(library_specs: list[str]) -> dict[str, SymbolLibraryIndex]:
-    indexes: dict[str, SymbolLibraryIndex] = {}
-    for spec in library_specs:
-        nickname, path = _parse_library(spec)
-        indexes[nickname] = index_symbol_library(nickname, path)
-    return indexes
-
-
-def _load_symbol_libraries(library_specs: list[str]) -> dict[str, SymbolInfo]:
-    symbols: dict[str, SymbolInfo] = {}
-    for index in _index_libraries(library_specs).values():
-        symbols.update(index.symbols)
-    return symbols
 
 
 @app.callback(invoke_without_command=True)
@@ -147,7 +125,7 @@ def compile_command(
     """Compile a schema project into KiCad project files."""
     try:
         project = load_project_ir(path)
-        symbols = _load_symbol_libraries(symbol_library or [])
+        symbols = load_symbol_libraries(symbol_library or [])
         resolved = resolve_project(project, LibraryContext(symbols=symbols, footprints={}))
         write_project(resolved, out)
     except (KschError, ValidationError, ValueError, OSError) as exc:
@@ -166,8 +144,8 @@ def symbols_search(
 ) -> None:
     """Search indexed symbols by library id."""
     try:
-        symbols = _load_symbol_libraries(library or [])
-    except (KschError, OSError) as exc:
+        symbols = load_symbol_libraries(library or [])
+    except (KschError, OSError, ValueError) as exc:
         _exit_error(_format_error(exc))
 
     query_lower = query.lower()
@@ -187,8 +165,8 @@ def pin_search(
 ) -> None:
     """Search pins on one symbol."""
     try:
-        symbols = _load_symbol_libraries(library or [])
-    except (KschError, OSError) as exc:
+        symbols = load_symbol_libraries(library or [])
+    except (KschError, OSError, ValueError) as exc:
         _exit_error(_format_error(exc))
 
     symbol = symbols.get(symbol_id)
@@ -211,25 +189,22 @@ def symbol_info(
 ) -> None:
     """Print indexed symbol information."""
     try:
-        indexes = _index_libraries(library or [])
-    except (KschError, OSError) as exc:
+        symbols = load_symbol_libraries(library or [])
+    except (KschError, OSError, ValueError) as exc:
         _exit_error(_format_error(exc))
 
     nickname, separator, _symbol_name = lib_id.partition(":")
     if not separator:
         _exit_error("symbol id must use NICKNAME:SYMBOL")
-    if nickname not in indexes:
+    if not any(symbol_id.startswith(f"{nickname}:") for symbol_id in symbols):
         _exit_error(f"library '{nickname}' was not provided")
 
-    symbol = indexes[nickname].symbols.get(lib_id)
+    symbol = symbols.get(lib_id)
     if symbol is None:
         _exit_error(f"symbol '{lib_id}' not found")
 
-    console.print(symbol.lib_id)
-    if symbol.footprint:
-        console.print(f"footprint: {symbol.footprint}")
-    for pin in symbol.pins:
-        console.print(f"{pin.name}@{pin.number} {pin.electrical_type}")
+    for line in symbol_info_lines(symbol):
+        console.print(line)
 
 
 app.add_typer(symbol_app, name="symbol")
