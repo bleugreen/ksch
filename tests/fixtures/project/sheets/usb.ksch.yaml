@@ -1,0 +1,16 @@
+ksch: 1
+sheet:
+  id: usb
+  title: USB
+interface:
+  VBUS: power_in
+  USB_UP_DP: bidirectional
+symbols:
+  U2:
+    lib: Test:USBHub
+    value: USB2514B
+nets:
+  VBUS:
+    - U2.VBUS_DET
+  USB_UP_DP:
+    - U2.USBDP_UP

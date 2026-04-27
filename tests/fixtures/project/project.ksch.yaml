@@ -1,0 +1,17 @@
+ksch: 1
+project:
+  name: demo
+sheets:
+  usb:
+    source: sheets/usb.ksch.yaml
+symbols:
+  J1:
+    lib: Test:USB_C
+    value: USB_IN
+nets:
+  +5V:
+    - J1.VBUS/all
+    - usb.VBUS
+  USB_UP_DP:
+    - J1.D+/all
+    - usb.USB_UP_DP
