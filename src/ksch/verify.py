@@ -32,7 +32,7 @@ def compare_dirs(expected: Path, actual: Path) -> list[str]:
     comparison = dircmp(expected, actual)
     findings: list[str] = []
 
-    def walk(cmp: dircmp, prefix: Path) -> None:
+    def walk(cmp: dircmp[str], prefix: Path) -> None:
         for name in cmp.left_only:
             findings.append(f"missing generated file {(prefix / name).as_posix()}")
         for name in cmp.right_only:
