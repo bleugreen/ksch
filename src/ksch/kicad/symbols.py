@@ -10,6 +10,7 @@ class SymbolPin:
     name: str
     number: str
     electrical_type: str
+    unit: int = 1
     at: tuple[float, float, float] | None = None
 
 
@@ -61,7 +62,14 @@ def _find_pin_fields(pin_expr: list[Any]) -> tuple[str, str, tuple[float, float,
     return name, number, at
 
 
-def _collect_pins(expr: list[Any]) -> list[SymbolPin]:
+def _symbol_unit(name: str) -> int:
+    parts = name.rsplit("_", 2)
+    if len(parts) == 3 and parts[1].isdigit() and parts[2].isdigit():
+        return int(parts[1])
+    return 1
+
+
+def _collect_pins(expr: list[Any], current_unit: int = 1) -> list[SymbolPin]:
     pins: list[SymbolPin] = []
     for item in expr:
         if isinstance(item, list) and item:
@@ -69,10 +77,17 @@ def _collect_pins(expr: list[Any]) -> list[SymbolPin]:
             if token == "pin":
                 name, number, at = _find_pin_fields(item)
                 pins.append(
-                    SymbolPin(name=name, number=number, electrical_type=atom(item[1]), at=at)
+                    SymbolPin(
+                        name=name,
+                        number=number,
+                        electrical_type=atom(item[1]),
+                        unit=current_unit,
+                        at=at,
+                    )
                 )
             elif token == "symbol":
-                pins.extend(_collect_pins(item[1:]))
+                unit = _symbol_unit(atom(item[1])) if len(item) > 1 else current_unit
+                pins.extend(_collect_pins(item[1:], unit))
     return pins
 
 

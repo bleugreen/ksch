@@ -2,7 +2,9 @@ import subprocess
 from dataclasses import dataclass
 from filecmp import dircmp
 from pathlib import Path
+from typing import Any
 
+from ksch.kicad.sexpr import atom, load_sexpr_file
 from ksch.model.endpoint import EndpointKind
 from ksch.resolver import ResolvedProject
 
@@ -44,6 +46,49 @@ def compare_dirs(expected: Path, actual: Path) -> list[str]:
 
     walk(comparison, Path("."))
     return findings
+
+
+def parse_kicadsexpr_netlist(path: Path) -> dict[str, NetlistNet]:
+    expr = load_sexpr_file(path)
+    nets: dict[str, NetlistNet] = {}
+    nets_expr = _first_child(expr, "nets")
+    if nets_expr is None:
+        return nets
+    for net_expr in _children(nets_expr, "net"):
+        name = _child_atom(net_expr, "name") or ""
+        connections = set()
+        for node_expr in _children(net_expr, "node"):
+            ref = _child_atom(node_expr, "ref")
+            pin = _child_atom(node_expr, "pin")
+            if ref and pin:
+                connections.add((ref, pin))
+        nets[name] = NetlistNet(name=name, connections=connections)
+    return nets
+
+
+def connectivity_signature(nets: dict[str, NetlistNet]) -> set[frozenset[tuple[str, str]]]:
+    return {frozenset(net.connections) for net in nets.values() if net.connections}
+
+
+def _child_atom(expr: list[Any], name: str) -> str | None:
+    child = _first_child(expr, name)
+    if child is None or len(child) < 2:
+        return None
+    return atom(child[1])
+
+
+def _first_child(expr: list[Any], name: str) -> list[Any] | None:
+    for child in _children(expr, name):
+        return child
+    return None
+
+
+def _children(expr: list[Any], name: str) -> list[list[Any]]:
+    return [
+        item
+        for item in expr[1:]
+        if isinstance(item, list) and item and atom(item[0]) == name
+    ]
 
 
 def run_kicad_cli(args: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:

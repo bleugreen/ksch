@@ -52,4 +52,13 @@ def load_project_ir(path: Path) -> ProjectIR:
         raise ValueError("root document must define project")
     sheets: dict[str, SheetIR] = {}
     _load_sheet_tree(root_path, "/", sheets)
-    return ProjectIR(name=source.project.name, root_path=root_path, sheets=sheets)
+    symbol_libraries = {
+        nickname: (root_path.parent / library_path).resolve()
+        for nickname, library_path in source.libraries.symbols.project.items()
+    }
+    return ProjectIR(
+        name=source.project.name,
+        root_path=root_path,
+        sheets=sheets,
+        symbol_libraries=symbol_libraries,
+    )

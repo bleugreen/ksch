@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 PinDirection = Literal[
     "input",
@@ -30,7 +30,14 @@ class SheetMeta(BaseModel):
 class LibrarySet(BaseModel):
     model_config = ConfigDict(extra="forbid")
     use_global: bool = True
-    project: list[Path] = Field(default_factory=list)
+    project: dict[str, Path] = Field(default_factory=dict)
+
+    @field_validator("project", mode="before")
+    @classmethod
+    def normalize_project_libraries(cls, value: object) -> object:
+        if isinstance(value, list):
+            return {Path(item).stem: item for item in value}
+        return value
 
 
 class Libraries(BaseModel):
@@ -51,6 +58,7 @@ class SymbolDecl(BaseModel):
     value: str | None = None
     footprint: str | None = None
     fields: dict[str, str] = Field(default_factory=dict)
+    units: list[int] | None = None
 
 
 class BlockDecl(BaseModel):

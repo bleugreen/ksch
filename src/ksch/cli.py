@@ -11,6 +11,8 @@ from ksch.authoring import index_symbol_libraries, load_symbol_libraries, symbol
 from ksch.emit import write_project
 from ksch.errors import KschError
 from ksch.expand import load_project_ir
+from ksch.importer import import_project
+from ksch.kicad.symbols import index_symbol_library
 from ksch.resolver import LibraryContext, resolve_project
 from ksch.schema.formatter import format_schema_text
 from ksch.schema.loader import load_yaml_file
@@ -54,6 +56,9 @@ def _load_and_validate_project(path: Path) -> None:
 def _compile_project(path: Path, out: Path, symbol_library: list[str]) -> None:
     project = load_project_ir(path)
     indexes = index_symbol_libraries(symbol_library)
+    for nickname, library_path in project.symbol_libraries.items():
+        if nickname not in indexes:
+            indexes[nickname] = index_symbol_library(nickname, library_path)
     symbols = {}
     symbol_libraries = {}
     for nickname, index in indexes.items():
@@ -143,6 +148,20 @@ def compile_command(
         _exit_error(_format_error(exc))
 
     console.print(f"wrote {out}")
+
+
+@app.command("import")
+def import_command(
+    path: Annotated[Path, typer.Argument(help="Root .kicad_sch schematic file.")],
+    out: Annotated[Path, typer.Option("--out", help="Output schema project directory.")],
+) -> None:
+    """Import a KiCad schematic project into schema files."""
+    try:
+        imported = import_project(path, out)
+    except (KschError, ValidationError, ValueError, OSError, RuntimeError) as exc:
+        _exit_error(_format_error(exc))
+
+    console.print(f"wrote {imported.root_schema}")
 
 
 @app.command("check")

@@ -30,3 +30,4 @@ class ProjectIR(BaseModel):
     name: str
     root_path: Path
     sheets: dict[str, SheetIR]
+    symbol_libraries: dict[str, Path] = Field(default_factory=dict)
