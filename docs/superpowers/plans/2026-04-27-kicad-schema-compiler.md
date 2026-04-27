@@ -93,6 +93,14 @@ dev = [
   "mypy>=1.10",
 ]
 
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+  "pytest-cov>=5.0",
+  "ruff>=0.6",
+  "mypy>=1.10",
+]
+
 [project.scripts]
 ksch = "ksch.cli:app"
 
