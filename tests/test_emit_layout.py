@@ -294,6 +294,7 @@ nets:
     text = schematic.read_text(encoding="utf-8")
 
     assert text.count('(label "VBUS_DECOUPLE"') == 1
+    assert "(justify right)" in text
     assert text.count("(wire") >= 2
 
 

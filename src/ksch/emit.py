@@ -490,7 +490,7 @@ def _wire_lines(start_x: float, start_y: float, end_x: float, end_y: float, key:
     ]
 
 
-def _label_lines(name: str, x: float, y: float, key: str) -> list[str]:
+def _label_lines(name: str, x: float, y: float, key: str, *, justify: str = "left") -> list[str]:
     return [
         f"  (label {_q(name)}",
         f"    (at {x} {y} 0)",
@@ -498,11 +498,27 @@ def _label_lines(name: str, x: float, y: float, key: str) -> list[str]:
         "      (font",
         "        (size 1.27 1.27)",
         "      )",
-        "      (justify left)",
+        f"      (justify {justify})",
         "    )",
         f"    (uuid {_q(stable_uuid(key))})",
         "  )",
     ]
+
+
+def _label_justify_for_point(point: PinPoint) -> str:
+    if point.label_x < point.x:
+        return "right"
+    return "left"
+
+
+def _point_label_lines(name: str, point: PinPoint, key: str) -> list[str]:
+    return _label_lines(
+        name,
+        point.label_x,
+        point.label_y,
+        key,
+        justify=_label_justify_for_point(point),
+    )
 
 
 def _point_stub_lines(point: PinPoint, key: str) -> list[str]:
@@ -519,6 +535,19 @@ def _route_lines(start: PinPoint, end: PinPoint, key: str) -> list[str]:
     return lines
 
 
+def _straight_direct_net_lines(name: str, start: PinPoint, end: PinPoint, key: str) -> list[str]:
+    left = start if start.label_x <= end.label_x else end
+    right = end if left is start else start
+    lines = _point_stub_lines(left, key + ":left-stub")
+    lines.extend(_point_stub_lines(right, key + ":right-stub"))
+    lines.extend(
+        _wire_lines(left.label_x, left.label_y, right.label_x, right.label_y, key + ":wire")
+    )
+    label_x = _snap_grid(min(left.label_x, right.label_x) + 5.08)
+    lines.extend(_label_lines(name, label_x, left.label_y, key + ":label"))
+    return lines
+
+
 def _direct_net_lines(name: str, start: PinPoint, end: PinPoint, key: str) -> list[str]:
     lines = _point_stub_lines(start, key + ":start-stub")
     lines.extend(_point_stub_lines(end, key + ":end-stub"))
@@ -530,7 +559,7 @@ def _direct_net_lines(name: str, start: PinPoint, end: PinPoint, key: str) -> li
     )
     route_end = PinPoint(x=end.label_x, y=end.label_y, label_x=end.label_x, label_y=end.label_y)
     lines.extend(_route_lines(route_start, route_end, key + ":route"))
-    lines.extend(_label_lines(name, start.label_x, start.label_y, key + ":label"))
+    lines.extend(_point_label_lines(name, start, key + ":label"))
     return lines
 
 
@@ -538,6 +567,30 @@ def _is_compact_net(points: list[PinPoint]) -> bool:
     xs = [point.x for point in points]
     ys = [point.y for point in points]
     return max(xs) - min(xs) <= 110 and max(ys) - min(ys) <= 110
+
+
+def _endpoint_ref(endpoint_text: str) -> str | None:
+    ref, separator, _pin = endpoint_text.partition(".")
+    return ref if separator else None
+
+
+def _is_anchor_endpoint(endpoint_text: str) -> bool:
+    ref = _endpoint_ref(endpoint_text)
+    return ref is not None and _is_anchor_ref(ref)
+
+
+def _is_safe_anchor_span(points: list[tuple[str, PinPoint]]) -> bool:
+    if len(points) != 2 or not all(_is_anchor_endpoint(endpoint) for endpoint, _point in points):
+        return False
+    start = points[0][1]
+    end = points[1][1]
+    start_faces_right = start.label_x > start.x
+    end_faces_right = end.label_x > end.x
+    return (
+        start_faces_right != end_faces_right
+        and abs(start.label_y - end.label_y) < 0.001
+        and abs(start.label_x - end.label_x) <= 130
+    )
 
 
 def _is_powerish_net(name: str) -> bool:
@@ -579,7 +632,7 @@ def _rail_lines(name: str, points: list[PinPoint], key: str) -> list[str]:
             for index, point in enumerate(side_points):
                 point_key = f"{key}:{side}:{index}"
                 lines.extend(_point_stub_lines(point, point_key + ":stub"))
-                lines.extend(_label_lines(name, point.label_x, point.label_y, point_key + ":label"))
+                lines.extend(_point_label_lines(name, point, point_key + ":label"))
             continue
 
         if side == "left":
@@ -650,8 +703,11 @@ def _net_point_lines(
     *,
     allow_shared_rails: bool,
     allow_direct_nets: bool,
+    allow_anchor_direct_nets: bool,
 ) -> list[str]:
     plain_points = [point for _endpoint_text, point in points]
+    if allow_anchor_direct_nets and _is_safe_anchor_span(points):
+        return _straight_direct_net_lines(name, plain_points[0], plain_points[1], key)
     if allow_direct_nets and len(points) == 2 and _is_compact_net(plain_points):
         return _direct_net_lines(name, plain_points[0], plain_points[1], key)
     if (
@@ -667,7 +723,7 @@ def _net_point_lines(
     for index, (endpoint_text, point) in enumerate(points):
         point_key = f"{key}:{endpoint_text}:{index}"
         lines.extend(_point_stub_lines(point, point_key + ":wire"))
-        lines.extend(_label_lines(name, point.label_x, point.label_y, point_key + ":label"))
+        lines.extend(_point_label_lines(name, point, point_key + ":label"))
     return lines
 
 
@@ -896,6 +952,7 @@ def _schematic_text(project: ResolvedProject, sheet_path: str) -> str:
     )
     allow_shared_rails = allow_routed_local_nets
     allow_direct_nets = allow_routed_local_nets
+    allow_anchor_direct_nets = bool(sheet.symbols) and not sheet.child_instances
     if resolved_sheet is not None:
         for net_name, endpoints in sorted(resolved_sheet.nets.items()):
             net_points: list[tuple[str, PinPoint]] = []
@@ -939,6 +996,7 @@ def _schematic_text(project: ResolvedProject, sheet_path: str) -> str:
                     f"{sheet_path}:{net_name}",
                     allow_shared_rails=allow_shared_rails,
                     allow_direct_nets=allow_direct_nets,
+                    allow_anchor_direct_nets=allow_anchor_direct_nets,
                 )
             )
     for index, endpoint_text in enumerate(sheet.no_connects):
