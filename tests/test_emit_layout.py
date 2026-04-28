@@ -52,6 +52,14 @@ def _symbol_positions(path: Path) -> dict[str, tuple[float, float]]:
     return positions
 
 
+def _paper(path: Path) -> str:
+    expr = load_sexpr_file(path)
+    paper = _child(expr, "paper")
+    if paper is None:
+        raise AssertionError("missing paper declaration")
+    return atom(paper[1])
+
+
 def _placed_symbol(path: Path, ref: str) -> list[Any]:
     expr = load_sexpr_file(path)
     for item in expr[1:]:
@@ -95,6 +103,10 @@ def _long_wire_count(path: Path, minimum_length: float) -> int:
         ):
             count += 1
     return count
+
+
+def _is_grid_aligned(value: float) -> bool:
+    return abs(value / 2.54 - round(value / 2.54)) < 0.001
 
 
 def test_high_fanout_rail_uses_shared_rail_labels(tmp_path: Path) -> None:
@@ -148,6 +160,62 @@ nets:
     anchor_y = positions["U1"][1]
 
     assert max(abs(positions[f"C{index}"][1] - anchor_y) for index in range(1, 9)) <= 90
+
+
+def test_symbol_placement_stays_inside_paper_width(tmp_path: Path) -> None:
+    capacitor_symbols = "\n".join(
+        f"  C{index}: {{lib: Test:C, value: 100nF}}" for index in range(1, 19)
+    )
+    capacitor_nets = "\n".join(
+        f"  DECOUPLE_{index}:\n    - U1.VBUS_DET\n    - C{index}.1\n"
+        for index in range(1, 19)
+    )
+    a4_schematic = _compile_schema(
+        tmp_path,
+        f"""\
+ksch: 1
+project:
+  name: layout_demo
+symbols:
+  U1: {{lib: Test:USBHub}}
+{capacitor_symbols}
+nets:
+{capacitor_nets}
+""",
+    )
+
+    a4_positions = _symbol_positions(a4_schematic)
+    assert _paper(a4_schematic) == "A4"
+    assert max(x for x, _y in a4_positions.values()) <= 297.0 - 38.1
+    assert all(_is_grid_aligned(x) and _is_grid_aligned(y) for x, y in a4_positions.values())
+
+    extra_symbols = "\n".join(
+        f"  C{index}: {{lib: Test:C, value: 100nF}}" for index in range(19, 23)
+    )
+    extra_nets = "\n".join(
+        f"  DECOUPLE_{index}:\n    - U1.VBUS_DET\n    - C{index}.1\n"
+        for index in range(19, 23)
+    )
+    a3_schematic = _compile_schema(
+        tmp_path,
+        f"""\
+ksch: 1
+project:
+  name: layout_demo
+symbols:
+  U1: {{lib: Test:USBHub}}
+{capacitor_symbols}
+{extra_symbols}
+nets:
+{capacitor_nets}
+{extra_nets}
+""",
+    )
+
+    a3_positions = _symbol_positions(a3_schematic)
+    assert _paper(a3_schematic) == "A3"
+    assert max(x for x, _y in a3_positions.values()) <= 420.0 - 38.1
+    assert all(_is_grid_aligned(x) and _is_grid_aligned(y) for x, y in a3_positions.values())
 
 
 def test_symbol_sheets_do_not_route_hierarchy_labels_across_page(tmp_path: Path) -> None:

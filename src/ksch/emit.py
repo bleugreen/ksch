@@ -23,6 +23,13 @@ SHEET_MIN_HEIGHT = 38.1
 SHEET_PIN_Y_OFFSET = 7.62
 SHEET_PIN_STEP = 5.08
 SHEET_ROW_MARGIN = 12.7
+SYMBOL_MARGIN_X = 38.1
+SYMBOL_MARGIN_Y = 38.1
+SCHEMATIC_GRID = 2.54
+PAPER_SIZES = {
+    "A4": (297.0, 210.0),
+    "A3": (420.0, 297.0),
+}
 
 
 @dataclass(frozen=True)
@@ -84,21 +91,27 @@ def _symbol_prefix(ref: str) -> str:
     return "".join(ch for ch in ref if ch.isalpha())
 
 
-def _symbol_lane(ref: str) -> tuple[float, int]:
+def _symbol_lane_index(ref: str) -> int:
     prefix = _symbol_prefix(ref)
     if prefix in {"J", "P", "CN"}:
-        return (50.8, 0)
+        return 0
     if prefix in {"F"}:
-        return (121.92, 1)
+        return 1
     if prefix in {"Q"}:
-        return (177.8, 2)
+        return 2
     if prefix in {"U", "IC"} or ref.startswith("Module"):
-        return (292.1, 3)
+        return 3
     if prefix in {"L", "FB"}:
-        return (370.84, 4)
+        return 4
     if prefix in {"R", "C", "D", "TP", "Y"}:
-        return (444.5, 5)
-    return (469.9, 3)
+        return 5
+    return 5
+
+
+def _symbol_lane(ref: str, min_x: float = 50.8, max_x: float = 330.2) -> tuple[float, int]:
+    lane = _symbol_lane_index(ref)
+    step = (max_x - min_x) / 5
+    return (_snap_grid(min_x + lane * step), lane)
 
 
 def _is_anchor_ref(ref: str) -> bool:
@@ -153,15 +166,45 @@ def _symbol_units(symbol_decl_units: list[int] | None, symbol_info: SymbolInfo |
     return [min(units)] if units else [1]
 
 
+def _paper_dimensions(project: ResolvedProject, sheet_path: str) -> tuple[float, float]:
+    return PAPER_SIZES.get(_paper_size(project, sheet_path), PAPER_SIZES["A4"])
+
+
+def _symbol_layout_bounds(
+    project: ResolvedProject,
+    sheet_path: str,
+) -> tuple[float, float, float, float]:
+    width, height = _paper_dimensions(project, sheet_path)
+    return (
+        SYMBOL_MARGIN_X,
+        width - SYMBOL_MARGIN_X,
+        SYMBOL_MARGIN_Y,
+        height - SYMBOL_MARGIN_Y,
+    )
+
+
+def _clamp(value: float, low: float, high: float) -> float:
+    return max(low, min(value, high))
+
+
+def _snap_grid(value: float) -> float:
+    return round(round(value / SCHEMATIC_GRID) * SCHEMATIC_GRID, 2)
+
+
 def _layout_sheet_symbols(
     project: ResolvedProject,
     sheet_path: str,
 ) -> dict[tuple[str, int], Point]:
     sheet = project.source.sheets[sheet_path]
+    min_x, max_x, _min_y, _max_y = _symbol_layout_bounds(project, sheet_path)
     enable_peripheral_clustering = len(sheet.symbols) <= 32
-    default_top = 95.25 if sheet.symbols else 50.8
+    default_top = 96.52 if sheet.symbols else 50.8
+
+    def lane_for(ref: str) -> tuple[float, int]:
+        return _symbol_lane(ref, min_x, max_x)
+
     if not enable_peripheral_clustering:
-        ordered = sorted(sheet.symbols, key=lambda ref: (_symbol_lane(ref)[1], ref))
+        ordered = sorted(sheet.symbols, key=lambda ref: (lane_for(ref)[1], ref))
         large_lane_bottoms: dict[int, float] = {}
         large_positions: dict[tuple[str, int], Point] = {}
         margin = 15.24
@@ -172,7 +215,7 @@ def _layout_sheet_symbols(
                 local_min_y, local_max_y = _symbol_vertical_extent(
                     _unit_symbol_info(symbol_info, unit)
                 )
-                x, lane = _symbol_lane(ref)
+                x, lane = lane_for(ref)
                 top = large_lane_bottoms.get(lane, default_top)
                 y = top + local_max_y
                 bottom = y - local_min_y
@@ -226,7 +269,7 @@ def _layout_sheet_symbols(
         if candidate[2] is not None
     }
 
-    ordered_anchors = sorted(anchor_refs, key=lambda ref: (_symbol_lane(ref)[1], ref))
+    ordered_anchors = sorted(anchor_refs, key=lambda ref: (lane_for(ref)[1], ref))
     lane_bottoms: dict[int, float] = {}
     positions: dict[tuple[str, int], Point] = {}
     margin = 20.32
@@ -237,14 +280,14 @@ def _layout_sheet_symbols(
         current_top = top
         for unit in _symbol_units(symbol_decl.units, symbol_info):
             local_min_y, local_max_y = _symbol_vertical_extent(_unit_symbol_info(symbol_info, unit))
-            y = current_top + local_max_y
+            y = _snap_grid(current_top + local_max_y)
             bottom = y - local_min_y
-            positions[(ref, unit)] = Point(x=x, y=y)
+            positions[(ref, unit)] = Point(x=_snap_grid(x), y=y)
             current_top = bottom + margin
         return current_top
 
     for ref in ordered_anchors:
-        x, lane = _symbol_lane(ref)
+        x, lane = lane_for(ref)
         top = lane_bottoms.get(lane, default_top)
         lane_bottoms[lane] = place_symbol(ref, x, top)
 
@@ -280,15 +323,16 @@ def _layout_sheet_symbols(
                 else:
                     x = anchor_position.x + centered_row * column_spacing
                     y = anchor_position.y + 48.26 + column * row_spacing
-                positions[(ref, 1)] = Point(x=x, y=y)
+                x = _snap_grid(_clamp(x, min_x, max_x))
+                positions[(ref, 1)] = Point(x=x, y=_snap_grid(y))
 
     fallback_refs = [
         ref
-        for ref in sorted(sheet.symbols, key=lambda item: (_symbol_lane(item)[1], item))
+        for ref in sorted(sheet.symbols, key=lambda item: (lane_for(item)[1], item))
         if (ref, 1) not in positions
     ]
     for ref in fallback_refs:
-        x, lane = _symbol_lane(ref)
+        x, lane = lane_for(ref)
         top = lane_bottoms.get(lane, default_top)
         lane_bottoms[lane] = place_symbol(ref, x, top)
 
