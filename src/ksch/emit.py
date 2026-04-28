@@ -14,7 +14,7 @@ from ksch.resolver import ResolvedProject
 
 UUID_NAMESPACE = uuid.UUID("7d91d76e-4e61-4c8c-a1b7-4a5f2d7d6f4b")
 WIRE_STUB = 10.16
-PIN_LABEL_STUB = 2.54
+PIN_LABEL_STUB = 5.08
 SHEET_X = 152.4
 SHEET_Y = 50.8
 SHEET_WIDTH = 50.8
@@ -88,25 +88,39 @@ def _symbol_lane(ref: str) -> tuple[float, int]:
     prefix = _symbol_prefix(ref)
     if prefix in {"J", "P", "CN"}:
         return (50.8, 0)
+    if prefix in {"F"}:
+        return (121.92, 1)
+    if prefix in {"Q"}:
+        return (177.8, 2)
     if prefix in {"U", "IC"} or ref.startswith("Module"):
-        return (190.5, 1)
-    if prefix in {"R", "C", "L", "FB", "D", "TP", "F", "Y", "Q"}:
-        return (330.2, 2)
+        return (292.1, 3)
+    if prefix in {"L", "FB"}:
+        return (370.84, 4)
+    if prefix in {"R", "C", "D", "TP", "Y"}:
+        return (444.5, 5)
     return (469.9, 3)
 
 
 def _is_anchor_ref(ref: str) -> bool:
     prefix = _symbol_prefix(ref)
-    return prefix in {"J", "P", "CN", "U", "IC"} or ref.startswith("Module")
+    return prefix in {"J", "P", "CN", "U", "IC", "Q", "F", "L", "FB"} or ref.startswith(
+        "Module"
+    )
 
 
 def _anchor_score(ref: str) -> tuple[int, str]:
     prefix = _symbol_prefix(ref)
     if ref.startswith("Module") or prefix in {"U", "IC"}:
         return (0, ref)
-    if prefix in {"J", "P", "CN"}:
+    if prefix in {"Q"}:
         return (1, ref)
-    return (2, ref)
+    if prefix in {"L", "FB"}:
+        return (2, ref)
+    if prefix in {"F"}:
+        return (3, ref)
+    if prefix in {"J", "P", "CN"}:
+        return (4, ref)
+    return (5, ref)
 
 
 def _symbol_vertical_extent(symbol: SymbolInfo | None) -> tuple[float, float]:
@@ -144,7 +158,8 @@ def _layout_sheet_symbols(
     sheet_path: str,
 ) -> dict[tuple[str, int], Point]:
     sheet = project.source.sheets[sheet_path]
-    enable_peripheral_clustering = len(sheet.symbols) <= 20
+    enable_peripheral_clustering = len(sheet.symbols) <= 32
+    default_top = 95.25 if sheet.symbols else 50.8
     if not enable_peripheral_clustering:
         ordered = sorted(sheet.symbols, key=lambda ref: (_symbol_lane(ref)[1], ref))
         large_lane_bottoms: dict[int, float] = {}
@@ -158,7 +173,7 @@ def _layout_sheet_symbols(
                     _unit_symbol_info(symbol_info, unit)
                 )
                 x, lane = _symbol_lane(ref)
-                top = large_lane_bottoms.get(lane, 50.8)
+                top = large_lane_bottoms.get(lane, default_top)
                 y = top + local_max_y
                 bottom = y - local_min_y
                 large_lane_bottoms[lane] = bottom + margin
@@ -167,9 +182,9 @@ def _layout_sheet_symbols(
 
     resolved_sheet = project.sheets.get(sheet_path)
     anchor_refs = {ref for ref in sheet.symbols if _is_anchor_ref(ref)}
-    assigned_to_anchor: dict[str, str] = {}
+    assignment_candidates: dict[str, tuple[tuple[int, int, int, str], str, SymbolPin | None]] = {}
     if resolved_sheet is not None:
-        for endpoints in resolved_sheet.nets.values():
+        for net_name, endpoints in resolved_sheet.nets.items():
             net_refs = {
                 endpoint.ref
                 for endpoint in endpoints
@@ -182,8 +197,34 @@ def _layout_sheet_symbols(
             if not anchors:
                 continue
             anchor = anchors[0]
+            anchor_symbol_decl = sheet.symbols[anchor]
+            anchor_symbol_info = project.symbol_library.get(anchor_symbol_decl.lib)
+            anchor_pin = next(
+                (
+                    pin
+                    for endpoint in endpoints
+                    if endpoint.ref == anchor and anchor_symbol_info is not None
+                    for pin in [_pin_by_number(anchor_symbol_info, endpoint.pin_number or "")]
+                    if pin is not None
+                ),
+                None,
+            )
             for ref in sorted(net_refs - anchor_refs):
-                assigned_to_anchor.setdefault(ref, anchor)
+                priority = (
+                    1 if _is_powerish_net(net_name) else 0,
+                    len(net_refs),
+                    _anchor_score(anchor)[0],
+                    anchor,
+                )
+                current = assignment_candidates.get(ref)
+                if current is None or priority < current[0]:
+                    assignment_candidates[ref] = (priority, anchor, anchor_pin)
+    assigned_to_anchor = {ref: candidate[1] for ref, candidate in assignment_candidates.items()}
+    assigned_anchor_pin = {
+        ref: candidate[2]
+        for ref, candidate in assignment_candidates.items()
+        if candidate[2] is not None
+    }
 
     ordered_anchors = sorted(anchor_refs, key=lambda ref: (_symbol_lane(ref)[1], ref))
     lane_bottoms: dict[int, float] = {}
@@ -204,7 +245,7 @@ def _layout_sheet_symbols(
 
     for ref in ordered_anchors:
         x, lane = _symbol_lane(ref)
-        top = lane_bottoms.get(lane, 50.8)
+        top = lane_bottoms.get(lane, default_top)
         lane_bottoms[lane] = place_symbol(ref, x, top)
 
     grouped_refs: dict[str, list[str]] = {}
@@ -214,16 +255,32 @@ def _layout_sheet_symbols(
         anchor_position = positions.get((anchor, 1))
         if anchor_position is None:
             continue
-        row_spacing = 22.86
-        rows_per_column = 8
-        for index, ref in enumerate(sorted(refs)):
-            column = index // rows_per_column
-            row = index % rows_per_column
-            row_count = min(rows_per_column, len(refs) - column * rows_per_column)
-            x = anchor_position.x + 101.6 + column * 45.72
-            top_y = anchor_position.y - (row_count - 1) * row_spacing / 2
-            y = top_y + row * row_spacing
-            positions[(ref, 1)] = Point(x=x, y=y)
+        side_refs: dict[str, list[str]] = {"left": [], "right": [], "top": [], "bottom": []}
+        for ref in refs:
+            side = _pin_side(assigned_anchor_pin[ref]) if ref in assigned_anchor_pin else "right"
+            side_refs[side].append(ref)
+        row_spacing = 20.32
+        column_spacing = 38.1
+        rows_per_column = 5
+        for side, side_items in side_refs.items():
+            for index, ref in enumerate(sorted(side_items)):
+                column = index // rows_per_column
+                row = index % rows_per_column
+                row_count = min(rows_per_column, len(side_items) - column * rows_per_column)
+                centered_row = row - (row_count - 1) / 2
+                if side == "left":
+                    x = anchor_position.x - 55.88 - column * column_spacing
+                    y = anchor_position.y + centered_row * row_spacing
+                elif side == "right":
+                    x = anchor_position.x + 55.88 + column * column_spacing
+                    y = anchor_position.y + centered_row * row_spacing
+                elif side == "top":
+                    x = anchor_position.x + centered_row * column_spacing
+                    y = anchor_position.y - 43.18 - column * row_spacing
+                else:
+                    x = anchor_position.x + centered_row * column_spacing
+                    y = anchor_position.y + 48.26 + column * row_spacing
+                positions[(ref, 1)] = Point(x=x, y=y)
 
     fallback_refs = [
         ref
@@ -232,7 +289,7 @@ def _layout_sheet_symbols(
     ]
     for ref in fallback_refs:
         x, lane = _symbol_lane(ref)
-        top = lane_bottoms.get(lane, 50.8)
+        top = lane_bottoms.get(lane, default_top)
         lane_bottoms[lane] = place_symbol(ref, x, top)
 
     return positions
@@ -318,7 +375,7 @@ def _paper_size(project: ResolvedProject, sheet_path: str) -> str:
     )
     if sheet_path == "/" and (len(sheet.child_instances) >= 3 and interface_count >= 40):
         return "A3"
-    if len(sheet.symbols) > 60:
+    if len(sheet.symbols) > 20:
         return "A3"
     return "A4"
 
@@ -349,6 +406,17 @@ def _symbol_pin_point(symbol_x: float, symbol_y: float, pin: SymbolPin) -> PinPo
         label_x = x - PIN_LABEL_STUB
         label_y = y
     return PinPoint(x=x, y=y, label_x=label_x, label_y=label_y)
+
+
+def _pin_side(pin: SymbolPin) -> str:
+    rotation = int(pin.at[2] if pin.at else 0.0) % 360
+    if rotation == 180:
+        return "right"
+    if rotation == 90:
+        return "bottom"
+    if rotation == 270:
+        return "top"
+    return "left"
 
 
 def _sheet_port_point(sheet_origin: tuple[float, float], port_index: int) -> PinPoint:
@@ -407,6 +475,27 @@ def _route_lines(start: PinPoint, end: PinPoint, key: str) -> list[str]:
     return lines
 
 
+def _direct_net_lines(name: str, start: PinPoint, end: PinPoint, key: str) -> list[str]:
+    lines = _point_stub_lines(start, key + ":start-stub")
+    lines.extend(_point_stub_lines(end, key + ":end-stub"))
+    route_start = PinPoint(
+        x=start.label_x,
+        y=start.label_y,
+        label_x=start.label_x,
+        label_y=start.label_y,
+    )
+    route_end = PinPoint(x=end.label_x, y=end.label_y, label_x=end.label_x, label_y=end.label_y)
+    lines.extend(_route_lines(route_start, route_end, key + ":route"))
+    lines.extend(_label_lines(name, start.label_x, start.label_y, key + ":label"))
+    return lines
+
+
+def _is_compact_net(points: list[PinPoint]) -> bool:
+    xs = [point.x for point in points]
+    ys = [point.y for point in points]
+    return max(xs) - min(xs) <= 110 and max(ys) - min(ys) <= 110
+
+
 def _is_powerish_net(name: str) -> bool:
     upper = name.upper()
     return (
@@ -426,11 +515,15 @@ def _should_emit_rail(name: str, points: list[PinPoint]) -> bool:
 
 
 def _rail_side(point: PinPoint) -> str:
+    if point.label_y < point.y:
+        return "top"
+    if point.label_y > point.y:
+        return "bottom"
     return "left" if point.label_x <= point.x else "right"
 
 
 def _rail_lines(name: str, points: list[PinPoint], key: str) -> list[str]:
-    grouped: dict[str, list[PinPoint]] = {"left": [], "right": []}
+    grouped: dict[str, list[PinPoint]] = {"left": [], "right": [], "top": [], "bottom": []}
     for point in points:
         grouped[_rail_side(point)].append(point)
 
@@ -447,24 +540,62 @@ def _rail_lines(name: str, points: list[PinPoint], key: str) -> list[str]:
 
         if side == "left":
             rail_x = min(min(point.x, point.label_x) for point in side_points) - 5.08
-        else:
-            rail_x = max(max(point.x, point.label_x) for point in side_points) + 5.08
-        rail_min_y = min(point.label_y for point in side_points)
-        rail_max_y = max(point.label_y for point in side_points)
-        lines.extend(_wire_lines(rail_x, rail_min_y, rail_x, rail_max_y, key + f":{side}:rail"))
-        for index, point in enumerate(side_points):
-            point_key = f"{key}:{side}:{index}"
-            lines.extend(_point_stub_lines(point, point_key + ":stub"))
-            lines.extend(
-                _wire_lines(
-                    point.label_x,
-                    point.label_y,
-                    rail_x,
-                    point.label_y,
-                    point_key + ":rail-join",
+            rail_min_y = min(point.label_y for point in side_points)
+            rail_max_y = max(point.label_y for point in side_points)
+            lines.extend(_wire_lines(rail_x, rail_min_y, rail_x, rail_max_y, key + ":left:rail"))
+            for index, point in enumerate(side_points):
+                point_key = f"{key}:left:{index}"
+                lines.extend(_point_stub_lines(point, point_key + ":stub"))
+                lines.extend(
+                    _wire_lines(
+                        point.label_x,
+                        point.label_y,
+                        rail_x,
+                        point.label_y,
+                        point_key + ":rail-join",
+                    )
                 )
+            lines.extend(_label_lines(name, rail_x, rail_min_y - 2.54, key + ":left:label"))
+        elif side == "right":
+            rail_x = max(max(point.x, point.label_x) for point in side_points) + 5.08
+            rail_min_y = min(point.label_y for point in side_points)
+            rail_max_y = max(point.label_y for point in side_points)
+            lines.extend(_wire_lines(rail_x, rail_min_y, rail_x, rail_max_y, key + ":right:rail"))
+            for index, point in enumerate(side_points):
+                point_key = f"{key}:right:{index}"
+                lines.extend(_point_stub_lines(point, point_key + ":stub"))
+                lines.extend(
+                    _wire_lines(
+                        point.label_x,
+                        point.label_y,
+                        rail_x,
+                        point.label_y,
+                        point_key + ":rail-join",
+                    )
+                )
+            lines.extend(_label_lines(name, rail_x, rail_min_y - 2.54, key + ":right:label"))
+        else:
+            rail_y = (
+                min(min(point.y, point.label_y) for point in side_points) - 5.08
+                if side == "top"
+                else max(max(point.y, point.label_y) for point in side_points) + 5.08
             )
-        lines.extend(_label_lines(name, rail_x, rail_min_y - 2.54, key + f":{side}:label"))
+            rail_min_x = min(point.label_x for point in side_points)
+            rail_max_x = max(point.label_x for point in side_points)
+            lines.extend(_wire_lines(rail_min_x, rail_y, rail_max_x, rail_y, key + f":{side}:rail"))
+            for index, point in enumerate(side_points):
+                point_key = f"{key}:{side}:{index}"
+                lines.extend(_point_stub_lines(point, point_key + ":stub"))
+                lines.extend(
+                    _wire_lines(
+                        point.label_x,
+                        point.label_y,
+                        point.label_x,
+                        rail_y,
+                        point_key + ":rail-join",
+                    )
+                )
+            lines.extend(_label_lines(name, rail_min_x, rail_y - 2.54, key + f":{side}:label"))
     return lines
 
 
@@ -474,9 +605,18 @@ def _net_point_lines(
     key: str,
     *,
     allow_shared_rails: bool,
+    allow_direct_nets: bool,
 ) -> list[str]:
     plain_points = [point for _endpoint_text, point in points]
-    if allow_shared_rails and _should_emit_rail(name, plain_points):
+    if allow_direct_nets and len(points) == 2 and _is_compact_net(plain_points):
+        return _direct_net_lines(name, plain_points[0], plain_points[1], key)
+    if (
+        allow_shared_rails
+        and _should_emit_rail(name, plain_points)
+        and _is_compact_net(plain_points)
+    ):
+        return _rail_lines(name, plain_points, key)
+    if allow_shared_rails and len(points) >= 3 and _is_compact_net(plain_points):
         return _rail_lines(name, plain_points, key)
 
     lines: list[str] = []
@@ -595,8 +735,15 @@ def _schematic_text(project: ResolvedProject, sheet_path: str) -> str:
                     f"    (uuid {_q(stable_uuid(sheet_path + '/' + ref + unit_suffix))})",
                     f"    (property \"Reference\" {_q(ref)} (at {x} {y - 2.54} 0))",
                     f"    (property \"Value\" {_q(symbol.value or ref)} (at {x} {y + 2.54} 0))",
-                    f"    (property \"Footprint\" {_q(symbol.footprint or '')} "
-                    f"(at {x} {y + 5.08} 0))",
+                    f"    (property \"Footprint\" {_q(symbol.footprint or '')}",
+                    f"      (at {x} {y + 5.08} 0)",
+                    "      (effects",
+                    "        (font",
+                    "          (size 1.27 1.27)",
+                    "        )",
+                    "        (hide yes)",
+                    "      )",
+                    "    )",
                 ]
             )
             if indexed_symbol is not None:
@@ -700,7 +847,11 @@ def _schematic_text(project: ResolvedProject, sheet_path: str) -> str:
         )
     resolved_sheet = project.sheets.get(sheet_path)
     net_label_points: dict[str, list[PinPoint]] = {}
-    allow_shared_rails = len(sheet.symbols) <= 3 and not sheet.child_instances
+    allow_routed_local_nets = (
+        bool(sheet.symbols) and not sheet.child_instances and len(sheet.symbols) <= 10
+    )
+    allow_shared_rails = allow_routed_local_nets
+    allow_direct_nets = allow_routed_local_nets
     if resolved_sheet is not None:
         for net_name, endpoints in sorted(resolved_sheet.nets.items()):
             net_points: list[tuple[str, PinPoint]] = []
@@ -743,6 +894,7 @@ def _schematic_text(project: ResolvedProject, sheet_path: str) -> str:
                     net_points,
                     f"{sheet_path}:{net_name}",
                     allow_shared_rails=allow_shared_rails,
+                    allow_direct_nets=allow_direct_nets,
                 )
             )
     for index, endpoint_text in enumerate(sheet.no_connects):
@@ -774,7 +926,7 @@ def _schematic_text(project: ResolvedProject, sheet_path: str) -> str:
                 f"{sheet_path}:{port_name}:hierarchical-label",
             )
         )
-        if len(sheet.interface) <= 8 and port_name in net_label_points:
+        if len(sheet.interface) <= 8 and len(sheet.symbols) <= 3 and port_name in net_label_points:
             lines.extend(
                 _route_lines(
                     point,
