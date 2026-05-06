@@ -256,6 +256,102 @@ def test_cli_explain_project_endpoint_disambiguates_pin_number(
     assert "D+@B6 bidirectional" not in result.stdout
 
 
+def test_cli_edit_connect_updates_configured_schema(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    library_dir = tmp_path / "lib"
+    library_dir.mkdir()
+    (library_dir / "Test.kicad_sym").write_text(
+        Path("tests/fixtures/kicad/symbols/Test.kicad_sym").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    schema = tmp_path / "project.ksch.yaml"
+    schema.write_text(
+        "\n".join(
+            [
+                "ksch: 1",
+                "project:",
+                "  name: demo",
+                "libraries:",
+                "  symbols:",
+                "    project:",
+                "      Test: lib/Test.kicad_sym",
+                "symbols:",
+                "  J1:",
+                "    lib: Test:USB_C",
+                "nets:",
+                "  USB_D_P:",
+                "    - J1.D+@A6",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "ksch.toml").write_text(
+        'schema = "project.ksch.yaml"\nout = "generated"\n',
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["edit", "connect", "USB_D_P", "J1.D+@B6"])
+
+    assert result.exit_code == 0, result.output
+    assert "connected 1 endpoint" in result.stdout
+    assert "    - J1.D+@B6\n" in schema.read_text(encoding="utf-8")
+
+
+def test_cli_edit_add_symbol_updates_configured_schema(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    library_dir = tmp_path / "lib"
+    library_dir.mkdir()
+    (library_dir / "Test.kicad_sym").write_text(
+        Path("tests/fixtures/kicad/symbols/Test.kicad_sym").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    schema = tmp_path / "project.ksch.yaml"
+    schema.write_text(
+        "\n".join(
+            [
+                "ksch: 1",
+                "project:",
+                "  name: demo",
+                "libraries:",
+                "  symbols:",
+                "    project:",
+                "      Test: lib/Test.kicad_sym",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "ksch.toml").write_text(
+        'schema = "project.ksch.yaml"\nout = "generated"\n',
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "edit",
+            "add-symbol",
+            "J1",
+            "Test:USB_C",
+            "--value",
+            "USB_IN",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "added symbol J1" in result.stdout
+    assert "  J1:\n    lib: Test:USB_C\n    value: USB_IN\n" in schema.read_text(
+        encoding="utf-8"
+    )
+
+
 def test_cli_skill_show_prints_bundled_skill() -> None:
     result = runner.invoke(app, ["skill", "show"])
 

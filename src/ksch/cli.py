@@ -18,6 +18,7 @@ from ksch.authoring import (
 )
 from ksch.compiler import write_project
 from ksch.config import ProjectConfig, load_project_config
+from ksch.edit import add_symbol, connect_endpoints
 from ksch.errors import KschError
 from ksch.expand import load_project_ir
 from ksch.explain import explain_project_target_lines, explain_symbol_lines
@@ -45,6 +46,7 @@ symbol_app = typer.Typer(help="Inspect KiCad symbol libraries.", no_args_is_help
 symbols_app = typer.Typer(help="Search KiCad symbol libraries.", no_args_is_help=True)
 skill_app = typer.Typer(help="Print bundled Codex skill material.", no_args_is_help=True)
 schema_app = typer.Typer(help="Print schema authoring material.", no_args_is_help=True)
+edit_app = typer.Typer(help="Apply structured schema edits.", no_args_is_help=True)
 console = Console()
 err_console = Console(stderr=True, soft_wrap=True)
 
@@ -116,6 +118,12 @@ def _load_config_for_defaults(
     if not need_schema and not need_out:
         return None
     return load_project_config(config)
+
+
+def _schema_from_config_or_arg(config: Path, schema: Path | None) -> Path:
+    if schema is not None:
+        return schema
+    return load_project_config(config).schema
 
 
 def _configured_symbol_libraries(
@@ -597,6 +605,95 @@ def explain_command(
         console.print(line)
 
 
+@edit_app.command("connect")
+def edit_connect_command(
+    net_name: Annotated[str, typer.Argument(help="Net name to connect endpoints to.")],
+    endpoints: Annotated[
+        list[str],
+        typer.Argument(help="Endpoint(s) to add to the net."),
+    ],
+    sheet_path: Annotated[
+        str,
+        typer.Option("--sheet", help="Schema sheet path to edit."),
+    ] = "/",
+    schema: Annotated[
+        Path | None,
+        typer.Option(
+            "--schema",
+            help="Root .ksch.yaml project file. Defaults to ksch.toml schema.",
+        ),
+    ] = None,
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to ksch.toml or a project directory."),
+    ] = Path("ksch.toml"),
+) -> None:
+    """Connect endpoint(s) to a schema net."""
+    try:
+        schema_path = _schema_from_config_or_arg(config, schema)
+        result = connect_endpoints(
+            schema_path,
+            sheet_path=sheet_path,
+            net_name=net_name,
+            endpoints=endpoints,
+        )
+    except (KschError, ValidationError, ValueError, OSError) as exc:
+        _exit_error(_format_error(exc))
+
+    if not result.changed:
+        console.print(f"{net_name}: endpoints already connected")
+        return
+    suffix = "" if len(result.added_endpoints) == 1 else "s"
+    console.print(
+        f"connected {len(result.added_endpoints)} endpoint{suffix} "
+        f"to {net_name} in {result.schema_path}"
+    )
+
+
+@edit_app.command("add-symbol")
+def edit_add_symbol_command(
+    ref: Annotated[str, typer.Argument(help="Symbol reference to add, such as U1.")],
+    lib_id: Annotated[str, typer.Argument(help="KiCad library id, such as Device:R.")],
+    value: Annotated[
+        str | None,
+        typer.Option("--value", help="Symbol value."),
+    ] = None,
+    footprint: Annotated[
+        str | None,
+        typer.Option("--footprint", help="Symbol footprint id."),
+    ] = None,
+    sheet_path: Annotated[
+        str,
+        typer.Option("--sheet", help="Schema sheet path to edit."),
+    ] = "/",
+    schema: Annotated[
+        Path | None,
+        typer.Option(
+            "--schema",
+            help="Root .ksch.yaml project file. Defaults to ksch.toml schema.",
+        ),
+    ] = None,
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to ksch.toml or a project directory."),
+    ] = Path("ksch.toml"),
+) -> None:
+    """Add a symbol declaration to a schema sheet."""
+    try:
+        schema_path = _schema_from_config_or_arg(config, schema)
+        result = add_symbol(
+            schema_path,
+            sheet_path=sheet_path,
+            ref=ref,
+            lib_id=lib_id,
+            value=value,
+            footprint=footprint,
+        )
+    except (KschError, ValidationError, ValueError, OSError) as exc:
+        _exit_error(_format_error(exc))
+    console.print(f"added symbol {result.ref} to {result.schema_path}")
+
+
 def _report_library_paths(
     kind: str,
     libraries: dict[str, Path],
@@ -709,3 +806,4 @@ app.add_typer(symbol_app, name="symbol")
 app.add_typer(symbols_app, name="symbols")
 app.add_typer(skill_app, name="skill")
 app.add_typer(schema_app, name="schema")
+app.add_typer(edit_app, name="edit")

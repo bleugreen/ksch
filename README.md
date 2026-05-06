@@ -109,6 +109,8 @@ ksch validate schematic/project.ksch.yaml
 ksch fmt schematic/project.ksch.yaml
 ksch schema show
 ksch explain U1.USBDP_UP
+ksch edit add-symbol U1 Device:R --value 10k
+ksch edit connect PULLUP U1.1 U1.2
 ksch compile schematic/project.ksch.yaml --out kicad
 ksch import board.kicad_sch --out ksch
 ksch symbols search USB
@@ -196,6 +198,16 @@ The compiler validates symbol library ids, endpoint references, duplicate pin
 disambiguation, sheet ports, and no-connect endpoints before writing KiCad
 output.
 
+Use structured edit commands when changing schema from tools or agents:
+
+```bash
+ksch edit add-symbol R1 Device:R --value 10k
+ksch edit connect RESET R1.1 U1.RESET
+```
+
+Edits are validated against the project graph and symbol libraries before the
+schema file is rewritten.
+
 For agent environments, print the bundled skill:
 
 ```bash
@@ -271,6 +283,7 @@ Important modules:
 - `ksch.model`: source and IR models
 - `ksch.kicad`: KiCad library, symbol, footprint, and S-expression helpers
 - `ksch.resolver`: endpoint and net resolution
+- `ksch.graph`, `ksch.edit`: project graph indexing and structured schema edits
 - `ksch.placement`, `ksch.net_routing`, `ksch.layout_problem`: schematic layout
 - `ksch.compiler`: placed-project construction and generation orchestration
 - `ksch.emit`: serialization of placed objects to KiCad files
