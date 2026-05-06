@@ -30,6 +30,8 @@ Common commands:
 - `ksch check`: compile to a temporary directory and compare against configured output.
 - `ksch validate <schema>`: validate schema, symbols, endpoints, and sheet ports.
 - `ksch fmt <schema>`: normalize schema formatting.
+- `ksch schema show`: print the JSON Schema for `.ksch.yaml`.
+- `ksch explain <target>`: explain a library symbol, project ref, or endpoint.
 - `ksch skill show`: print this skill for installation in another agent environment.
 
 For an imported KiCad project, `out = "."` means `ksch gen` updates the actual
@@ -85,6 +87,7 @@ Before writing endpoints for unfamiliar symbols:
 ```bash
 ksch symbol info Device:R
 ksch pin-search Connector:USB_C_Receptacle_USB2.0 D+
+ksch explain U1.D+
 ```
 
 Inside a configured project, authoring lookup uses project context
@@ -94,6 +97,10 @@ one-off extra libraries.
 
 If a symbol is project-local, prefer declaring it in the schema or project
 config rather than passing `--symbol-library` every time.
+
+If validation reports a schema path such as `nets.USB_D_P[1]`, use
+`ksch explain` on the referenced symbol or endpoint to inspect the actual KiCad
+pins.
 
 ## Common Fixes
 
