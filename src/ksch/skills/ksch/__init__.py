@@ -1,0 +1,1 @@
+"""ksch skill resources."""

@@ -21,6 +21,20 @@ Project documents define the root schematic and sheet tree:
 - `assertions`: schema-level checks reserved for verification.
 - `blocks` and `use`: reusable schematic fragments reserved for expansion.
 
+Example project-local library declaration:
+
+```yaml
+libraries:
+  symbols:
+    project:
+      MyParts: lib/MyParts.kicad_sym
+  footprints:
+    project:
+      MyFootprints: footprints/MyFootprints.pretty
+```
+
+Symbol ids use the declared nickname, such as `MyParts:PowerSwitch`.
+
 ## Sheet Documents
 
 Sheet documents define one reusable or instantiated schematic sheet:

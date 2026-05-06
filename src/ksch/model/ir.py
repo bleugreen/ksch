@@ -20,6 +20,7 @@ class SheetIR(BaseModel):
     interface: dict[str, PinDirection] = Field(default_factory=dict)
     symbols: dict[str, SymbolDecl] = Field(default_factory=dict)
     nets: dict[str, list[str]] = Field(default_factory=dict)
+    power_flags: list[str] = Field(default_factory=list)
     no_connects: list[str] = Field(default_factory=list)
     assertions: list[dict[str, object]] = Field(default_factory=list)
     child_instances: dict[str, ChildInstanceIR] = Field(default_factory=dict)
@@ -31,3 +32,4 @@ class ProjectIR(BaseModel):
     root_path: Path
     sheets: dict[str, SheetIR]
     symbol_libraries: dict[str, Path] = Field(default_factory=dict)
+    footprint_libraries: dict[str, Path] = Field(default_factory=dict)

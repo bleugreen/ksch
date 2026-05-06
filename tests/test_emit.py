@@ -1,7 +1,8 @@
 from pathlib import Path
 
-from ksch.emit import stable_uuid, write_project
+from ksch.compiler import write_project
 from ksch.expand import load_project_ir
+from ksch.ids import stable_uuid
 from ksch.kicad.symbols import index_symbol_library
 from ksch.resolver import LibraryContext, ResolvedProject, resolve_project
 
@@ -54,7 +55,7 @@ def test_write_project_emits_visible_net_labels_and_wires(tmp_path: Path) -> Non
     assert "(label \"+5V\"" in root
     assert "(label \"USB_UP_DP\"" in root
     assert "(hierarchical_label \"VBUS\"" in child
-    assert "(label \"VBUS\"" in child
+    assert "(label \"VBUS\"" not in child
 
 
 def test_write_project_emits_no_connect_markers(tmp_path: Path) -> None:

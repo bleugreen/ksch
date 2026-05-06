@@ -2,7 +2,7 @@ from pathlib import Path
 
 from ksch.model.endpoint import EndpointKind
 from ksch.resolver import ResolvedEndpoint, ResolvedProject, ResolvedSheet
-from ksch.verify import NetlistNet, compare_connectivity, compare_dirs
+from ksch.verify import NetlistNet, compare_connectivity, compare_dirs, connectivity_signature
 
 
 def test_compare_connectivity_reports_missing_pin() -> None:
@@ -46,6 +46,18 @@ def test_compare_connectivity_accepts_matching_pin() -> None:
     )
     exported = {"USB_DP": NetlistNet(name="USB_DP", connections={("J1", "A6")})}
     assert compare_connectivity(project, exported) == []
+
+
+def test_connectivity_signature_ignores_single_pin_nets() -> None:
+    assert connectivity_signature(
+        {
+            "unconnected-(J1-Pad1)": NetlistNet(
+                name="unconnected-(J1-Pad1)",
+                connections={("J1", "1")},
+            ),
+            "REAL": NetlistNet(name="REAL", connections={("J1", "2"), ("U1", "1")}),
+        }
+    ) == {frozenset({("J1", "2"), ("U1", "1")})}
 
 
 def test_compare_dirs_reports_missing_unexpected_and_different_files(tmp_path: Path) -> None:

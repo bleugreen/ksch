@@ -83,6 +83,7 @@ class SourceDocument(BaseModel):
     sheets: dict[str, SheetInstance] = Field(default_factory=dict)
     symbols: dict[str, SymbolDecl] = Field(default_factory=dict)
     nets: dict[str, list[str]] = Field(default_factory=dict)
+    power_flags: list[str] = Field(default_factory=list)
     no_connects: list[str] = Field(default_factory=list)
     assertions: list[dict[str, Any]] = Field(default_factory=list)
     blocks: dict[str, BlockDecl] = Field(default_factory=dict)

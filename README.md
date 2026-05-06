@@ -23,8 +23,43 @@ The project is not intended to be just an MCP server. It should have a core comp
 
 - [Schema v1](docs/schema-v1.md)
 - [CLI](docs/cli.md)
+- [Basic board example](examples/basic-board)
 - [Compiler design spec](docs/superpowers/specs/2026-04-27-kicad-schema-compiler-design.md)
 - [Implementation plan](docs/superpowers/plans/2026-04-27-kicad-schema-compiler.md)
+
+## Quick Start
+
+Create a schema-owned KiCad project:
+
+```bash
+ksch init my-board
+cd my-board
+ksch gen
+```
+
+Initialize schema ownership from an existing KiCad project:
+
+```bash
+cd existing-board
+ksch init
+ksch gen
+```
+
+The generated project keeps `schematic/project.ksch.yaml` as source of truth and
+writes KiCad files into `kicad/`. `ksch.toml` records the configured schema and
+output, so `ksch gen` and `ksch check` work from the project root.
+Use `ksch validate schematic/project.ksch.yaml` before generation when editing
+the schema by hand.
+For imported projects, the schema is written to `ksch/project.ksch.yaml` and the
+generated output target is the existing KiCad project directory. Running the
+generator updates the actual KiCad schematics from schema instead of writing a
+separate copy.
+
+Print the bundled agent skill for reuse in another environment:
+
+```bash
+ksch skill show
+```
 
 ## What The Schema Should Be
 

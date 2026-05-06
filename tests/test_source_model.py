@@ -49,3 +49,24 @@ nets:
     document = SourceDocument.model_validate(data)
     assert document.sheet is not None
     assert document.interface["VBUS"] == "power_in"
+
+
+def test_sheet_document_accepts_power_flags() -> None:
+    data = load_yaml_text(
+        """
+ksch: 1
+sheet:
+  id: power
+symbols:
+  U1:
+    lib: Test:Regulator
+nets:
+  +5V:
+    - U1.VOUT
+power_flags:
+  - +5V
+""",
+        Path("power.ksch.yaml"),
+    )
+    document = SourceDocument.model_validate(data)
+    assert document.power_flags == ["+5V"]

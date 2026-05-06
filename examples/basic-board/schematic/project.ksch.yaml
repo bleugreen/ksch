@@ -1,0 +1,37 @@
+ksch: 1
+project:
+  name: basic-board
+  title: Basic Board
+libraries:
+  symbols:
+    project:
+      Starter: lib/Starter.kicad_sym
+symbols:
+  J1:
+    lib: Starter:Conn4
+    value: USB_IN
+  U1:
+    lib: Starter:LDO_3Pin
+    value: 3V3_REG
+  C1:
+    lib: Starter:C
+    value: 10uF
+  C2:
+    lib: Starter:C
+    value: 100nF
+nets:
+  VBUS:
+    - J1.VBUS
+    - U1.VIN
+    - C1.1
+  +3V3:
+    - U1.VOUT
+    - C2.1
+  GND:
+    - J1.GND
+    - U1.GND
+    - C1.2
+    - C2.2
+no_connects:
+  - J1.D+
+  - J1.D-

@@ -15,6 +15,7 @@ TOP_LEVEL_ORDER = [
     "sheets",
     "symbols",
     "nets",
+    "power_flags",
     "no_connects",
     "assertions",
     "blocks",

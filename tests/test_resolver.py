@@ -18,6 +18,10 @@ def test_resolves_pin_name_all_to_duplicate_numbers() -> None:
     resolved = resolve_project(project, _context())
     endpoints = resolved.sheets["/"].nets["+5V"]
     assert [endpoint.pin_number for endpoint in endpoints if endpoint.ref == "J1"] == ["A4", "B4"]
+    assert [endpoint.text for endpoint in endpoints if endpoint.ref == "J1"] == [
+        "J1.VBUS@A4",
+        "J1.VBUS@B4",
+    ]
 
 
 def test_rejects_ambiguous_pin_without_all_or_number() -> None:
@@ -31,4 +35,13 @@ def test_rejects_unknown_child_port() -> None:
     project = load_project_ir(Path("tests/fixtures/project/project.ksch.yaml"))
     project.sheets["/"].nets["BAD"] = ["usb.NO_SUCH_PORT"]
     with pytest.raises(KschError, match="unknown sheet port usb.NO_SUCH_PORT"):
+        resolve_project(project, _context())
+
+
+def test_rejects_same_pin_on_multiple_nets() -> None:
+    project = load_project_ir(Path("tests/fixtures/project/project.ksch.yaml"))
+    project.sheets["/"].nets["ALIAS_A"] = ["J1.VBUS@A4"]
+    project.sheets["/"].nets["ALIAS_B"] = ["J1.VBUS@A4"]
+
+    with pytest.raises(KschError, match="J1.VBUS@A4 is connected to both"):
         resolve_project(project, _context())

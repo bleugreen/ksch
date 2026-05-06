@@ -4,7 +4,7 @@ from ksch.errors import KschError
 from ksch.kicad.footprints import FootprintInfo
 from ksch.kicad.symbols import SymbolInfo, SymbolPin
 from ksch.model.endpoint import EndpointKind, parse_endpoint
-from ksch.model.ir import ProjectIR
+from ksch.model.ir import ProjectIR, SheetIR
 
 
 @dataclass(frozen=True)
@@ -68,7 +68,7 @@ def _resolve_symbol_pin(
 
     return [
         ResolvedEndpoint(
-            text=endpoint_text,
+            text=f"{ref}.{pin.name}@{pin.number}" if all_matching else endpoint_text,
             kind=EndpointKind.SYMBOL_PIN,
             sheet_path=sheet_path,
             ref=ref,
@@ -79,10 +79,63 @@ def _resolve_symbol_pin(
     ]
 
 
-def resolve_project(project: ProjectIR, libraries: LibraryContext) -> ResolvedProject:
+def _resolve_sheet_symbol_endpoint(
+    sheet_path: str,
+    sheet: SheetIR,
+    endpoint_text: str,
+    libraries: LibraryContext,
+) -> list[ResolvedEndpoint]:
+    endpoint = parse_endpoint(endpoint_text)
+    if endpoint.kind is not EndpointKind.SYMBOL_PIN:
+        raise KschError(f"{endpoint_text} is not a symbol pin endpoint")
+    ref = endpoint.ref or ""
+    symbol_decl = sheet.symbols.get(ref)
+    if symbol_decl is None:
+        raise KschError(f"unknown symbol reference {ref} in {sheet_path}")
+    symbol = libraries.symbols.get(symbol_decl.lib)
+    if symbol is None:
+        raise KschError(f"unknown symbol library id {symbol_decl.lib}")
+    return _resolve_symbol_pin(
+        sheet_path,
+        ref,
+        endpoint_text,
+        symbol,
+        endpoint.pin_name or "",
+        endpoint.pin_number,
+        endpoint.all_matching,
+    )
+
+
+def _resolved_endpoint_key(endpoint: ResolvedEndpoint) -> tuple[str, ...]:
+    if endpoint.kind is EndpointKind.SYMBOL_PIN:
+        return (
+            endpoint.sheet_path,
+            "symbol",
+            endpoint.ref or "",
+            endpoint.pin_number or "",
+        )
+    return (
+        endpoint.sheet_path,
+        "sheet_port",
+        endpoint.child_sheet or "",
+        endpoint.port or "",
+    )
+
+
+def resolve_project(
+    project: ProjectIR,
+    libraries: LibraryContext,
+    *,
+    validate_declared_symbols: bool = False,
+) -> ResolvedProject:
     resolved = ResolvedProject(name=project.name, source=project, symbol_library=libraries.symbols)
     for sheet_path, sheet in project.sheets.items():
         resolved_sheet = ResolvedSheet(path=sheet_path)
+        endpoint_nets: dict[tuple[str, ...], str] = {}
+        if validate_declared_symbols:
+            for symbol_decl in sheet.symbols.values():
+                if symbol_decl.lib not in libraries.symbols:
+                    raise KschError(f"unknown symbol library id {symbol_decl.lib}")
         for net_name, endpoint_texts in sheet.nets.items():
             resolved_endpoints: list[ResolvedEndpoint] = []
             for endpoint_text in endpoint_texts:
@@ -105,24 +158,25 @@ def resolve_project(project: ProjectIR, libraries: LibraryContext) -> ResolvedPr
                     )
                     continue
 
-                ref = endpoint.ref or ""
-                symbol_decl = sheet.symbols.get(ref)
-                if symbol_decl is None:
-                    raise KschError(f"unknown symbol reference {ref} in {sheet_path}")
-                symbol = libraries.symbols.get(symbol_decl.lib)
-                if symbol is None:
-                    raise KschError(f"unknown symbol library id {symbol_decl.lib}")
                 resolved_endpoints.extend(
-                    _resolve_symbol_pin(
+                    _resolve_sheet_symbol_endpoint(
                         sheet_path,
-                        ref,
+                        sheet,
                         endpoint_text,
-                        symbol,
-                        endpoint.pin_name or "",
-                        endpoint.pin_number,
-                        endpoint.all_matching,
+                        libraries,
                     )
                 )
+            for resolved_endpoint in resolved_endpoints:
+                endpoint_key = _resolved_endpoint_key(resolved_endpoint)
+                existing_net = endpoint_nets.get(endpoint_key)
+                if existing_net is not None and existing_net != net_name:
+                    raise KschError(
+                        f"{resolved_endpoint.text} is connected to both "
+                        f"{existing_net} and {net_name} in {sheet_path}"
+                    )
+                endpoint_nets[endpoint_key] = net_name
             resolved_sheet.nets[net_name] = resolved_endpoints
+        for endpoint_text in sheet.no_connects:
+            _resolve_sheet_symbol_endpoint(sheet_path, sheet, endpoint_text, libraries)
         resolved.sheets[sheet_path] = resolved_sheet
     return resolved

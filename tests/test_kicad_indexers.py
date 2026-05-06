@@ -16,6 +16,23 @@ def test_symbol_index_extracts_default_footprint() -> None:
     assert index.symbols["Test:USBHub"].footprint == "TestFootprints:USB_Test"
 
 
+def test_symbol_index_resolves_extended_symbol_pins_and_overrides() -> None:
+    index = index_symbol_library("Test", Path("tests/fixtures/kicad/symbols/Test.kicad_sym"))
+    symbol = index.symbols["Test:DerivedSwitch"]
+    assert [(pin.name, pin.number) for pin in symbol.pins] == [("GND", "1"), ("OUT", "2")]
+    assert symbol.footprint == "TestFootprints:Derived"
+    assert symbol.definition is not None
+    assert "extends" not in str(symbol.definition)
+    assert "DerivedSwitch_1_1" in str(symbol.definition)
+
+
+def test_symbol_index_keeps_real_symbols_with_numeric_suffixes() -> None:
+    index = index_symbol_library("Test", Path("tests/fixtures/kicad/symbols/Test.kicad_sym"))
+
+    assert "Test:Connector_8" in index.symbols
+    assert "Test:Connector_8_1_1" not in index.symbols
+
+
 def test_footprint_index_extracts_pads() -> None:
     index = index_footprint_library(
         "TestFootprints",

@@ -1,19 +1,18 @@
-# CM5 HUDSP exact round-trip parity
+# CM5 HUDSP Exact Round-Trip Parity
 
-The KiCad schematic importer can import `/Users/mitch/projects/cm5-hudsp/cm5hudsp/cm5hudsp.kicad_sch`,
-compile the generated schema back to KiCad, and export a valid KiCad netlist. The current parity smoke
-test holds the residual at or below:
+## Status
 
-- 11 original connectivity signatures missing from the round trip
-- 3 extra generated connectivity signatures
+Resolved for connectivity and ERC errors.
 
-The remaining gaps are concentrated in a small set of local/power nets, for example:
+Current verification on `/Users/mitch/projects/cm5-hudsp/cm5hudsp/cm5hudsp.kicad_sch`:
 
-- `C1.1/C2.1/D12.2/Q1.2/Q2.2/R3.1/R36.1/U1.2`
-- `C1.2/C10.2/C11.2/.../C21.2/...` ground-like aggregate
-- `J2.A6/J2.B6/U2.4` merged with `Module1.103/U2.30`
+- Schematic import compiles back to KiCad.
+- KiCad `kicadsexpr` connectivity signatures match exactly: 0 missing, 0 extra.
+- Generated ERC reports 0 errors.
+- Generated ERC still reports 4 warnings for `MountingHole:MountingHole_3.2mm_M3_DIN965_Pad`;
+  the original project reports the same footprint-library warning class.
 
-Work already done:
+## Fixes Landed
 
 - Import uses KiCad's own `kicadsexpr` netlist export as the source of resolved connectivity.
 - Schema libraries now preserve KiCad library nicknames with `libraries.symbols.project`.
@@ -21,11 +20,20 @@ Work already done:
 - The emitter places child sheets using cumulative sheet heights to avoid overlapping sheet pins.
 - The emitter places multiple symbol units for the same reference instead of collapsing every ref to unit 1.
 - Generated fixture schematic round-trips with exact connectivity parity.
+- KiCad inherited symbols using `(extends ...)` are flattened during library indexing so derived symbols
+  keep base pins and override fields.
+- Imported KiCad `power:PWR_FLAG` pseudo-symbols are preserved as schema `power_flags` and re-emitted as
+  KiCad-native ERC power drivers.
+- Large-sheet placement now checks existing pin and label-stub coordinates before wrapping passive columns
+  back across IC lanes, preventing generated shorts such as `CM5_5V_IN` to `HUB_3V3`/GND.
+- Direct local routes emit a visible label plus hidden endpoint labels so KiCad netlist export preserves
+  the intended far endpoint on routed two-pin nets.
+- `/all` duplicate-pin endpoints now resolve to pin-number-specific endpoint identities, preventing
+  interface filtering from dropping duplicate pins such as `Module1.+3.3v_(Output)@86`.
+- `test_import_cm5_hudsp_roundtrip_smoke` now asserts exact connectivity equality, no ERC errors, and
+  absence of generated net-name collisions, dangling wires, and unconnected pins.
 
-Likely next work:
+## Remaining Follow-Up
 
-- Preserve original symbol instance positions when importing, at least as optional placement metadata.
-- Preserve original no-connect markers and power symbols from schematic geometry, not just netlist nodes.
-- Extend parity diagnostics to report net names beside connectivity signatures.
-- Replace the residual threshold in `test_import_cm5_hudsp_roundtrip_smoke` with exact equality once the
-  remaining power/local net merges are removed.
+- Decide whether the compiler should infer or synthesize global footprint-library entries for stock
+  footprint libraries such as `MountingHole`, or leave this as an upstream project/library-table warning.

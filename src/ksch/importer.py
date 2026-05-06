@@ -14,6 +14,9 @@ from ksch.model.source import PinDirection
 from ksch.schema.formatter import format_schema_text
 from ksch.verify import run_kicad_cli
 
+type CoordinateKey = tuple[int, int]
+type WireSegmentKey = tuple[CoordinateKey, CoordinateKey]
+
 
 @dataclass(frozen=True)
 class ImportedComponent:
@@ -60,6 +63,25 @@ class ImportedProject:
     generated_files: list[Path]
 
 
+class _UnionFind:
+    def __init__(self) -> None:
+        self._parents: dict[CoordinateKey, CoordinateKey] = {}
+
+    def add(self, item: CoordinateKey) -> None:
+        self._parents.setdefault(item, item)
+
+    def find(self, item: CoordinateKey) -> CoordinateKey:
+        self.add(item)
+        parent = self._parents[item]
+        if parent != item:
+            parent = self.find(parent)
+            self._parents[item] = parent
+        return parent
+
+    def union(self, first: CoordinateKey, second: CoordinateKey) -> None:
+        self._parents[self.find(second)] = self.find(first)
+
+
 def import_project(root_schematic: Path, out_dir: Path) -> ImportedProject:
     root = root_schematic.resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -67,6 +89,7 @@ def import_project(root_schematic: Path, out_dir: Path) -> ImportedProject:
     components, symbol_pins, nets = _parse_netlist(netlist)
     sheets = _read_sheet_tree(root)
     symbol_units = _read_symbol_units(sheets)
+    power_flags = _read_power_flags(sheets)
     sheet_by_file = {
         info.source.resolve().name: info.sheet_path for info in sheets.values()
     }
@@ -81,6 +104,7 @@ def import_project(root_schematic: Path, out_dir: Path) -> ImportedProject:
         symbol_pins=symbol_pins,
         symbol_units=symbol_units,
         nets=nets,
+        power_flags=power_flags,
     )
     generated: list[Path] = []
     for sheet_path, data in schema_by_sheet.items():
@@ -249,6 +273,118 @@ def _read_symbol_units(sheets: dict[str, SheetInfo]) -> dict[str, list[int]]:
     return {ref: sorted(values) for ref, values in units.items()}
 
 
+def _read_power_flags(sheets: dict[str, SheetInfo]) -> dict[str, list[str]]:
+    flags: dict[str, list[str]] = {}
+    for sheet_path, sheet in sheets.items():
+        net_names = _power_flag_net_names(load_sexpr_file(sheet.source))
+        if net_names:
+            flags[sheet_path] = net_names
+    return flags
+
+
+def _power_flag_net_names(expr: list[Any]) -> list[str]:
+    flag_points: list[CoordinateKey] = []
+    label_points: dict[CoordinateKey, set[str]] = defaultdict(set)
+    relevant_points: set[CoordinateKey] = set()
+    wire_segments: list[WireSegmentKey] = []
+
+    for symbol_expr in _children(expr, "symbol"):
+        lib_id = _child_atom(symbol_expr, "lib_id") or ""
+        point = _at_point(symbol_expr)
+        if point is None or not lib_id.startswith("power:"):
+            continue
+        if lib_id == "power:PWR_FLAG":
+            flag_points.append(point)
+            relevant_points.add(point)
+            continue
+        value = _property_value(symbol_expr, "Value") or lib_id.split(":", 1)[1]
+        label_points[point].add(_schema_net_name(value))
+        relevant_points.add(point)
+
+    for token in ("label", "global_label", "hierarchical_label"):
+        for label_expr in _children(expr, token):
+            if len(label_expr) < 2:
+                continue
+            point = _at_point(label_expr)
+            if point is None:
+                continue
+            label_points[point].add(_schema_net_name(atom(label_expr[1])))
+            relevant_points.add(point)
+
+    for junction_expr in _children(expr, "junction"):
+        point = _at_point(junction_expr)
+        if point is not None:
+            relevant_points.add(point)
+
+    for wire_expr in _children(expr, "wire"):
+        points_expr = _first_child(wire_expr, "pts")
+        if points_expr is None:
+            continue
+        wire_points: list[CoordinateKey] = []
+        for point_expr in points_expr[1:]:
+            if not isinstance(point_expr, list):
+                continue
+            point = _xy_point(point_expr)
+            if point is not None:
+                wire_points.append(point)
+        for start, end in zip(wire_points, wire_points[1:], strict=False):
+            wire_segments.append((start, end))
+            relevant_points.add(start)
+            relevant_points.add(end)
+
+    graph = _UnionFind()
+    for point in relevant_points:
+        graph.add(point)
+    for start, end in wire_segments:
+        graph.union(start, end)
+        for point in relevant_points:
+            if point not in {start, end} and _point_on_segment(point, start, end):
+                graph.union(start, point)
+
+    labels_by_root: dict[CoordinateKey, set[str]] = defaultdict(set)
+    for point, labels in label_points.items():
+        labels_by_root[graph.find(point)].update(labels)
+
+    net_names: list[str] = []
+    for flag_point in flag_points:
+        label_names = sorted(labels_by_root.get(graph.find(flag_point), set()))
+        if label_names:
+            net_names.append(label_names[0])
+    return sorted(set(net_names))
+
+
+def _at_point(expr: list[Any]) -> CoordinateKey | None:
+    at_expr = _first_child(expr, "at")
+    if at_expr is None or len(at_expr) < 3:
+        return None
+    return _coordinate_key(float(atom(at_expr[1])), float(atom(at_expr[2])))
+
+
+def _xy_point(expr: list[Any]) -> CoordinateKey | None:
+    if len(expr) < 3 or atom(expr[0]) != "xy":
+        return None
+    return _coordinate_key(float(atom(expr[1])), float(atom(expr[2])))
+
+
+def _coordinate_key(x: float, y: float) -> CoordinateKey:
+    return (int(round(x * 1000)), int(round(y * 1000)))
+
+
+def _point_on_segment(
+    point: CoordinateKey,
+    start: CoordinateKey,
+    end: CoordinateKey,
+) -> bool:
+    x, y = point
+    start_x, start_y = start
+    end_x, end_y = end
+    return (
+        (x - start_x) * (end_y - start_y) == (y - start_y) * (end_x - start_x)
+        and min(start_x, end_x) <= x <= max(start_x, end_x)
+        and min(start_y, end_y) <= y <= max(start_y, end_y)
+    )
+
+
 def _build_schema_documents(
     *,
     root_name: str,
@@ -260,6 +396,7 @@ def _build_schema_documents(
     symbol_pins: dict[str, dict[str, ImportedPin]],
     symbol_units: dict[str, list[int]],
     nets: list[ImportedNet],
+    power_flags: dict[str, list[str]] | None = None,
 ) -> dict[str, dict[str, Any]]:
     docs: dict[str, dict[str, Any]] = {}
     component_sheet = {
@@ -268,7 +405,16 @@ def _build_schema_documents(
     }
     cross_sheet_ports: dict[str, dict[str, PinDirection]] = defaultdict(dict)
     sheet_nets: dict[str, dict[str, list[str]]] = defaultdict(dict)
+    sheet_no_connects: dict[str, list[str]] = defaultdict(list)
     for net in nets:
+        if _is_kicad_unconnected_net(net) and len(net.nodes) == 1:
+            node = net.nodes[0]
+            sheet_path = component_sheet.get(node.ref, "/")
+            sheet_no_connects[sheet_path].extend(
+                _endpoints_for_nodes([node], components, symbol_pins)
+            )
+            continue
+
         nodes_by_sheet: dict[str, list[ImportedNode]] = defaultdict(list)
         for node in net.nodes:
             sheet_path = component_sheet.get(node.ref, "/")
@@ -286,7 +432,8 @@ def _build_schema_documents(
                 root_endpoints.add(f"{_sheet_instance_name(sheet_path)}.{net.name}")
             sheet_nets["/"][net.name] = sorted(root_endpoints)
 
-    library_paths = _project_symbol_libraries(project_dir, out_dir)
+    symbol_library_paths = _project_libraries(project_dir, out_dir, "sym-lib-table")
+    footprint_library_paths = _project_libraries(project_dir, out_dir, "fp-lib-table")
     for sheet_path, sheet in sheets.items():
         symbols = {
             ref: _symbol_decl(component, symbol_units.get(ref))
@@ -298,8 +445,13 @@ def _build_schema_documents(
                 "ksch": 1,
                 "project": {"name": root_name},
             }
-            if library_paths:
-                data["libraries"] = {"symbols": {"project": library_paths}}
+            libraries: dict[str, Any] = {}
+            if symbol_library_paths:
+                libraries["symbols"] = {"project": symbol_library_paths}
+            if footprint_library_paths:
+                libraries["footprints"] = {"project": footprint_library_paths}
+            if libraries:
+                data["libraries"] = libraries
             if sheet.children:
                 data["sheets"] = {
                     name: {"source": _relative_schema_path(out_dir, child_path)}
@@ -330,8 +482,32 @@ def _build_schema_documents(
             data["symbols"] = symbols
         if sheet_nets.get(sheet_path):
             data["nets"] = dict(sorted(sheet_nets[sheet_path].items()))
+        sheet_power_flags = _canonical_power_flag_names(
+            (power_flags or {}).get(sheet_path, []),
+            set(sheet_nets.get(sheet_path, {})),
+        )
+        if sheet_power_flags:
+            data["power_flags"] = sheet_power_flags
+        if sheet_no_connects.get(sheet_path):
+            data["no_connects"] = sorted(set(sheet_no_connects[sheet_path]))
         docs[sheet_path] = data
     return docs
+
+
+def _is_kicad_unconnected_net(net: ImportedNet) -> bool:
+    return net.name.startswith("unconnected-(")
+
+
+def _canonical_power_flag_names(candidates: list[str], sheet_net_names: set[str]) -> list[str]:
+    resolved: list[str] = []
+    for candidate in candidates:
+        if candidate in sheet_net_names:
+            resolved.append(candidate)
+            continue
+        suffix = f"_{candidate}"
+        suffix_matches = sorted(name for name in sheet_net_names if name.endswith(suffix))
+        resolved.append(suffix_matches[0] if len(suffix_matches) == 1 else candidate)
+    return sorted(set(resolved))
 
 
 def _symbol_decl(component: ImportedComponent, units: list[int] | None) -> dict[str, Any]:
@@ -383,8 +559,8 @@ def _endpoints_for_nodes(
     return endpoints
 
 
-def _project_symbol_libraries(project_dir: Path, out_dir: Path) -> dict[str, str]:
-    table = project_dir / "sym-lib-table"
+def _project_libraries(project_dir: Path, out_dir: Path, table_name: str) -> dict[str, str]:
+    table = project_dir / table_name
     if not table.exists():
         return {}
     parsed = parse_library_table(table, {"KIPRJMOD": str(project_dir)})

@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from ksch.cli import app
@@ -58,3 +59,87 @@ def test_compile_uses_schema_project_symbol_libraries(tmp_path: Path) -> None:
 
     assert result.exit_code == 0, result.output
     assert (tmp_path / "out" / "sym-lib-table").read_text(encoding="utf-8").count("Test") >= 1
+
+
+def test_compile_uses_schema_project_footprint_libraries(tmp_path: Path) -> None:
+    schema = tmp_path / "project.ksch.yaml"
+    schema.write_text(
+        "\n".join(
+            [
+                "ksch: 1",
+                "project:",
+                "  name: demo",
+                "libraries:",
+                "  footprints:",
+                "    project:",
+                "      TestFootprints: TestFootprints.pretty",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "TestFootprints.pretty").mkdir()
+
+    result = runner.invoke(app, ["compile", str(schema), "--out", str(tmp_path / "out")])
+
+    assert result.exit_code == 0, result.output
+    assert "TestFootprints" in (tmp_path / "out" / "fp-lib-table").read_text(encoding="utf-8")
+
+
+def test_compile_emits_power_flags(tmp_path: Path) -> None:
+    schema = tmp_path / "project.ksch.yaml"
+    schema.write_text(
+        "\n".join(
+            [
+                "ksch: 1",
+                "project:",
+                "  name: demo",
+                "power_flags:",
+                "  - +5V",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["compile", str(schema), "--out", str(tmp_path / "out")])
+
+    assert result.exit_code == 0, result.output
+    schematic = (tmp_path / "out" / "demo.kicad_sch").read_text(encoding="utf-8")
+    assert '(symbol "power:PWR_FLAG"' in schematic
+    assert '(lib_id "power:PWR_FLAG")' in schematic
+    assert '(label "+5V"' in schematic
+    assert "(hide yes)" in schematic
+
+
+def test_gen_uses_project_config_from_current_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_dir = tmp_path / "starter-board"
+    init_result = runner.invoke(app, ["init", str(project_dir)])
+    assert init_result.exit_code == 0, init_result.output
+
+    monkeypatch.chdir(project_dir)
+    result = runner.invoke(app, ["gen"])
+
+    assert result.exit_code == 0, result.output
+    assert (project_dir / "kicad" / "starter-board.kicad_sch").exists()
+
+
+def test_check_uses_project_config_from_current_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_dir = tmp_path / "starter-board"
+    init_result = runner.invoke(app, ["init", str(project_dir)])
+    assert init_result.exit_code == 0, init_result.output
+
+    monkeypatch.chdir(project_dir)
+    gen_result = runner.invoke(app, ["gen"])
+    assert gen_result.exit_code == 0, gen_result.output
+
+    result = runner.invoke(app, ["check"])
+
+    assert result.exit_code == 0, result.output
+    assert "matches schema" in result.output

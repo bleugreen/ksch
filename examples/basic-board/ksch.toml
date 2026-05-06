@@ -1,0 +1,2 @@
+schema = "schematic/project.ksch.yaml"
+out = "kicad"

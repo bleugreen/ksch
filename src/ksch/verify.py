@@ -67,7 +67,7 @@ def parse_kicadsexpr_netlist(path: Path) -> dict[str, NetlistNet]:
 
 
 def connectivity_signature(nets: dict[str, NetlistNet]) -> set[frozenset[tuple[str, str]]]:
-    return {frozenset(net.connections) for net in nets.values() if net.connections}
+    return {frozenset(net.connections) for net in nets.values() if len(net.connections) > 1}
 
 
 def _child_atom(expr: list[Any], name: str) -> str | None:

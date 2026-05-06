@@ -40,6 +40,12 @@ ksch = "ksch.cli:app"
 [tool.hatch.build.targets.wheel]
 packages = ["src/ksch"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"src/ksch/skills/ksch/SKILL.md" = "ksch/skills/ksch/SKILL.md"
+
+[tool.hatch.build.targets.sdist.force-include]
+"src/ksch/skills/ksch/SKILL.md" = "src/ksch/skills/ksch/SKILL.md"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]

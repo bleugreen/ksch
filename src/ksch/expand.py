@@ -24,6 +24,7 @@ def _sheet_ir(path: str, source_path: Path, source: SourceDocument) -> SheetIR:
         interface=source.interface,
         symbols=source.symbols,
         nets=source.nets,
+        power_flags=source.power_flags,
         no_connects=source.no_connects,
         assertions=source.assertions,
     )
@@ -56,9 +57,14 @@ def load_project_ir(path: Path) -> ProjectIR:
         nickname: (root_path.parent / library_path).resolve()
         for nickname, library_path in source.libraries.symbols.project.items()
     }
+    footprint_libraries = {
+        nickname: (root_path.parent / library_path).resolve()
+        for nickname, library_path in source.libraries.footprints.project.items()
+    }
     return ProjectIR(
         name=source.project.name,
         root_path=root_path,
         sheets=sheets,
         symbol_libraries=symbol_libraries,
+        footprint_libraries=footprint_libraries,
     )
