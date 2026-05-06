@@ -193,6 +193,17 @@ def _merge_inherited_symbol(
     return resolved[name]
 
 
+def symbol_info_from_definition(lib_id: str, expr: list[Any]) -> SymbolInfo:
+    name = lib_id.split(":", 1)[1] if ":" in lib_id else lib_id
+    return SymbolInfo(
+        lib_id=lib_id,
+        name=name,
+        footprint=_property_value(expr, "Footprint"),
+        pins=_collect_pins(expr),
+        definition=deepcopy(expr),
+    )
+
+
 def index_symbol_library(nickname: str, path: Path) -> SymbolLibraryIndex:
     expr = load_sexpr_file(path)
     symbol_exprs: dict[str, list[Any]] = {}

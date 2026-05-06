@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ksch.kicad.sexpr import atom
-from ksch.kicad.symbols import SymbolInfo
+from ksch.kicad.symbols import SymbolInfo, SymbolPin
 
 Coordinate = tuple[float, float]
 WireSegment = tuple[float, float, float, float]
@@ -29,6 +29,25 @@ def sexpr_point(expr: list[Any], token: str) -> Coordinate | None:
     if child is None or len(child) < 3:
         return None
     return (float(atom(child[1])), float(atom(child[2])))
+
+
+def symbol_pin_coordinate(
+    symbol_x: float,
+    symbol_y: float,
+    pin: SymbolPin,
+    *,
+    symbol_rotation: int = 0,
+) -> Coordinate:
+    local_x = pin.at[0] if pin.at else 0.0
+    local_y = pin.at[1] if pin.at else 0.0
+    symbol_rotation = symbol_rotation % 360
+    if symbol_rotation == 90:
+        local_x, local_y = -local_y, local_x
+    elif symbol_rotation == 180:
+        local_x, local_y = -local_x, -local_y
+    elif symbol_rotation == 270:
+        local_x, local_y = local_y, -local_x
+    return (symbol_x + local_x, symbol_y - local_y)
 
 
 def symbol_graphic_points(expr: list[Any]) -> list[Coordinate]:

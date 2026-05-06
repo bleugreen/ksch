@@ -35,6 +35,9 @@ from ksch.geometry import (
     symbol_horizontal_extent as _symbol_horizontal_extent,
 )
 from ksch.geometry import (
+    symbol_pin_coordinate as _symbol_pin_coordinate,
+)
+from ksch.geometry import (
     symbol_rect as _symbol_rect,
 )
 from ksch.geometry import (
@@ -2697,18 +2700,14 @@ def _symbol_pin_point(
     symbol_info: SymbolInfo | None = None,
     symbol_rotation: int = 0,
 ) -> PinPoint:
-    local_x = pin.at[0] if pin.at else 0.0
-    local_y = pin.at[1] if pin.at else 0.0
     symbol_rotation = symbol_rotation % 360
-    if symbol_rotation == 90:
-        local_x, local_y = -local_y, local_x
-    elif symbol_rotation == 180:
-        local_x, local_y = -local_x, -local_y
-    elif symbol_rotation == 270:
-        local_x, local_y = local_y, -local_x
     rotation = (int(pin.at[2] if pin.at else 0.0) + symbol_rotation) % 360
-    x = symbol_x + local_x
-    y = symbol_y - local_y
+    x, y = _symbol_pin_coordinate(
+        symbol_x,
+        symbol_y,
+        pin,
+        symbol_rotation=symbol_rotation,
+    )
     if _is_vertical_two_pin_symbol(symbol_info) and rotation in {90, 270}:
         label_x = x + PIN_LABEL_STUB
         label_y = y
