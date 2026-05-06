@@ -35,3 +35,67 @@ def test_check_reports_clean_generated_output(tmp_path: Path) -> None:
 
     assert check_result.exit_code == 0
     assert "generated output matches schema" in check_result.stdout
+
+
+def test_verify_reports_clean_generated_output_without_erc(tmp_path: Path) -> None:
+    compile_result = runner.invoke(
+        app,
+        [
+            "compile",
+            "tests/fixtures/project/project.ksch.yaml",
+            "--out",
+            str(tmp_path),
+            "--symbol-library",
+            "Test=tests/fixtures/kicad/symbols/Test.kicad_sym",
+        ],
+    )
+    assert compile_result.exit_code == 0
+
+    verify_result = runner.invoke(
+        app,
+        [
+            "verify",
+            "tests/fixtures/project/project.ksch.yaml",
+            "--out",
+            str(tmp_path),
+            "--no-erc",
+            "--symbol-library",
+            "Test=tests/fixtures/kicad/symbols/Test.kicad_sym",
+        ],
+    )
+
+    assert verify_result.exit_code == 0
+    assert "drift: generated output matches" in verify_result.stdout
+    assert "verification passed" in verify_result.stdout
+
+
+def test_verify_reports_generated_output_drift(tmp_path: Path) -> None:
+    compile_result = runner.invoke(
+        app,
+        [
+            "compile",
+            "tests/fixtures/project/project.ksch.yaml",
+            "--out",
+            str(tmp_path),
+            "--symbol-library",
+            "Test=tests/fixtures/kicad/symbols/Test.kicad_sym",
+        ],
+    )
+    assert compile_result.exit_code == 0
+    (tmp_path / "demo.kicad_sch").write_text("manual edit\n", encoding="utf-8")
+
+    verify_result = runner.invoke(
+        app,
+        [
+            "verify",
+            "tests/fixtures/project/project.ksch.yaml",
+            "--out",
+            str(tmp_path),
+            "--no-erc",
+            "--symbol-library",
+            "Test=tests/fixtures/kicad/symbols/Test.kicad_sym",
+        ],
+    )
+
+    assert verify_result.exit_code == 1
+    assert "drift: generated file differs demo.kicad_sch" in verify_result.stdout

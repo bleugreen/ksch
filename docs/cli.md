@@ -42,6 +42,26 @@ symbol_library = ["Test=lib/Test.kicad_sym"]
 Run `ksch gen` from the project root to compile the configured schema to the
 configured KiCad output.
 
+## Verify Generated KiCad
+
+```bash
+ksch verify
+ksch verify --against path/to/original.kicad_sch --artifacts .ksch-verify
+```
+
+Reads `ksch.toml`, compiles the configured schema, runs KiCad ERC on the
+generated root schematic, and compares generated files against the configured
+output. `--against` exports KiCad netlists for the original schematic and the
+generated schematic, then compares connectivity. `--artifacts` keeps the
+generated verification project, ERC report, and netlists.
+
+Use this as the normal dogfooding gate after editing schema:
+
+```bash
+ksch gen
+ksch verify
+```
+
 ## Validate
 
 ```bash
@@ -114,6 +134,10 @@ ksch check project.ksch.yaml \
 
 Regenerates into a temporary directory and reports differences from the current
 generated output. With no arguments it reads `ksch.toml`.
+
+`ksch check` is the fast generated-file comparison. Prefer `ksch verify` when
+`kicad-cli` is available, because it also runs ERC and can compare netlist
+connectivity.
 
 ## Skill Material
 

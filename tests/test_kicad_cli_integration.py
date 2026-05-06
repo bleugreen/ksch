@@ -96,3 +96,46 @@ def test_generated_project_exports_visible_svg(tmp_path: Path) -> None:
     assert "+5V" in root_svg
     assert "USB2514B" in child_svg
     assert "VBUS" in child_svg
+
+
+@pytest.mark.skipif(shutil.which("kicad-cli") is None, reason="kicad-cli is not installed")
+def test_verify_runs_erc_and_netlist_parity(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    result = runner.invoke(
+        app,
+        [
+            "compile",
+            "tests/fixtures/project/project.ksch.yaml",
+            "--out",
+            str(project),
+            "--symbol-library",
+            "Test=tests/fixtures/kicad/symbols/Test.kicad_sym",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    artifacts = tmp_path / "verify-artifacts"
+    verify_result = runner.invoke(
+        app,
+        [
+            "verify",
+            "tests/fixtures/project/project.ksch.yaml",
+            "--out",
+            str(project),
+            "--against",
+            str(project / "demo.kicad_sch"),
+            "--artifacts",
+            str(artifacts),
+            "--symbol-library",
+            "Test=tests/fixtures/kicad/symbols/Test.kicad_sym",
+        ],
+    )
+
+    assert verify_result.exit_code == 0, verify_result.output
+    assert "erc: 0 violation(s)" in verify_result.stdout
+    assert "netlist: matches" in verify_result.stdout
+    assert "drift: generated output matches" in verify_result.stdout
+    assert "verification passed" in verify_result.stdout
+    assert (artifacts / "erc.rpt").exists()
+    assert (artifacts / "reference.net").exists()
+    assert (artifacts / "generated.net").exists()
