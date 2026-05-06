@@ -8,8 +8,10 @@ from typing import Any
 
 from ruamel.yaml import YAML
 
+from ksch.geometry import symbol_pin_coordinate
 from ksch.kicad.libraries import parse_library_table
 from ksch.kicad.sexpr import atom, load_sexpr_file
+from ksch.kicad.symbols import SymbolInfo, symbol_info_from_definition
 from ksch.model.source import PinDirection
 from ksch.schema.formatter import format_schema_text
 from ksch.verify import run_kicad_cli
@@ -93,6 +95,7 @@ def import_project(root_schematic: Path, out_dir: Path) -> ImportedProject:
     sheet_by_file = {
         info.source.resolve().name: info.sheet_path for info in sheets.values()
     }
+    no_connects = _read_no_connects(sheets, components, symbol_pins)
     root_name = root.stem
     schema_by_sheet = _build_schema_documents(
         root_name=root_name,
@@ -105,6 +108,7 @@ def import_project(root_schematic: Path, out_dir: Path) -> ImportedProject:
         symbol_units=symbol_units,
         nets=nets,
         power_flags=power_flags,
+        no_connects=no_connects,
     )
     generated: list[Path] = []
     for sheet_path, data in schema_by_sheet.items():
@@ -282,6 +286,71 @@ def _read_power_flags(sheets: dict[str, SheetInfo]) -> dict[str, list[str]]:
     return flags
 
 
+def _read_no_connects(
+    sheets: dict[str, SheetInfo],
+    components: dict[str, ImportedComponent],
+    symbol_pins: dict[str, dict[str, ImportedPin]],
+) -> dict[str, list[str]]:
+    no_connects: dict[str, list[str]] = {}
+    for sheet_path, sheet in sheets.items():
+        expr = load_sexpr_file(sheet.source)
+        no_connect_points = {
+            point for item in _children(expr, "no_connect") for point in [_at_point(item)]
+            if point is not None
+        }
+        if not no_connect_points:
+            continue
+
+        embedded_symbols = _embedded_symbol_infos(expr)
+        nodes: list[ImportedNode] = []
+        for symbol_expr in _children(expr, "symbol"):
+            ref = _property_value(symbol_expr, "Reference")
+            lib_id = _child_atom(symbol_expr, "lib_id")
+            at_expr = _first_child(symbol_expr, "at")
+            if ref is None or lib_id is None or at_expr is None or len(at_expr) < 3:
+                continue
+            symbol_info = embedded_symbols.get(lib_id)
+            if symbol_info is None:
+                continue
+            try:
+                symbol_x = float(atom(at_expr[1]))
+                symbol_y = float(atom(at_expr[2]))
+                symbol_rotation = int(float(atom(at_expr[3]))) if len(at_expr) > 3 else 0
+                unit = int(_child_atom(symbol_expr, "unit") or "1")
+            except ValueError:
+                continue
+
+            for pin in symbol_info.pins:
+                if pin.unit not in {0, unit}:
+                    continue
+                point = symbol_pin_coordinate(
+                    symbol_x,
+                    symbol_y,
+                    pin,
+                    symbol_rotation=symbol_rotation,
+                )
+                if _coordinate_key(point[0], point[1]) not in no_connect_points:
+                    continue
+                nodes.append(
+                    ImportedNode(ref=ref, pin_number=pin.number, pin_name=pin.name)
+                )
+        if nodes:
+            no_connects[sheet_path] = _endpoints_for_nodes(nodes, components, symbol_pins)
+    return no_connects
+
+
+def _embedded_symbol_infos(expr: list[Any]) -> dict[str, SymbolInfo]:
+    lib_symbols = _first_child(expr, "lib_symbols")
+    if lib_symbols is None:
+        return {}
+    return {
+        lib_id: symbol_info_from_definition(lib_id, symbol_expr)
+        for symbol_expr in _children(lib_symbols, "symbol")
+        for lib_id in [atom(symbol_expr[1]) if len(symbol_expr) > 1 else ""]
+        if lib_id
+    }
+
+
 def _power_flag_net_names(expr: list[Any]) -> list[str]:
     flag_points: list[CoordinateKey] = []
     label_points: dict[CoordinateKey, set[str]] = defaultdict(set)
@@ -397,6 +466,7 @@ def _build_schema_documents(
     symbol_units: dict[str, list[int]],
     nets: list[ImportedNet],
     power_flags: dict[str, list[str]] | None = None,
+    no_connects: dict[str, list[str]] | None = None,
 ) -> dict[str, dict[str, Any]]:
     docs: dict[str, dict[str, Any]] = {}
     component_sheet = {
@@ -406,6 +476,8 @@ def _build_schema_documents(
     cross_sheet_ports: dict[str, dict[str, PinDirection]] = defaultdict(dict)
     sheet_nets: dict[str, dict[str, list[str]]] = defaultdict(dict)
     sheet_no_connects: dict[str, list[str]] = defaultdict(list)
+    for sheet_path, endpoints in (no_connects or {}).items():
+        sheet_no_connects[sheet_path].extend(endpoints)
     for net in nets:
         if _is_kicad_unconnected_net(net) and len(net.nodes) == 1:
             node = net.nodes[0]
