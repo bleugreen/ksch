@@ -26,6 +26,7 @@ Common commands:
 - `ksch init`: initialize in the current directory; imports if one KiCad root is detected.
 - `ksch gen`: compile the project described by `ksch.toml`.
 - `ksch verify`: compile, run KiCad ERC, and compare generated output.
+- `ksch doctor`: report project config, KiCad CLI, and library path readiness.
 - `ksch check`: compile to a temporary directory and compare against configured output.
 - `ksch validate <schema>`: validate schema, symbols, endpoints, and sheet ports.
 - `ksch fmt <schema>`: normalize schema formatting.
@@ -86,8 +87,13 @@ ksch symbol info Device:R
 ksch pin-search Connector:USB_C_Receptacle_USB2.0 D+
 ```
 
-If a symbol is project-local, prefer declaring it in the schema rather than
-passing `--symbol-library` every time.
+Inside a configured project, authoring lookup uses project context
+automatically: schema-declared libraries, `ksch.toml` extra symbol libraries,
+and generated KiCad `sym-lib-table` entries. Use `--library NICK=PATH` only for
+one-off extra libraries.
+
+If a symbol is project-local, prefer declaring it in the schema or project
+config rather than passing `--symbol-library` every time.
 
 ## Common Fixes
 

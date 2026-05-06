@@ -1,4 +1,6 @@
+import shutil
 import tempfile
+from collections.abc import Callable
 from importlib.resources import files
 from pathlib import Path
 from typing import Annotated, NoReturn
@@ -8,13 +10,19 @@ from pydantic import ValidationError
 from rich.console import Console
 
 from ksch import __version__
-from ksch.authoring import index_symbol_libraries, load_symbol_libraries, symbol_info_lines
+from ksch.authoring import (
+    index_symbol_libraries,
+    load_symbol_library_paths,
+    parse_symbol_library_spec,
+    symbol_info_lines,
+)
 from ksch.compiler import write_project
 from ksch.config import ProjectConfig, load_project_config
 from ksch.errors import KschError
 from ksch.expand import load_project_ir
 from ksch.importer import ImportedProject, import_project
-from ksch.kicad.symbols import index_symbol_library
+from ksch.kicad.symbols import SymbolInfo, index_symbol_library
+from ksch.project_context import load_project_context
 from ksch.resolver import LibraryContext, ResolvedProject, resolve_project
 from ksch.scaffold import create_project_from_kicad, create_starter_project, discover_kicad_roots
 from ksch.schema.formatter import format_schema_text
@@ -111,7 +119,14 @@ def _configured_symbol_libraries(
     config: ProjectConfig | None,
     symbol_library: list[str] | None,
 ) -> list[str]:
-    return [*(config.symbol_library if config is not None else ()), *(symbol_library or [])]
+    configured: list[str] = []
+    if config is not None:
+        for spec in config.symbol_library:
+            nickname, path = parse_symbol_library_spec(spec)
+            if not path.is_absolute():
+                path = config.root / path
+            configured.append(f"{nickname}={path}")
+    return [*configured, *(symbol_library or [])]
 
 
 def _skill_text() -> str:
@@ -127,6 +142,14 @@ def _print_import_result(imported: ImportedProject) -> None:
     console.print(f"wrote {len(child_sheets)} child sheet schema{suffix}:")
     for path in child_sheets:
         console.print(f"- {path}")
+
+
+def _load_authoring_symbols(
+    config: Path,
+    symbol_library: list[str] | None,
+) -> dict[str, SymbolInfo]:
+    context = load_project_context(config, symbol_library=symbol_library)
+    return load_symbol_library_paths(context.symbol_libraries)
 
 
 @app.callback(invoke_without_command=True)
@@ -473,6 +496,81 @@ def verify_command(
     console.print("verification passed")
 
 
+@app.command("doctor")
+def doctor_command(
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to ksch.toml or a project directory."),
+    ] = Path("ksch.toml"),
+) -> None:
+    """Report local ksch, KiCad CLI, and project library readiness."""
+    errors = 0
+    warnings = 0
+
+    def ok(message: str) -> None:
+        console.print(f"ok: {message}")
+
+    def warn(message: str) -> None:
+        nonlocal warnings
+        warnings += 1
+        console.print(f"warning: {message}")
+
+    def error(message: str) -> None:
+        nonlocal errors
+        errors += 1
+        console.print(f"error: {message}")
+
+    kicad_cli = shutil.which("kicad-cli")
+    if kicad_cli is None:
+        error("kicad-cli not found on PATH")
+    else:
+        ok(f"kicad-cli {kicad_cli}")
+
+    try:
+        context = load_project_context(config, require_config=True)
+    except (KschError, ValidationError, ValueError, OSError) as exc:
+        error(_format_error(exc))
+        raise typer.Exit(1) from exc
+
+    project_config = context.config
+    assert project_config is not None
+    ok(f"config {project_config.config_path}")
+    ok(f"schema {project_config.schema}")
+    if project_config.out.exists():
+        ok(f"output {project_config.out}")
+    else:
+        warn(f"output directory does not exist yet: {project_config.out}")
+
+    if context.symbol_libraries:
+        found = _report_library_paths("symbol", context.symbol_libraries, error)
+        ok(f"{found}/{len(context.symbol_libraries)} symbol libraries found")
+    else:
+        warn("no symbol libraries discovered")
+
+    if context.footprint_libraries:
+        found = _report_library_paths("footprint", context.footprint_libraries, error)
+        ok(f"{found}/{len(context.footprint_libraries)} footprint libraries found")
+
+    if errors:
+        raise typer.Exit(1)
+    suffix = "" if warnings == 0 else f" with {warnings} warning(s)"
+    console.print(f"doctor passed{suffix}")
+
+
+def _report_library_paths(
+    kind: str,
+    libraries: dict[str, Path],
+    report_error: Callable[[str], None],
+) -> int:
+    found = 0
+    for nickname, path in sorted(libraries.items()):
+        if path.exists():
+            found += 1
+        else:
+            report_error(f"missing {kind} library {nickname}: {path}")
+    return found
+
+
 @skill_app.command("show")
 def skill_show() -> None:
     """Print the bundled Codex skill for ksch projects."""
@@ -489,10 +587,14 @@ def symbols_search(
         list[str] | None,
         typer.Option("--library", "-L", help="Symbol library as NICKNAME=PATH."),
     ] = None,
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to ksch.toml or a project directory."),
+    ] = Path("ksch.toml"),
 ) -> None:
     """Search indexed symbols by library id."""
     try:
-        symbols = load_symbol_libraries(library or [])
+        symbols = _load_authoring_symbols(config, library)
     except (KschError, OSError, ValueError) as exc:
         _exit_error(_format_error(exc))
 
@@ -510,10 +612,14 @@ def pin_search(
         list[str] | None,
         typer.Option("--library", "-L", help="Symbol library as NICKNAME=PATH."),
     ] = None,
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to ksch.toml or a project directory."),
+    ] = Path("ksch.toml"),
 ) -> None:
     """Search pins on one symbol."""
     try:
-        symbols = load_symbol_libraries(library or [])
+        symbols = _load_authoring_symbols(config, library)
     except (KschError, OSError, ValueError) as exc:
         _exit_error(_format_error(exc))
 
@@ -534,10 +640,14 @@ def symbol_info(
         list[str] | None,
         typer.Option("--library", "-L", help="Symbol library as NICKNAME=PATH."),
     ] = None,
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to ksch.toml or a project directory."),
+    ] = Path("ksch.toml"),
 ) -> None:
     """Print indexed symbol information."""
     try:
-        symbols = load_symbol_libraries(library or [])
+        symbols = _load_authoring_symbols(config, library)
     except (KschError, OSError, ValueError) as exc:
         _exit_error(_format_error(exc))
 
