@@ -41,6 +41,7 @@ def format_schema_text(text: str, path: Path | None = None) -> str:
     ordered = _order_mapping(data, top_level=True)
     yaml = YAML()
     yaml.default_flow_style = False
+    yaml.indent(mapping=2, sequence=4, offset=2)
     yaml.width = 100
     output = StringIO()
     yaml.dump(ordered, output)

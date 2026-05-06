@@ -187,3 +187,17 @@ extra symbol libraries, and generated KiCad `sym-lib-table` entries. Use
 
 `ksch explain` accepts a library symbol id, a project ref, or a project endpoint
 and prints the concrete symbol/pin information used by validation.
+
+## Structured Edits
+
+```bash
+ksch edit add-symbol R1 Device:R --value 10k
+ksch edit add-symbol C1 Device:C --value 100nF --sheet /power
+ksch edit connect RESET R1.1 U1.RESET
+ksch edit connect +3V3 C1.1 --sheet /power
+```
+
+Structured edits load the configured project graph, validate symbol libraries
+and endpoints, reject cross-net conflicts, then rewrite the affected schema
+sheet with deterministic formatting. With no `--schema`, edit commands read the
+root schema from `ksch.toml`.
