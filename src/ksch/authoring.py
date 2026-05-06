@@ -10,17 +10,38 @@ def parse_symbol_library_spec(value: str) -> tuple[str, Path]:
     return nickname, Path(path_text)
 
 
-def index_symbol_libraries(library_specs: list[str]) -> dict[str, SymbolLibraryIndex]:
-    indexes: dict[str, SymbolLibraryIndex] = {}
+def parse_symbol_library_specs(
+    library_specs: list[str],
+    *,
+    base_dir: Path | None = None,
+) -> dict[str, Path]:
+    libraries: dict[str, Path] = {}
     for spec in library_specs:
         nickname, path = parse_symbol_library_spec(spec)
-        indexes[nickname] = index_symbol_library(nickname, path)
-    return indexes
+        if base_dir is not None and not path.is_absolute():
+            path = base_dir / path
+        libraries[nickname] = path
+    return libraries
+
+
+def index_symbol_library_paths(libraries: dict[str, Path]) -> dict[str, SymbolLibraryIndex]:
+    return {
+        nickname: index_symbol_library(nickname, path)
+        for nickname, path in libraries.items()
+    }
+
+
+def index_symbol_libraries(library_specs: list[str]) -> dict[str, SymbolLibraryIndex]:
+    return index_symbol_library_paths(parse_symbol_library_specs(library_specs))
 
 
 def load_symbol_libraries(library_specs: list[str]) -> dict[str, SymbolInfo]:
+    return load_symbol_library_paths(parse_symbol_library_specs(library_specs))
+
+
+def load_symbol_library_paths(libraries: dict[str, Path]) -> dict[str, SymbolInfo]:
     symbols: dict[str, SymbolInfo] = {}
-    for index in index_symbol_libraries(library_specs).values():
+    for index in index_symbol_library_paths(libraries).values():
         symbols.update(index.symbols)
     return symbols
 

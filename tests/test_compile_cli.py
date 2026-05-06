@@ -127,6 +127,48 @@ def test_gen_uses_project_config_from_current_directory(
     assert (project_dir / "kicad" / "starter-board.kicad_sch").exists()
 
 
+def test_gen_uses_config_symbol_library_relative_to_config_path(tmp_path: Path) -> None:
+    library_dir = tmp_path / "lib"
+    library_dir.mkdir()
+    (library_dir / "Test.kicad_sym").write_text(
+        Path("tests/fixtures/kicad/symbols/Test.kicad_sym").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (tmp_path / "project.ksch.yaml").write_text(
+        "\n".join(
+            [
+                "ksch: 1",
+                "project:",
+                "  name: demo",
+                "symbols:",
+                "  J1:",
+                "    lib: Test:USB_C",
+                "nets:",
+                "  +5V:",
+                "    - J1.VBUS/all",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "ksch.toml").write_text(
+        "\n".join(
+            [
+                'schema = "project.ksch.yaml"',
+                'out = "out"',
+                'symbol_library = ["Test=lib/Test.kicad_sym"]',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["gen", "--config", str(tmp_path / "ksch.toml")])
+
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "out" / "demo.kicad_sch").exists()
+
+
 def test_check_uses_project_config_from_current_directory(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

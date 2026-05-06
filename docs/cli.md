@@ -42,6 +42,19 @@ symbol_library = ["Test=lib/Test.kicad_sym"]
 Run `ksch gen` from the project root to compile the configured schema to the
 configured KiCad output.
 
+## Diagnose Project Context
+
+```bash
+ksch doctor
+ksch doctor --config path/to/ksch.toml
+```
+
+Reports whether `kicad-cli` is available, whether `ksch.toml` and the schema
+load correctly, and whether discovered symbol and footprint library paths exist.
+Discovery includes schema-declared project libraries, `ksch.toml`
+`symbol_library` entries, and generated KiCad `sym-lib-table` / `fp-lib-table`
+entries from the configured output directory.
+
 ## Verify Generated KiCad
 
 ```bash
@@ -155,5 +168,7 @@ ksch symbol info Test:USB_C --library Test=path/to/Test.kicad_sym
 ksch pin-search Test:USB_C D+ --library Test=path/to/Test.kicad_sym
 ```
 
-Lookup commands read actual KiCad symbol libraries. They are intended for
-authoring and agent use before endpoints are written.
+Lookup commands read actual KiCad symbol libraries. Inside a configured project
+they use project context automatically: schema-declared libraries, `ksch.toml`
+extra symbol libraries, and generated KiCad `sym-lib-table` entries. Use
+`--library NICK=PATH` for one-off extra libraries.

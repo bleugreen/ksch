@@ -12,6 +12,7 @@ The package includes:
 - a CLI for local authoring and generation
 - a schema importer for existing KiCad projects
 - KiCad symbol and footprint library indexing
+- project-aware library discovery and diagnostics
 - endpoint resolution and schema validation
 - generated-file drift checks, KiCad ERC checks, and netlist parity checks
 - a layout/compiler pipeline that emits KiCad schematic files
@@ -102,6 +103,7 @@ Common commands:
 ksch init
 ksch gen
 ksch verify
+ksch doctor
 ksch check
 ksch validate schematic/project.ksch.yaml
 ksch fmt schematic/project.ksch.yaml
@@ -113,9 +115,9 @@ ksch pin-search Connector:USB_C_Receptacle_USB2.0 D+
 ksch skill show
 ```
 
-`ksch gen`, bare `ksch verify`, and bare `ksch check` read `ksch.toml`.
-Explicit `compile` and `import` commands are still available for scripts and
-one-off conversions.
+`ksch gen`, bare `ksch verify`, bare `ksch check`, `ksch doctor`, and the
+authoring lookup commands read `ksch.toml`. Explicit `compile` and `import`
+commands are still available for scripts and one-off conversions.
 
 See [docs/cli.md](docs/cli.md) for command details.
 
@@ -180,6 +182,10 @@ ksch symbol info Interface_USB:USB2514B
 ksch pin-search Interface_USB:USB2514B USBDP
 ```
 
+Inside a configured project, lookup commands use schema-declared libraries,
+`ksch.toml` extra libraries, and generated KiCad library tables automatically.
+Use `--library NICK=PATH` only for one-off extra libraries.
+
 The compiler validates symbol library ids, endpoint references, duplicate pin
 disambiguation, sheet ports, and no-connect endpoints before writing KiCad
 output.
@@ -213,6 +219,7 @@ in KiCad becomes drift unless it is imported back into schema.
 Useful verification commands:
 
 ```bash
+ksch doctor
 ksch verify
 ksch verify --against path/to/original.kicad_sch --artifacts .ksch-verify
 uv run pre-commit install
