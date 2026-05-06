@@ -3,8 +3,8 @@
 ## Canonical Source
 
 `.ksch.yaml` is the only source schema format. Generated `.kicad_sch` and
-`.kicad_pro` files are artifacts and should be checked with `ksch check` before
-manual edits are trusted.
+`.kicad_pro` files are artifacts and should be verified with `ksch verify`
+before manual edits are trusted.
 
 ## Project Documents
 

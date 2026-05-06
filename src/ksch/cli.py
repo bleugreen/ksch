@@ -19,7 +19,12 @@ from ksch.resolver import LibraryContext, ResolvedProject, resolve_project
 from ksch.scaffold import create_project_from_kicad, create_starter_project, discover_kicad_roots
 from ksch.schema.formatter import format_schema_text
 from ksch.schema.loader import load_yaml_file
-from ksch.verify import compare_dirs
+from ksch.verify import (
+    compare_dirs,
+    compare_netlist_signatures,
+    export_kicad_netlist,
+    run_kicad_erc,
+)
 
 app = typer.Typer(
     add_completion=False,
@@ -352,6 +357,120 @@ def check_command(
             console.print(finding)
         raise typer.Exit(1)
     console.print("generated output matches schema")
+
+
+@app.command("verify")
+def verify_command(
+    path: Annotated[
+        Path | None,
+        typer.Argument(help="Root .ksch.yaml project file. Defaults to ksch.toml schema."),
+    ] = None,
+    out: Annotated[
+        Path | None,
+        typer.Option("--out", help="Generated KiCad project directory. Defaults to ksch.toml out."),
+    ] = None,
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to ksch.toml or a project directory."),
+    ] = Path("ksch.toml"),
+    symbol_library: Annotated[
+        list[str] | None,
+        typer.Option("--symbol-library", help="Extra symbol library as NICKNAME=PATH."),
+    ] = None,
+    against: Annotated[
+        Path | None,
+        typer.Option(
+            "--against",
+            help="Original KiCad root schematic to compare netlist connectivity against.",
+        ),
+    ] = None,
+    artifacts: Annotated[
+        Path | None,
+        typer.Option("--artifacts", help="Directory for generated verification artifacts."),
+    ] = None,
+    no_erc: Annotated[
+        bool,
+        typer.Option("--no-erc", help="Skip KiCad ERC on the generated schematic."),
+    ] = False,
+    no_drift: Annotated[
+        bool,
+        typer.Option("--no-drift", help="Skip generated-file drift comparison against out."),
+    ] = False,
+) -> None:
+    """Compile, ERC-check, and optionally netlist-compare a schema project."""
+    temp_context = tempfile.TemporaryDirectory() if artifacts is None else None
+    root = Path(temp_context.name) if temp_context is not None else artifacts
+    assert root is not None
+    try:
+        generated_dir = root / "generated" if artifacts is not None else root
+        generated_dir.mkdir(parents=True, exist_ok=True)
+        project_config = _load_config_for_defaults(
+            config,
+            need_schema=path is None,
+            need_out=out is None,
+        )
+        schema_path = path or project_config.schema if project_config is not None else path
+        out_path = out or project_config.out if project_config is not None else out
+        if schema_path is None:
+            raise KschError("schema path is required when ksch.toml is not used")
+        if out_path is None and not no_drift:
+            raise KschError("--out is required for drift checks when ksch.toml is not used")
+
+        resolved, symbol_libraries = _resolved_project_context(
+            schema_path,
+            _configured_symbol_libraries(project_config, symbol_library),
+        )
+        write_project(
+            resolved,
+            generated_dir,
+            symbol_libraries=symbol_libraries,
+            footprint_libraries=resolved.source.footprint_libraries,
+        )
+        console.print(f"compiled {schema_path} -> {generated_dir}")
+
+        findings: list[str] = []
+        generated_root = generated_dir / f"{resolved.name}.kicad_sch"
+        if not no_erc:
+            erc_report = root / "erc.rpt"
+            erc = run_kicad_erc(generated_root, erc_report)
+            console.print(f"erc: {erc.violations} violation(s)")
+            if erc.violations:
+                report_hint = (
+                    f"report: {erc.report}"
+                    if artifacts is not None
+                    else "rerun with --artifacts DIR to keep erc.rpt"
+                )
+                findings.append(f"ERC found {erc.violations} violation(s); {report_hint}")
+        if against is not None:
+            reference_netlist = root / "reference.net"
+            generated_netlist = root / "generated.net"
+            export_kicad_netlist(against, reference_netlist)
+            export_kicad_netlist(generated_root, generated_netlist)
+            netlist_findings = compare_netlist_signatures(reference_netlist, generated_netlist)
+            if netlist_findings:
+                findings.extend(f"netlist: {finding}" for finding in netlist_findings)
+            else:
+                console.print(f"netlist: matches {against}")
+        if not no_drift:
+            assert out_path is not None
+            drift_findings = compare_dirs(generated_dir, out_path)
+            if drift_findings:
+                findings.extend(f"drift: {finding}" for finding in drift_findings)
+            else:
+                console.print(f"drift: generated output matches {out_path}")
+    except (KschError, ValidationError, ValueError, OSError, RuntimeError) as exc:
+        if temp_context is not None:
+            temp_context.cleanup()
+        _exit_error(_format_error(exc))
+    finally:
+        if temp_context is not None:
+            temp_context.cleanup()
+
+    if findings:
+        for finding in findings:
+            console.print(finding)
+        raise typer.Exit(1)
+    console.print("verification passed")
 
 
 @skill_app.command("show")

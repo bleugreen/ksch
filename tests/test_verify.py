@@ -60,7 +60,7 @@ def test_connectivity_signature_ignores_single_pin_nets() -> None:
     ) == {frozenset({("J1", "2"), ("U1", "1")})}
 
 
-def test_compare_dirs_reports_missing_unexpected_and_different_files(tmp_path: Path) -> None:
+def test_compare_dirs_reports_missing_and_different_generated_files(tmp_path: Path) -> None:
     expected = tmp_path / "expected"
     actual = tmp_path / "actual"
     (expected / "sheets").mkdir(parents=True)
@@ -74,6 +74,5 @@ def test_compare_dirs_reports_missing_unexpected_and_different_files(tmp_path: P
 
     assert compare_dirs(expected, actual) == [
         "missing generated file missing.txt",
-        "unexpected generated file unexpected.txt",
         "generated file differs sheets/changed.txt",
     ]

@@ -13,7 +13,7 @@ The package includes:
 - a schema importer for existing KiCad projects
 - KiCad symbol and footprint library indexing
 - endpoint resolution and schema validation
-- generated-file drift checks
+- generated-file drift checks, KiCad ERC checks, and netlist parity checks
 - a layout/compiler pipeline that emits KiCad schematic files
 - a thin MCP adapter for agent-assisted workflows
 - a bundled Codex skill for using the tool in other projects
@@ -65,8 +65,8 @@ schema = "schematic/project.ksch.yaml"
 out = "kicad"
 ```
 
-Generate from the project root with `ksch gen`. Check generated-file drift with
-`ksch check`.
+Generate from the project root with `ksch gen`. Verify the generated KiCad
+project with `ksch verify`.
 
 ## Import Existing KiCad
 
@@ -101,6 +101,7 @@ Common commands:
 ```bash
 ksch init
 ksch gen
+ksch verify
 ksch check
 ksch validate schematic/project.ksch.yaml
 ksch fmt schematic/project.ksch.yaml
@@ -112,8 +113,9 @@ ksch pin-search Connector:USB_C_Receptacle_USB2.0 D+
 ksch skill show
 ```
 
-`ksch gen` and bare `ksch check` read `ksch.toml`. Explicit `compile` and
-`import` commands are still available for scripts and one-off conversions.
+`ksch gen`, bare `ksch verify`, and bare `ksch check` read `ksch.toml`.
+Explicit `compile` and `import` commands are still available for scripts and
+one-off conversions.
 
 See [docs/cli.md](docs/cli.md) for command details.
 
@@ -211,11 +213,19 @@ in KiCad becomes drift unless it is imported back into schema.
 Useful verification commands:
 
 ```bash
+ksch verify
+ksch verify --against path/to/original.kicad_sch --artifacts .ksch-verify
 uv run pre-commit install
 uv run pre-commit run --all-files
 ./scripts/test.sh
 ./scripts/check.sh
 ```
+
+`ksch verify` compiles the configured schema, runs KiCad ERC on the generated
+root schematic, and compares generated files against the configured output. Use
+`--against` to compare generated netlist connectivity against an existing KiCad
+root schematic. Use `--artifacts` to keep the generated verification project,
+ERC report, and netlists for inspection.
 
 The pre-commit hooks run `ruff`, `mypy`, and a fast CLI/package test slice.
 `./scripts/test.sh` runs the full test suite. `./scripts/check.sh` runs the
@@ -223,7 +233,7 @@ full local gate: lint, typecheck, tests, and package build.
 
 The test suite includes KiCad CLI integration tests where `kicad-cli` is
 available, importer roundtrip smoke tests, layout tests, and package build
-coverage. Run `ksch validate`, `ksch gen`, and `ksch check` inside generated
+coverage. Run `ksch validate`, `ksch gen`, and `ksch verify` inside generated
 projects while dogfooding schemas.
 
 ## Examples And Docs

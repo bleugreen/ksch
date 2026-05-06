@@ -25,6 +25,7 @@ Common commands:
 
 - `ksch init`: initialize in the current directory; imports if one KiCad root is detected.
 - `ksch gen`: compile the project described by `ksch.toml`.
+- `ksch verify`: compile, run KiCad ERC, and compare generated output.
 - `ksch check`: compile to a temporary directory and compare against configured output.
 - `ksch validate <schema>`: validate schema, symbols, endpoints, and sheet ports.
 - `ksch fmt <schema>`: normalize schema formatting.
@@ -32,6 +33,20 @@ Common commands:
 
 For an imported KiCad project, `out = "."` means `ksch gen` updates the actual
 KiCad project directory. Do not copy from a generated scratch directory by hand.
+
+Use `ksch verify` as the normal dogfooding gate when `kicad-cli` is available:
+
+```bash
+ksch gen
+ksch verify
+```
+
+When comparing against an existing KiCad schematic during import or roundtrip
+work, keep artifacts for inspection:
+
+```bash
+ksch verify --against path/to/root.kicad_sch --artifacts .ksch-verify
+```
 
 ## Schema Rules
 
