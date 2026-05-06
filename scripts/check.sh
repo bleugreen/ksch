@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+uv run ruff check src tests
+uv run mypy src tests
+uv run pytest -q
+uv build

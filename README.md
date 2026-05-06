@@ -211,15 +211,20 @@ in KiCad becomes drift unless it is imported back into schema.
 Useful verification commands:
 
 ```bash
-ksch validate schematic/project.ksch.yaml
-ksch gen
-ksch check
-uv run pytest -q
+uv run pre-commit install
+uv run pre-commit run --all-files
+./scripts/test.sh
+./scripts/check.sh
 ```
+
+The pre-commit hooks run `ruff`, `mypy`, and a fast CLI/package test slice.
+`./scripts/test.sh` runs the full test suite. `./scripts/check.sh` runs the
+full local gate: lint, typecheck, tests, and package build.
 
 The test suite includes KiCad CLI integration tests where `kicad-cli` is
 available, importer roundtrip smoke tests, layout tests, and package build
-coverage.
+coverage. Run `ksch validate`, `ksch gen`, and `ksch check` inside generated
+projects while dogfooding schemas.
 
 ## Examples And Docs
 
