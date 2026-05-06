@@ -32,8 +32,6 @@ Common commands:
 - `ksch fmt <schema>`: normalize schema formatting.
 - `ksch schema show`: print the JSON Schema for `.ksch.yaml`.
 - `ksch explain <target>`: explain a library symbol, project ref, or endpoint.
-- `ksch edit add-symbol <ref> <lib_id>`: add a validated symbol declaration.
-- `ksch edit connect <net> <endpoint...>`: connect validated endpoints to a net.
 - `ksch skill show`: print this skill for installation in another agent environment.
 
 For an imported KiCad project, `out = "."` means `ksch gen` updates the actual
@@ -104,16 +102,16 @@ If validation reports a schema path such as `nets.USB_D_P[1]`, use
 `ksch explain` on the referenced symbol or endpoint to inspect the actual KiCad
 pins.
 
-Prefer structured edits over ad hoc YAML mutation when a command covers the
-change:
+Edit `.ksch.yaml` directly for normal authoring, then validate and verify:
 
 ```bash
-ksch edit add-symbol R1 Device:R --value 10k
-ksch edit connect RESET R1.1 U1.RESET
+ksch validate ksch/project.ksch.yaml
+ksch gen
+ksch verify
 ```
 
-Edit commands validate against the project graph before writing the affected
-schema file.
+Low-level structured edit APIs exist for tools and future semantic refactors,
+but they are not the primary authoring workflow.
 
 ## Common Fixes
 

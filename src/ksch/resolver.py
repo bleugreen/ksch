@@ -186,7 +186,18 @@ def resolve_project(
             resolved_sheet.nets[net_name] = resolved_endpoints
         for index, endpoint_text in enumerate(sheet.no_connects):
             try:
-                _resolve_sheet_symbol_endpoint(sheet_path, sheet, endpoint_text, libraries)
+                for resolved_endpoint in _resolve_sheet_symbol_endpoint(
+                    sheet_path,
+                    sheet,
+                    endpoint_text,
+                    libraries,
+                ):
+                    existing_net = endpoint_nets.get(_resolved_endpoint_key(resolved_endpoint))
+                    if existing_net is not None:
+                        raise KschError(
+                            f"{resolved_endpoint.text} is connected to "
+                            f"{existing_net} in {sheet_path}"
+                        )
             except (KschError, ValueError) as exc:
                 raise KschError(
                     f"{sheet.source_path}: no_connects[{index}]: {exc}"

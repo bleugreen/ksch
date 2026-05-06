@@ -2,7 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from ksch.edit import add_symbol, connect_endpoints
+from ksch.edit import (
+    add_no_connects,
+    add_symbol,
+    clear_no_connects,
+    connect_endpoints,
+    disconnect_endpoints,
+)
 from ksch.errors import KschError
 from ksch.graph import ProjectGraph
 
@@ -94,6 +100,115 @@ def test_connect_endpoints_rejects_cross_net_conflict(tmp_path: Path) -> None:
             net_name="GND",
             endpoints=["J1.VBUS/all"],
         )
+
+    assert schema.read_text(encoding="utf-8") == before
+
+
+def test_disconnect_endpoints_removes_from_net_and_formats(tmp_path: Path) -> None:
+    schema = _write_edit_project(tmp_path)
+
+    result = disconnect_endpoints(
+        schema,
+        sheet_path="/",
+        net_name="USB_D_P",
+        endpoints=["J1.D+@A6"],
+    )
+
+    assert result.changed is True
+    assert result.removed_endpoints == ("J1.D+@A6",)
+    assert result.deleted_net is True
+    text = schema.read_text(encoding="utf-8")
+    assert "USB_D_P" not in text
+    assert "  VBUS:\n    - J1.VBUS/all\n" in text
+
+
+def test_disconnect_endpoints_rejects_endpoint_on_other_net_without_writing(
+    tmp_path: Path,
+) -> None:
+    schema = _write_edit_project(tmp_path)
+    before = schema.read_text(encoding="utf-8")
+
+    with pytest.raises(KschError, match="J1.VBUS/all is connected to VBUS, not GND"):
+        disconnect_endpoints(
+            schema,
+            sheet_path="/",
+            net_name="GND",
+            endpoints=["J1.VBUS/all"],
+        )
+
+    assert schema.read_text(encoding="utf-8") == before
+
+
+def test_disconnect_endpoints_rejects_missing_endpoint_without_writing(
+    tmp_path: Path,
+) -> None:
+    schema = _write_edit_project(tmp_path)
+    before = schema.read_text(encoding="utf-8")
+
+    with pytest.raises(KschError, match="J1.D-@A7 is not connected in /"):
+        disconnect_endpoints(
+            schema,
+            sheet_path="/",
+            net_name="USB_D_P",
+            endpoints=["J1.D-@A7"],
+        )
+
+    assert schema.read_text(encoding="utf-8") == before
+
+
+def test_add_no_connects_adds_valid_unconnected_endpoint(tmp_path: Path) -> None:
+    schema = _write_edit_project(tmp_path)
+
+    result = add_no_connects(schema, sheet_path="/", endpoints=["J1.D-@A7"])
+
+    assert result.changed is True
+    assert result.added_endpoints == ("J1.D-@A7",)
+    text = schema.read_text(encoding="utf-8")
+    assert "no_connects:\n  - J1.D-@A7\n" in text
+
+
+def test_add_no_connects_is_idempotent(tmp_path: Path) -> None:
+    schema = _write_edit_project(tmp_path)
+    add_no_connects(schema, sheet_path="/", endpoints=["J1.D-@A7"])
+    before = schema.read_text(encoding="utf-8")
+
+    result = add_no_connects(schema, sheet_path="/", endpoints=["J1.D-@A7"])
+
+    assert result.changed is False
+    assert schema.read_text(encoding="utf-8") == before
+
+
+def test_add_no_connects_rejects_connected_endpoint_without_writing(
+    tmp_path: Path,
+) -> None:
+    schema = _write_edit_project(tmp_path)
+    before = schema.read_text(encoding="utf-8")
+
+    with pytest.raises(KschError, match="J1.D\\+@A6 is connected to USB_D_P"):
+        add_no_connects(schema, sheet_path="/", endpoints=["J1.D+@A6"])
+
+    assert schema.read_text(encoding="utf-8") == before
+
+
+def test_clear_no_connects_removes_endpoint_and_formats(tmp_path: Path) -> None:
+    schema = _write_edit_project(tmp_path)
+    add_no_connects(schema, sheet_path="/", endpoints=["J1.D-@A7"])
+
+    result = clear_no_connects(schema, sheet_path="/", endpoints=["J1.D-@A7"])
+
+    assert result.changed is True
+    assert result.removed_endpoints == ("J1.D-@A7",)
+    assert "no_connects" not in schema.read_text(encoding="utf-8")
+
+
+def test_clear_no_connects_rejects_missing_endpoint_without_writing(
+    tmp_path: Path,
+) -> None:
+    schema = _write_edit_project(tmp_path)
+    before = schema.read_text(encoding="utf-8")
+
+    with pytest.raises(KschError, match="J1.D-@A7 is not marked no-connect in /"):
+        clear_no_connects(schema, sheet_path="/", endpoints=["J1.D-@A7"])
 
     assert schema.read_text(encoding="utf-8") == before
 
