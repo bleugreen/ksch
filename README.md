@@ -107,6 +107,8 @@ ksch doctor
 ksch check
 ksch validate schematic/project.ksch.yaml
 ksch fmt schematic/project.ksch.yaml
+ksch schema show
+ksch explain U1.USBDP_UP
 ksch compile schematic/project.ksch.yaml --out kicad
 ksch import board.kicad_sch --out ksch
 ksch symbols search USB
@@ -180,11 +182,15 @@ Use the library lookup commands before writing endpoints for unfamiliar parts:
 ksch symbols search USB2514
 ksch symbol info Interface_USB:USB2514B
 ksch pin-search Interface_USB:USB2514B USBDP
+ksch explain U1.USBDP_UP
 ```
 
 Inside a configured project, lookup commands use schema-declared libraries,
 `ksch.toml` extra libraries, and generated KiCad library tables automatically.
 Use `--library NICK=PATH` only for one-off extra libraries.
+
+Use `ksch schema show` to print the canonical JSON Schema for editor
+configuration and external tooling.
 
 The compiler validates symbol library ids, endpoint references, duplicate pin
 disambiguation, sheet ports, and no-connect endpoints before writing KiCad

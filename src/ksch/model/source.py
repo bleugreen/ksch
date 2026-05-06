@@ -75,7 +75,7 @@ class UseDecl(BaseModel):
 
 class SourceDocument(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
-    ksch: int
+    ksch: Literal[1]
     project: ProjectMeta | None = None
     sheet: SheetMeta | None = None
     libraries: Libraries = Field(default_factory=Libraries)

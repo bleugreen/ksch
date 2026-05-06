@@ -85,7 +85,17 @@ ksch validate project.ksch.yaml \
 Validates the root project document, referenced sheet documents, symbol library
 ids, endpoint references, duplicate pin-name disambiguation, and sheet ports.
 Project-local libraries declared under `libraries.symbols.project` are loaded
-automatically.
+automatically. Semantic validation errors include schema paths such as
+`nets.USB_D_P[0]` or `symbols.U1.lib`.
+
+## JSON Schema
+
+```bash
+ksch schema show
+```
+
+Prints the canonical JSON Schema for `.ksch.yaml` documents. Use it for editor
+configuration, external validators, and agent context.
 
 ## Format
 
@@ -166,9 +176,14 @@ Prints the bundled Codex skill covering ksch workflow and schema conventions.
 ksch symbols search USB --library Test=path/to/Test.kicad_sym
 ksch symbol info Test:USB_C --library Test=path/to/Test.kicad_sym
 ksch pin-search Test:USB_C D+ --library Test=path/to/Test.kicad_sym
+ksch explain Test:USB_C --library Test=path/to/Test.kicad_sym
+ksch explain U1.USBDP_UP
 ```
 
 Lookup commands read actual KiCad symbol libraries. Inside a configured project
 they use project context automatically: schema-declared libraries, `ksch.toml`
 extra symbol libraries, and generated KiCad `sym-lib-table` entries. Use
 `--library NICK=PATH` for one-off extra libraries.
+
+`ksch explain` accepts a library symbol id, a project ref, or a project endpoint
+and prints the concrete symbol/pin information used by validation.

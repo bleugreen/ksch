@@ -133,39 +133,47 @@ def resolve_project(
         resolved_sheet = ResolvedSheet(path=sheet_path)
         endpoint_nets: dict[tuple[str, ...], str] = {}
         if validate_declared_symbols:
-            for symbol_decl in sheet.symbols.values():
+            for ref, symbol_decl in sheet.symbols.items():
                 if symbol_decl.lib not in libraries.symbols:
-                    raise KschError(f"unknown symbol library id {symbol_decl.lib}")
+                    raise KschError(
+                        f"{sheet.source_path}: symbols.{ref}.lib: "
+                        f"unknown symbol library id {symbol_decl.lib}"
+                    )
         for net_name, endpoint_texts in sheet.nets.items():
             resolved_endpoints: list[ResolvedEndpoint] = []
-            for endpoint_text in endpoint_texts:
-                endpoint = parse_endpoint(endpoint_text)
-                if endpoint.kind is EndpointKind.SHEET_PORT:
-                    child = sheet.child_instances.get(endpoint.sheet or "")
-                    if child is None:
-                        raise KschError(f"unknown child sheet {endpoint.sheet}")
-                    child_sheet = project.sheets[child.target_path]
-                    if endpoint.port not in child_sheet.interface:
-                        raise KschError(f"unknown sheet port {endpoint_text}")
-                    resolved_endpoints.append(
-                        ResolvedEndpoint(
-                            text=endpoint_text,
-                            kind=EndpointKind.SHEET_PORT,
-                            sheet_path=sheet_path,
-                            child_sheet=endpoint.sheet,
-                            port=endpoint.port,
+            for index, endpoint_text in enumerate(endpoint_texts):
+                try:
+                    endpoint = parse_endpoint(endpoint_text)
+                    if endpoint.kind is EndpointKind.SHEET_PORT:
+                        child = sheet.child_instances.get(endpoint.sheet or "")
+                        if child is None:
+                            raise KschError(f"unknown child sheet {endpoint.sheet}")
+                        child_sheet = project.sheets[child.target_path]
+                        if endpoint.port not in child_sheet.interface:
+                            raise KschError(f"unknown sheet port {endpoint_text}")
+                        resolved_endpoints.append(
+                            ResolvedEndpoint(
+                                text=endpoint_text,
+                                kind=EndpointKind.SHEET_PORT,
+                                sheet_path=sheet_path,
+                                child_sheet=endpoint.sheet,
+                                port=endpoint.port,
+                            )
+                        )
+                        continue
+
+                    resolved_endpoints.extend(
+                        _resolve_sheet_symbol_endpoint(
+                            sheet_path,
+                            sheet,
+                            endpoint_text,
+                            libraries,
                         )
                     )
-                    continue
-
-                resolved_endpoints.extend(
-                    _resolve_sheet_symbol_endpoint(
-                        sheet_path,
-                        sheet,
-                        endpoint_text,
-                        libraries,
-                    )
-                )
+                except (KschError, ValueError) as exc:
+                    raise KschError(
+                        f"{sheet.source_path}: nets.{net_name}[{index}]: {exc}"
+                    ) from exc
             for resolved_endpoint in resolved_endpoints:
                 endpoint_key = _resolved_endpoint_key(resolved_endpoint)
                 existing_net = endpoint_nets.get(endpoint_key)
@@ -176,7 +184,12 @@ def resolve_project(
                     )
                 endpoint_nets[endpoint_key] = net_name
             resolved_sheet.nets[net_name] = resolved_endpoints
-        for endpoint_text in sheet.no_connects:
-            _resolve_sheet_symbol_endpoint(sheet_path, sheet, endpoint_text, libraries)
+        for index, endpoint_text in enumerate(sheet.no_connects):
+            try:
+                _resolve_sheet_symbol_endpoint(sheet_path, sheet, endpoint_text, libraries)
+            except (KschError, ValueError) as exc:
+                raise KschError(
+                    f"{sheet.source_path}: no_connects[{index}]: {exc}"
+                ) from exc
         resolved.sheets[sheet_path] = resolved_sheet
     return resolved

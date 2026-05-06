@@ -20,12 +20,14 @@ from ksch.compiler import write_project
 from ksch.config import ProjectConfig, load_project_config
 from ksch.errors import KschError
 from ksch.expand import load_project_ir
+from ksch.explain import explain_project_target_lines, explain_symbol_lines
 from ksch.importer import ImportedProject, import_project
 from ksch.kicad.symbols import SymbolInfo, index_symbol_library
 from ksch.project_context import load_project_context
 from ksch.resolver import LibraryContext, ResolvedProject, resolve_project
 from ksch.scaffold import create_project_from_kicad, create_starter_project, discover_kicad_roots
 from ksch.schema.formatter import format_schema_text
+from ksch.schema.json_schema import schema_json_text
 from ksch.schema.loader import load_yaml_file
 from ksch.verify import (
     compare_dirs,
@@ -42,8 +44,9 @@ app = typer.Typer(
 symbol_app = typer.Typer(help="Inspect KiCad symbol libraries.", no_args_is_help=True)
 symbols_app = typer.Typer(help="Search KiCad symbol libraries.", no_args_is_help=True)
 skill_app = typer.Typer(help="Print bundled Codex skill material.", no_args_is_help=True)
+schema_app = typer.Typer(help="Print schema authoring material.", no_args_is_help=True)
 console = Console()
-err_console = Console(stderr=True)
+err_console = Console(stderr=True, soft_wrap=True)
 
 
 def _version_callback(value: bool) -> None:
@@ -273,6 +276,12 @@ def expand(path: Annotated[Path, typer.Argument(help="Root .ksch.yaml project fi
 
     for sheet_path in sorted(project.sheets):
         console.print(sheet_path)
+
+
+@schema_app.command("show")
+def schema_show() -> None:
+    """Print the canonical JSON Schema for .ksch.yaml documents."""
+    console.print(schema_json_text(), end="", markup=False)
 
 
 @app.command("compile")
@@ -557,6 +566,37 @@ def doctor_command(
     console.print(f"doctor passed{suffix}")
 
 
+@app.command("explain")
+def explain_command(
+    target: Annotated[
+        str,
+        typer.Argument(help="Library symbol id, project ref, or project endpoint to explain."),
+    ],
+    library: Annotated[
+        list[str] | None,
+        typer.Option("--library", "-L", help="Extra symbol library as NICKNAME=PATH."),
+    ] = None,
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to ksch.toml or a project directory."),
+    ] = Path("ksch.toml"),
+) -> None:
+    """Explain a library symbol, project symbol ref, or endpoint."""
+    try:
+        if ":" in target:
+            symbols = _load_authoring_symbols(config, library)
+            symbol = symbols.get(target)
+            if symbol is None:
+                raise KschError(f"symbol '{target}' not found")
+            lines = explain_symbol_lines(symbol)
+        else:
+            lines = explain_project_target_lines(target, config, library)
+    except (KschError, OSError, ValueError) as exc:
+        _exit_error(_format_error(exc))
+    for line in lines:
+        console.print(line)
+
+
 def _report_library_paths(
     kind: str,
     libraries: dict[str, Path],
@@ -668,3 +708,4 @@ def symbol_info(
 app.add_typer(symbol_app, name="symbol")
 app.add_typer(symbols_app, name="symbols")
 app.add_typer(skill_app, name="skill")
+app.add_typer(schema_app, name="schema")
