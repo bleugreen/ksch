@@ -92,6 +92,8 @@ def test_init_from_existing_kicad_project_imports_schema(tmp_path: Path) -> None
 
     assert result.exit_code == 0, result.output
     assert "Found KiCad schematic" in result.output
+    assert "wrote 1 child sheet schema" in result.output
+    assert "ksch/sheets/usb.ksch.yaml" in result.output
     assert (existing / "ksch" / "project.ksch.yaml").exists()
     assert (existing / "ksch" / "sheets" / "usb.ksch.yaml").exists()
     assert (existing / "ksch.toml").read_text(encoding="utf-8") == (

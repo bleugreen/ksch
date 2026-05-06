@@ -78,6 +78,37 @@ def test_import_generated_fixture_roundtrips_connectivity(tmp_path: Path) -> Non
     assert original == compiled
 
 
+def test_import_command_reports_child_sheets(tmp_path: Path) -> None:
+    source_project = tmp_path / "source"
+    imported_schema = tmp_path / "imported"
+    compile_result = runner.invoke(
+        app,
+        [
+            "compile",
+            "tests/fixtures/project/project.ksch.yaml",
+            "--out",
+            str(source_project),
+            "--symbol-library",
+            "Test=tests/fixtures/kicad/symbols/Test.kicad_sym",
+        ],
+    )
+    assert compile_result.exit_code == 0, compile_result.output
+
+    result = runner.invoke(
+        app,
+        [
+            "import",
+            str(source_project / "demo.kicad_sch"),
+            "--out",
+            str(imported_schema),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "wrote 1 child sheet schema" in result.output
+    assert "sheets/usb.ksch.yaml" in result.output
+
+
 def test_import_maps_kicad_unconnected_nets_to_no_connects(tmp_path: Path) -> None:
     docs = _build_schema_documents(
         root_name="demo",

@@ -13,7 +13,7 @@ from ksch.compiler import write_project
 from ksch.config import ProjectConfig, load_project_config
 from ksch.errors import KschError
 from ksch.expand import load_project_ir
-from ksch.importer import import_project
+from ksch.importer import ImportedProject, import_project
 from ksch.kicad.symbols import index_symbol_library
 from ksch.resolver import LibraryContext, ResolvedProject, resolve_project
 from ksch.scaffold import create_project_from_kicad, create_starter_project, discover_kicad_roots
@@ -113,6 +113,17 @@ def _skill_text() -> str:
     return files("ksch.skills.ksch").joinpath("SKILL.md").read_text(encoding="utf-8")
 
 
+def _print_import_result(imported: ImportedProject) -> None:
+    console.print(f"wrote {imported.root_schema}")
+    child_sheets = sorted(path for path in imported.generated_files if path != imported.root_schema)
+    if not child_sheets:
+        return
+    suffix = "" if len(child_sheets) == 1 else "s"
+    console.print(f"wrote {len(child_sheets)} child sheet schema{suffix}:")
+    for path in child_sheets:
+        console.print(f"- {path}")
+
+
 @app.callback(invoke_without_command=True)
 def main(
     version: Annotated[
@@ -167,7 +178,7 @@ def init_command(
                         root_schematic=root_schematic,
                         force=force,
                     )
-                    console.print(f"wrote {imported.root_schema}")
+                    _print_import_result(imported)
                     return
             elif len(candidates) > 1:
                 rendered = "\n".join(f"- {candidate}" for candidate in candidates)
@@ -290,7 +301,7 @@ def import_command(
     except (KschError, ValidationError, ValueError, OSError, RuntimeError) as exc:
         _exit_error(_format_error(exc))
 
-    console.print(f"wrote {imported.root_schema}")
+    _print_import_result(imported)
 
 
 @app.command("check")
