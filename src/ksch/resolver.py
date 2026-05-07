@@ -106,7 +106,7 @@ def _resolve_sheet_symbol_endpoint(
     )
 
 
-def _resolved_endpoint_key(endpoint: ResolvedEndpoint) -> tuple[str, ...]:
+def resolved_endpoint_key(endpoint: ResolvedEndpoint) -> tuple[str, ...]:
     if endpoint.kind is EndpointKind.SYMBOL_PIN:
         return (
             endpoint.sheet_path,
@@ -120,6 +120,34 @@ def _resolved_endpoint_key(endpoint: ResolvedEndpoint) -> tuple[str, ...]:
         endpoint.child_sheet or "",
         endpoint.port or "",
     )
+
+
+def resolve_endpoint_text(
+    project: ProjectIR,
+    sheet_path: str,
+    endpoint_text: str,
+    libraries: LibraryContext,
+) -> list[ResolvedEndpoint]:
+    sheet = project.sheets[sheet_path]
+    endpoint = parse_endpoint(endpoint_text)
+    if endpoint.kind is EndpointKind.SHEET_PORT:
+        child = sheet.child_instances.get(endpoint.sheet or "")
+        if child is None:
+            raise KschError(f"unknown child sheet {endpoint.sheet}")
+        child_sheet = project.sheets[child.target_path]
+        if endpoint.port not in child_sheet.interface:
+            raise KschError(f"unknown sheet port {endpoint_text}")
+        return [
+            ResolvedEndpoint(
+                text=endpoint_text,
+                kind=EndpointKind.SHEET_PORT,
+                sheet_path=sheet_path,
+                child_sheet=endpoint.sheet,
+                port=endpoint.port,
+            )
+        ]
+
+    return _resolve_sheet_symbol_endpoint(sheet_path, sheet, endpoint_text, libraries)
 
 
 def resolve_project(
@@ -143,39 +171,15 @@ def resolve_project(
             resolved_endpoints: list[ResolvedEndpoint] = []
             for index, endpoint_text in enumerate(endpoint_texts):
                 try:
-                    endpoint = parse_endpoint(endpoint_text)
-                    if endpoint.kind is EndpointKind.SHEET_PORT:
-                        child = sheet.child_instances.get(endpoint.sheet or "")
-                        if child is None:
-                            raise KschError(f"unknown child sheet {endpoint.sheet}")
-                        child_sheet = project.sheets[child.target_path]
-                        if endpoint.port not in child_sheet.interface:
-                            raise KschError(f"unknown sheet port {endpoint_text}")
-                        resolved_endpoints.append(
-                            ResolvedEndpoint(
-                                text=endpoint_text,
-                                kind=EndpointKind.SHEET_PORT,
-                                sheet_path=sheet_path,
-                                child_sheet=endpoint.sheet,
-                                port=endpoint.port,
-                            )
-                        )
-                        continue
-
                     resolved_endpoints.extend(
-                        _resolve_sheet_symbol_endpoint(
-                            sheet_path,
-                            sheet,
-                            endpoint_text,
-                            libraries,
-                        )
+                        resolve_endpoint_text(project, sheet_path, endpoint_text, libraries)
                     )
                 except (KschError, ValueError) as exc:
                     raise KschError(
                         f"{sheet.source_path}: nets.{net_name}[{index}]: {exc}"
                     ) from exc
             for resolved_endpoint in resolved_endpoints:
-                endpoint_key = _resolved_endpoint_key(resolved_endpoint)
+                endpoint_key = resolved_endpoint_key(resolved_endpoint)
                 existing_net = endpoint_nets.get(endpoint_key)
                 if existing_net is not None and existing_net != net_name:
                     raise KschError(
@@ -192,7 +196,7 @@ def resolve_project(
                     endpoint_text,
                     libraries,
                 ):
-                    existing_net = endpoint_nets.get(_resolved_endpoint_key(resolved_endpoint))
+                    existing_net = endpoint_nets.get(resolved_endpoint_key(resolved_endpoint))
                     if existing_net is not None:
                         raise KschError(
                             f"{resolved_endpoint.text} is connected to "

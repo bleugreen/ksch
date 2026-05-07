@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from dataclasses import dataclass
 from io import StringIO
 from pathlib import Path
@@ -7,10 +8,16 @@ from ruamel.yaml import YAML
 
 from ksch.errors import KschError
 from ksch.graph import ProjectGraph
-from ksch.kicad.symbols import index_symbol_library
+from ksch.kicad.symbols import SymbolPin, index_symbol_library
+from ksch.model.endpoint import EndpointKind
 from ksch.model.ir import ProjectIR
 from ksch.model.source import SymbolDecl
-from ksch.resolver import LibraryContext, resolve_project
+from ksch.resolver import (
+    LibraryContext,
+    ResolvedEndpoint,
+    resolve_project,
+    resolved_endpoint_key,
+)
 from ksch.schema.formatter import format_schema_text
 from ksch.schema.loader import load_yaml_file
 
@@ -56,6 +63,16 @@ class AddSymbolResult:
     sheet_path: str
     ref: str
     changed: bool
+
+
+@dataclass(frozen=True)
+class _EndpointItem:
+    endpoint: ResolvedEndpoint
+    order: int
+
+    @property
+    def key(self) -> tuple[str, ...]:
+        return resolved_endpoint_key(self.endpoint)
 
 
 def add_symbol(
@@ -139,7 +156,14 @@ def connect_endpoints(
             changed=False,
         )
 
-    _validate_connected_project(graph, sheet_path, net_name, added)
+    rewritten = _rewrite_net_endpoints(
+        graph,
+        sheet_path,
+        net_name,
+        add=endpoints,
+        remove=[],
+    )
+    _validate_rewritten_net(graph, sheet_path, net_name, rewritten)
 
     data = load_yaml_file(sheet.source_path)
     if not isinstance(data, dict):
@@ -150,7 +174,7 @@ def connect_endpoints(
     net_endpoints = nets.setdefault(net_name, [])
     if not isinstance(net_endpoints, list):
         raise KschError(f"{sheet.source_path}: nets.{net_name} must be a list")
-    net_endpoints.extend(added)
+    net_endpoints[:] = rewritten
     sheet.source_path.write_text(_dump_schema(data, sheet.source_path), encoding="utf-8")
     return EditResult(
         schema_path=sheet.source_path,
@@ -193,18 +217,15 @@ def disconnect_endpoints(
             changed=False,
         )
 
-    candidate = graph.source.model_copy(deep=True)
-    candidate_sheet = candidate.sheets[sheet_path]
-    candidate_endpoints = candidate_sheet.nets.get(net_name, [])
-    removed = set(requested)
-    remaining = [endpoint for endpoint in candidate_endpoints if endpoint not in removed]
-    if remaining:
-        candidate_sheet.nets[net_name] = remaining
-        deleted_net = False
-    else:
-        candidate_sheet.nets.pop(net_name, None)
-        deleted_net = True
-    _validate_project(candidate)
+    rewritten = _rewrite_net_endpoints(
+        graph,
+        sheet_path,
+        net_name,
+        add=[],
+        remove=list(requested),
+    )
+    deleted_net = not rewritten
+    _validate_rewritten_net(graph, sheet_path, net_name, rewritten)
 
     data = load_yaml_file(sheet.source_path)
     if not isinstance(data, dict):
@@ -215,7 +236,7 @@ def disconnect_endpoints(
     net_endpoints = nets.get(net_name)
     if not isinstance(net_endpoints, list):
         raise KschError(f"{sheet.source_path}: nets.{net_name} must be a list")
-    net_endpoints[:] = [endpoint for endpoint in net_endpoints if endpoint not in removed]
+    net_endpoints[:] = rewritten
     if not net_endpoints:
         del nets[net_name]
     if not nets:
@@ -242,8 +263,12 @@ def add_no_connects(
     if sheet is None:
         raise KschError(f"unknown sheet {sheet_path}")
 
-    existing = set(sheet.no_connects)
-    added = tuple(endpoint for endpoint in dict.fromkeys(endpoints) if endpoint not in existing)
+    existing_keys = _resolved_endpoint_keys(graph, sheet_path, sheet.no_connects)
+    added = tuple(
+        endpoint
+        for endpoint in dict.fromkeys(endpoints)
+        if not _resolved_endpoint_keys(graph, sheet_path, [endpoint]) <= existing_keys
+    )
     if not added:
         return NoConnectResult(
             schema_path=sheet.source_path,
@@ -252,8 +277,15 @@ def add_no_connects(
             changed=False,
         )
 
+    rewritten = _rewrite_endpoint_expressions(
+        graph,
+        sheet_path,
+        sheet.no_connects,
+        add=list(added),
+        remove=[],
+    )
     candidate = graph.source.model_copy(deep=True)
-    candidate.sheets[sheet_path].no_connects.extend(added)
+    candidate.sheets[sheet_path].no_connects = rewritten
     _validate_project(candidate)
 
     data = load_yaml_file(sheet.source_path)
@@ -262,7 +294,7 @@ def add_no_connects(
     no_connects = data.setdefault("no_connects", [])
     if not isinstance(no_connects, list):
         raise KschError(f"{sheet.source_path}: no_connects must be a list")
-    no_connects.extend(added)
+    no_connects[:] = rewritten
     sheet.source_path.write_text(_dump_schema(data, sheet.source_path), encoding="utf-8")
     return NoConnectResult(
         schema_path=sheet.source_path,
@@ -284,9 +316,10 @@ def clear_no_connects(
         raise KschError(f"unknown sheet {sheet_path}")
 
     requested = tuple(dict.fromkeys(endpoints))
-    existing = set(sheet.no_connects)
+    existing_keys = _resolved_endpoint_keys(graph, sheet_path, sheet.no_connects)
     for endpoint in requested:
-        if endpoint not in existing:
+        requested_keys = _resolved_endpoint_keys(graph, sheet_path, [endpoint])
+        if not requested_keys <= existing_keys:
             raise KschError(f"{endpoint} is not marked no-connect in {sheet_path}")
 
     if not requested:
@@ -297,11 +330,15 @@ def clear_no_connects(
             changed=False,
         )
 
+    rewritten = _rewrite_endpoint_expressions(
+        graph,
+        sheet_path,
+        sheet.no_connects,
+        add=[],
+        remove=list(requested),
+    )
     candidate = graph.source.model_copy(deep=True)
-    removed = set(requested)
-    candidate.sheets[sheet_path].no_connects = [
-        endpoint for endpoint in candidate.sheets[sheet_path].no_connects if endpoint not in removed
-    ]
+    candidate.sheets[sheet_path].no_connects = rewritten
     _validate_project(candidate)
 
     data = load_yaml_file(sheet.source_path)
@@ -310,7 +347,7 @@ def clear_no_connects(
     no_connects = data.get("no_connects", [])
     if not isinstance(no_connects, list):
         raise KschError(f"{sheet.source_path}: no_connects must be a list")
-    no_connects[:] = [endpoint for endpoint in no_connects if endpoint not in removed]
+    no_connects[:] = rewritten
     if not no_connects:
         data.pop("no_connects", None)
     sheet.source_path.write_text(_dump_schema(data, sheet.source_path), encoding="utf-8")
@@ -322,17 +359,145 @@ def clear_no_connects(
     )
 
 
-def _validate_connected_project(
+def _validate_rewritten_net(
     graph: ProjectGraph,
     sheet_path: str,
     net_name: str,
-    added: list[str],
+    endpoints: list[str],
 ) -> None:
     candidate = graph.source.model_copy(deep=True)
     sheet = candidate.sheets[sheet_path]
-    sheet.nets.setdefault(net_name, [])
-    sheet.nets[net_name].extend(added)
+    if endpoints:
+        sheet.nets[net_name] = endpoints
+    else:
+        sheet.nets.pop(net_name, None)
     _validate_project(candidate)
+
+
+def _rewrite_net_endpoints(
+    graph: ProjectGraph,
+    sheet_path: str,
+    net_name: str,
+    *,
+    add: list[str],
+    remove: list[str],
+) -> list[str]:
+    sheet = graph.source.sheets[sheet_path]
+    existing_texts = sheet.nets.get(net_name, [])
+    return _rewrite_endpoint_expressions(
+        graph,
+        sheet_path,
+        existing_texts,
+        add=add,
+        remove=remove,
+    )
+
+
+def _rewrite_endpoint_expressions(
+    graph: ProjectGraph,
+    sheet_path: str,
+    existing_texts: list[str],
+    *,
+    add: list[str],
+    remove: list[str],
+) -> list[str]:
+    items: dict[tuple[str, ...], _EndpointItem] = {}
+    order = 0
+    for source_text in existing_texts:
+        for resolved_endpoint in graph.resolve_endpoint(sheet_path, source_text):
+            key = resolved_endpoint_key(resolved_endpoint)
+            items.setdefault(key, _EndpointItem(endpoint=resolved_endpoint, order=order))
+            order += 1
+
+    for source_text in remove:
+        for resolved_endpoint in graph.resolve_endpoint(sheet_path, source_text):
+            items.pop(resolved_endpoint_key(resolved_endpoint), None)
+
+    for source_text in add:
+        for resolved_endpoint in graph.resolve_endpoint(sheet_path, source_text):
+            key = resolved_endpoint_key(resolved_endpoint)
+            items.setdefault(key, _EndpointItem(endpoint=resolved_endpoint, order=order))
+            order += 1
+
+    return _render_endpoint_items(graph, sheet_path, items.values())
+
+
+def _resolved_endpoint_keys(
+    graph: ProjectGraph,
+    sheet_path: str,
+    endpoint_texts: Iterable[str],
+) -> set[tuple[str, ...]]:
+    return {
+        resolved_endpoint_key(endpoint)
+        for endpoint_text in endpoint_texts
+        for endpoint in graph.resolve_endpoint(sheet_path, endpoint_text)
+    }
+
+
+def _render_endpoint_items(
+    graph: ProjectGraph,
+    sheet_path: str,
+    items: Iterable[_EndpointItem],
+) -> list[str]:
+    grouped: dict[tuple[str, ...], list[_EndpointItem]] = {}
+    for item in items:
+        grouped.setdefault(_render_group_key(item.endpoint), []).append(item)
+
+    rendered: list[str] = []
+    ordered_groups = sorted(
+        grouped.values(),
+        key=lambda group: min(item.order for item in group),
+    )
+    for group_items in ordered_groups:
+        endpoint = group_items[0].endpoint
+        if endpoint.kind is EndpointKind.SHEET_PORT:
+            rendered.append(endpoint.text)
+            continue
+        rendered.extend(_render_symbol_pin_group(graph, sheet_path, group_items))
+    return rendered
+
+
+def _render_group_key(endpoint: ResolvedEndpoint) -> tuple[str, ...]:
+    if endpoint.kind is EndpointKind.SYMBOL_PIN:
+        return (
+            endpoint.sheet_path,
+            "symbol-pin-name",
+            endpoint.ref or "",
+            endpoint.pin_name or "",
+        )
+    return resolved_endpoint_key(endpoint)
+
+
+def _render_symbol_pin_group(
+    graph: ProjectGraph,
+    sheet_path: str,
+    group_items: list[_EndpointItem],
+) -> list[str]:
+    endpoint = group_items[0].endpoint
+    ref = endpoint.ref or ""
+    pin_name = endpoint.pin_name or ""
+    sheet = graph.source.sheets[sheet_path]
+    symbol_decl = sheet.symbols[ref]
+    symbol = graph.symbols[symbol_decl.lib]
+    matching = _matching_pins(symbol.pins, pin_name)
+    selected_numbers = {item.endpoint.pin_number for item in group_items}
+    matching_numbers = {pin.number for pin in matching}
+    if len(matching) > 1 and selected_numbers == matching_numbers:
+        return [f"{ref}.{pin_name}/all"]
+
+    rendered: list[str] = []
+    for pin in matching:
+        if pin.number not in selected_numbers:
+            continue
+        if len(matching) == 1:
+            rendered.append(f"{ref}.{pin.name}")
+        else:
+            rendered.append(f"{ref}.{pin.name}@{pin.number}")
+    return rendered
+
+
+def _matching_pins(pins: list[SymbolPin], pin_name: str) -> list[SymbolPin]:
+    return [pin for pin in pins if pin.name == pin_name or pin.number == pin_name]
 
 
 def _validate_project(project: ProjectIR) -> None:

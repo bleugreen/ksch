@@ -204,5 +204,6 @@ open-ended YAML writes.
 
 Structured edits load the configured project graph, validate symbol libraries
 and endpoints, reject cross-net conflicts, then rewrite the affected schema
-sheet with deterministic formatting. With no `--schema`, edit commands read the
-root schema from `ksch.toml`.
+sheet with deterministic formatting. The internal edit core resolves aggregate
+endpoint expressions such as `/all` to physical pin keys before rewriting. With
+no `--schema`, edit commands read the root schema from `ksch.toml`.
