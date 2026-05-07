@@ -208,8 +208,8 @@ ksch verify
 The package also contains a structured edit core for tool, agent, and future
 semantic refactor operations. That layer validates candidate changes before
 writing, resolves aggregate endpoint expressions such as `/all` to physical pin
-keys, and rejects connected no-connect endpoints. It is not the primary human
-authoring interface.
+keys, supports symbol/net renames across coupled schema locations, and rejects
+connected no-connect endpoints. It is not the primary human authoring interface.
 
 For agent environments, print the bundled skill:
 

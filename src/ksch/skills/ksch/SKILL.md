@@ -111,8 +111,9 @@ ksch verify
 ```
 
 Low-level structured edit APIs exist for tools and future semantic refactors.
-They resolve aggregate endpoint expressions such as `/all` before rewriting, but
-they are not the primary authoring workflow.
+They resolve aggregate endpoint expressions such as `/all` before rewriting and
+can update coupled schema locations for internal semantic operations such as
+symbol/net renames. They are not the primary authoring workflow.
 
 ## Common Fixes
 

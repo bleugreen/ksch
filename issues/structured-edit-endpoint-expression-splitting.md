@@ -20,7 +20,9 @@ nets:
 ```
 
 Adding the last missing duplicate pin collapses back to `/all`. The same
-resolved-key rewrite path is used for `no_connects`.
+resolved-key rewrite path is used for `no_connects`. The edit core also supports
+internal symbol-reference renames and net renames, updating coupled schema
+locations before validation.
 
 ## Remaining Work
 
@@ -30,10 +32,9 @@ list-mutation commands.
 
 Good next candidates:
 
-- Rename a symbol reference and update all net/no-connect endpoint expressions.
-- Rename or merge a net across one sheet with conflict checks.
 - Move endpoint groups between nets as one validated transaction.
 - Extract a set of symbols/nets into a child sheet and rewrite sheet ports.
+- Support explicit net merge semantics for rename-like operations.
 - Preserve source comments around rewritten endpoint lists if ruamel node
   mutations need more care.
 

@@ -9,7 +9,7 @@ from ruamel.yaml import YAML
 from ksch.errors import KschError
 from ksch.graph import ProjectGraph
 from ksch.kicad.symbols import SymbolPin, index_symbol_library
-from ksch.model.endpoint import EndpointKind
+from ksch.model.endpoint import EndpointKind, parse_endpoint
 from ksch.model.ir import ProjectIR
 from ksch.model.source import SymbolDecl
 from ksch.resolver import (
@@ -62,6 +62,24 @@ class AddSymbolResult:
     schema_path: Path
     sheet_path: str
     ref: str
+    changed: bool
+
+
+@dataclass(frozen=True)
+class RenameSymbolResult:
+    schema_path: Path
+    sheet_path: str
+    old_ref: str
+    new_ref: str
+    changed: bool
+
+
+@dataclass(frozen=True)
+class RenameNetResult:
+    schema_path: Path
+    sheet_path: str
+    old_name: str
+    new_name: str
     changed: bool
 
 
@@ -120,6 +138,120 @@ def add_symbol(
         schema_path=sheet.source_path,
         sheet_path=sheet_path,
         ref=ref,
+        changed=True,
+    )
+
+
+def rename_symbol_ref(
+    root_schema: Path,
+    *,
+    sheet_path: str,
+    old_ref: str,
+    new_ref: str,
+) -> RenameSymbolResult:
+    graph = ProjectGraph.from_schema(root_schema)
+    sheet = graph.sheet(sheet_path)
+    if sheet is None:
+        raise KschError(f"unknown sheet {sheet_path}")
+    if old_ref not in sheet.symbols:
+        raise KschError(f"unknown symbol {old_ref} in {sheet_path}")
+    if old_ref == new_ref:
+        return RenameSymbolResult(
+            schema_path=sheet.source_path,
+            sheet_path=sheet_path,
+            old_ref=old_ref,
+            new_ref=new_ref,
+            changed=False,
+        )
+    if new_ref in sheet.symbols:
+        raise KschError(f"symbol {new_ref} already exists in {sheet_path}")
+
+    candidate = graph.source.model_copy(deep=True)
+    candidate_sheet = candidate.sheets[sheet_path]
+    _rename_mapping_key(candidate_sheet.symbols, old_ref, new_ref)
+    candidate_sheet.nets = _rename_ref_in_nets(candidate_sheet.nets, old_ref, new_ref)
+    candidate_sheet.no_connects = [
+        _rename_endpoint_ref(endpoint, old_ref, new_ref)
+        for endpoint in candidate_sheet.no_connects
+    ]
+    _validate_project(candidate)
+
+    data = load_yaml_file(sheet.source_path)
+    if not isinstance(data, dict):
+        raise KschError(f"{sheet.source_path} must contain a mapping")
+    symbols = data.get("symbols", {})
+    if not isinstance(symbols, dict):
+        raise KschError(f"{sheet.source_path}: symbols must be a mapping")
+    if old_ref not in symbols:
+        raise KschError(f"{sheet.source_path}: symbols.{old_ref} is missing")
+    _rename_mapping_key(symbols, old_ref, new_ref)
+    _rename_ref_in_document_endpoints(data, old_ref, new_ref, sheet.source_path)
+    sheet.source_path.write_text(_dump_schema(data, sheet.source_path), encoding="utf-8")
+    return RenameSymbolResult(
+        schema_path=sheet.source_path,
+        sheet_path=sheet_path,
+        old_ref=old_ref,
+        new_ref=new_ref,
+        changed=True,
+    )
+
+
+def rename_net(
+    root_schema: Path,
+    *,
+    sheet_path: str,
+    old_name: str,
+    new_name: str,
+) -> RenameNetResult:
+    graph = ProjectGraph.from_schema(root_schema)
+    sheet = graph.sheet(sheet_path)
+    if sheet is None:
+        raise KschError(f"unknown sheet {sheet_path}")
+    if old_name not in sheet.nets:
+        raise KschError(f"unknown net {old_name} in {sheet_path}")
+    if old_name == new_name:
+        return RenameNetResult(
+            schema_path=sheet.source_path,
+            sheet_path=sheet_path,
+            old_name=old_name,
+            new_name=new_name,
+            changed=False,
+        )
+    if new_name in sheet.nets:
+        raise KschError(f"net {new_name} already exists in {sheet_path}")
+
+    candidate = graph.source.model_copy(deep=True)
+    candidate_sheet = candidate.sheets[sheet_path]
+    _rename_mapping_key(candidate_sheet.nets, old_name, new_name)
+    candidate_sheet.power_flags = [
+        new_name if power_flag == old_name else power_flag
+        for power_flag in candidate_sheet.power_flags
+    ]
+    _validate_project(candidate)
+
+    data = load_yaml_file(sheet.source_path)
+    if not isinstance(data, dict):
+        raise KschError(f"{sheet.source_path} must contain a mapping")
+    nets = data.get("nets", {})
+    if not isinstance(nets, dict):
+        raise KschError(f"{sheet.source_path}: nets must be a mapping")
+    if old_name not in nets:
+        raise KschError(f"{sheet.source_path}: nets.{old_name} is missing")
+    _rename_mapping_key(nets, old_name, new_name)
+    power_flags = data.get("power_flags", [])
+    if power_flags is not None:
+        if not isinstance(power_flags, list):
+            raise KschError(f"{sheet.source_path}: power_flags must be a list")
+        power_flags[:] = [
+            new_name if power_flag == old_name else power_flag
+            for power_flag in power_flags
+        ]
+    sheet.source_path.write_text(_dump_schema(data, sheet.source_path), encoding="utf-8")
+    return RenameNetResult(
+        schema_path=sheet.source_path,
+        sheet_path=sheet_path,
+        old_name=old_name,
+        new_name=new_name,
         changed=True,
     )
 
@@ -498,6 +630,62 @@ def _render_symbol_pin_group(
 
 def _matching_pins(pins: list[SymbolPin], pin_name: str) -> list[SymbolPin]:
     return [pin for pin in pins if pin.name == pin_name or pin.number == pin_name]
+
+
+def _rename_mapping_key(mapping: dict[str, Any], old_key: str, new_key: str) -> None:
+    renamed = {
+        new_key if key == old_key else key: value
+        for key, value in mapping.items()
+    }
+    mapping.clear()
+    mapping.update(renamed)
+
+
+def _rename_ref_in_nets(
+    nets: dict[str, list[str]],
+    old_ref: str,
+    new_ref: str,
+) -> dict[str, list[str]]:
+    return {
+        net_name: [_rename_endpoint_ref(endpoint, old_ref, new_ref) for endpoint in endpoints]
+        for net_name, endpoints in nets.items()
+    }
+
+
+def _rename_ref_in_document_endpoints(
+    data: dict[str, Any],
+    old_ref: str,
+    new_ref: str,
+    source_path: Path,
+) -> None:
+    nets = data.get("nets", {})
+    if nets is not None:
+        if not isinstance(nets, dict):
+            raise KschError(f"{source_path}: nets must be a mapping")
+        for net_name, endpoints in nets.items():
+            if not isinstance(endpoints, list):
+                raise KschError(f"{source_path}: nets.{net_name} must be a list")
+            endpoints[:] = [
+                _rename_endpoint_ref(endpoint, old_ref, new_ref)
+                for endpoint in endpoints
+            ]
+
+    no_connects = data.get("no_connects", [])
+    if no_connects is not None:
+        if not isinstance(no_connects, list):
+            raise KschError(f"{source_path}: no_connects must be a list")
+        no_connects[:] = [
+            _rename_endpoint_ref(endpoint, old_ref, new_ref)
+            for endpoint in no_connects
+        ]
+
+
+def _rename_endpoint_ref(endpoint_text: str, old_ref: str, new_ref: str) -> str:
+    endpoint = parse_endpoint(endpoint_text)
+    if endpoint.kind is not EndpointKind.SYMBOL_PIN or endpoint.ref != old_ref:
+        return endpoint_text
+    _head, _sep, tail = endpoint_text.partition(".")
+    return f"{new_ref}.{tail}"
 
 
 def _validate_project(project: ProjectIR) -> None:

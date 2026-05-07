@@ -8,6 +8,8 @@ from ksch.edit import (
     clear_no_connects,
     connect_endpoints,
     disconnect_endpoints,
+    rename_net,
+    rename_symbol_ref,
 )
 from ksch.errors import KschError
 from ksch.graph import ProjectGraph
@@ -39,6 +41,8 @@ def _write_edit_project(tmp_path: Path) -> Path:
                 "    - J1.D+@A6",
                 "  VBUS:",
                 "    - J1.VBUS/all",
+                "power_flags:",
+                "  - VBUS",
                 "",
             ]
         ),
@@ -328,5 +332,79 @@ def test_add_symbol_rejects_unknown_library_without_writing(tmp_path: Path) -> N
 
     with pytest.raises(KschError, match="unknown symbol library id Missing:Part"):
         add_symbol(schema, sheet_path="/", ref="U1", lib_id="Missing:Part")
+
+    assert schema.read_text(encoding="utf-8") == before
+
+
+def test_rename_symbol_ref_rewrites_symbols_nets_and_no_connects(tmp_path: Path) -> None:
+    schema = _write_edit_project(tmp_path)
+    add_no_connects(schema, sheet_path="/", endpoints=["J1.D-/all"])
+
+    result = rename_symbol_ref(schema, sheet_path="/", old_ref="J1", new_ref="J2")
+
+    assert result.changed is True
+    assert result.old_ref == "J1"
+    assert result.new_ref == "J2"
+    text = schema.read_text(encoding="utf-8")
+    assert "  J2:\n    lib: Test:USB_C\n" in text
+    assert "J1" not in text
+    assert "    - J2.D+@A6\n" in text
+    assert "    - J2.VBUS/all\n" in text
+    assert "no_connects:\n  - J2.D-/all\n" in text
+    assert ProjectGraph.from_schema(schema).net_for_endpoint("/", "J2.VBUS@A4") == "VBUS"
+
+
+def test_rename_symbol_ref_rejects_duplicate_without_writing(tmp_path: Path) -> None:
+    schema = _write_edit_project(tmp_path)
+    add_symbol(schema, sheet_path="/", ref="J2", lib_id="Test:USB_C")
+    before = schema.read_text(encoding="utf-8")
+
+    with pytest.raises(KschError, match="symbol J2 already exists"):
+        rename_symbol_ref(schema, sheet_path="/", old_ref="J1", new_ref="J2")
+
+    assert schema.read_text(encoding="utf-8") == before
+
+
+def test_rename_symbol_ref_rejects_unknown_ref_without_writing(tmp_path: Path) -> None:
+    schema = _write_edit_project(tmp_path)
+    before = schema.read_text(encoding="utf-8")
+
+    with pytest.raises(KschError, match="unknown symbol U9 in /"):
+        rename_symbol_ref(schema, sheet_path="/", old_ref="U9", new_ref="U10")
+
+    assert schema.read_text(encoding="utf-8") == before
+
+
+def test_rename_net_rewrites_key_and_power_flags(tmp_path: Path) -> None:
+    schema = _write_edit_project(tmp_path)
+
+    result = rename_net(schema, sheet_path="/", old_name="VBUS", new_name="+5V")
+
+    assert result.changed is True
+    assert result.old_name == "VBUS"
+    assert result.new_name == "+5V"
+    text = schema.read_text(encoding="utf-8")
+    assert "  +5V:\n    - J1.VBUS/all\n" in text
+    assert "  VBUS:" not in text
+    assert "power_flags:\n  - +5V\n" in text
+    assert ProjectGraph.from_schema(schema).net_for_endpoint("/", "J1.VBUS@A4") == "+5V"
+
+
+def test_rename_net_rejects_collision_without_writing(tmp_path: Path) -> None:
+    schema = _write_edit_project(tmp_path)
+    before = schema.read_text(encoding="utf-8")
+
+    with pytest.raises(KschError, match="net USB_D_P already exists in /"):
+        rename_net(schema, sheet_path="/", old_name="VBUS", new_name="USB_D_P")
+
+    assert schema.read_text(encoding="utf-8") == before
+
+
+def test_rename_net_rejects_missing_net_without_writing(tmp_path: Path) -> None:
+    schema = _write_edit_project(tmp_path)
+    before = schema.read_text(encoding="utf-8")
+
+    with pytest.raises(KschError, match="unknown net NOPE in /"):
+        rename_net(schema, sheet_path="/", old_name="NOPE", new_name="OTHER")
 
     assert schema.read_text(encoding="utf-8") == before
