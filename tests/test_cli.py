@@ -308,6 +308,7 @@ def test_cli_edit_help_does_not_surface_inverse_list_mutations() -> None:
     assert "disconnect" not in result.stdout
     assert "no-connect" not in result.stdout
     assert "clear-no-connect" not in result.stdout
+    assert "rename" not in result.stdout
 
 
 def test_cli_edit_add_symbol_updates_configured_schema(
