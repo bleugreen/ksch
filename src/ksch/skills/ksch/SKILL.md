@@ -110,8 +110,9 @@ ksch gen
 ksch verify
 ```
 
-Low-level structured edit APIs exist for tools and future semantic refactors,
-but they are not the primary authoring workflow.
+Low-level structured edit APIs exist for tools and future semantic refactors.
+They resolve aggregate endpoint expressions such as `/all` before rewriting, but
+they are not the primary authoring workflow.
 
 ## Common Fixes
 

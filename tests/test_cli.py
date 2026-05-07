@@ -298,7 +298,7 @@ def test_cli_edit_connect_updates_configured_schema(
 
     assert result.exit_code == 0, result.output
     assert "connected 1 endpoint" in result.stdout
-    assert "    - J1.D+@B6\n" in schema.read_text(encoding="utf-8")
+    assert "    - J1.D+/all\n" in schema.read_text(encoding="utf-8")
 
 
 def test_cli_edit_help_does_not_surface_inverse_list_mutations() -> None:

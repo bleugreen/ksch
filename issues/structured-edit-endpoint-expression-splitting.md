@@ -1,13 +1,9 @@
-# Structured Edits Need Endpoint Expression Splitting
+# Structured Endpoint Rewrite Follow-Ups
 
 ## Context
 
-The internal `disconnect_endpoints` edit primitive currently removes exact
-endpoint strings from a net. That is correct for explicit schema entries such as
-`J1.D+@A6`, but it does not yet edit inside aggregate endpoint expressions such
-as `J1.D+/all`.
-
-Example:
+The edit core now resolves endpoint expressions to physical endpoint keys before
+rewriting source YAML. This means internal edits can split aggregate expressions:
 
 ```yaml
 nets:
@@ -15,8 +11,7 @@ nets:
     - J1.D+/all
 ```
 
-Disconnecting `J1.D+@A6` from that net should eventually rewrite the aggregate
-expression into the remaining physical pins, for example:
+Removing `J1.D+@A6` rewrites to:
 
 ```yaml
 nets:
@@ -24,23 +19,26 @@ nets:
     - J1.D+@B6
 ```
 
-## Desired Shape
+Adding the last missing duplicate pin collapses back to `/all`. The same
+resolved-key rewrite path is used for `no_connects`.
 
-The edit layer should operate on resolved physical endpoints while still
-preserving compact source expressions when they remain semantically correct.
+## Remaining Work
 
-Needed pieces:
+The edit core is still intentionally internal. Future useful work should build
+larger semantic operations on top of this substrate instead of exposing tiny
+list-mutation commands.
 
-- An endpoint-expression expander that maps each source endpoint to resolved
-  physical endpoint keys.
-- A rewrite operation that can subtract physical endpoint keys from one source
-  endpoint expression.
-- Deterministic formatting for rewritten endpoint lists.
-- Tests for `/all`, explicit `@pin`, and bare unique pin-name expressions.
+Good next candidates:
 
-## Why This Is Not In The Current Slice
+- Rename a symbol reference and update all net/no-connect endpoint expressions.
+- Rename or merge a net across one sheet with conflict checks.
+- Move endpoint groups between nets as one validated transaction.
+- Extract a set of symbols/nets into a child sheet and rewrite sheet ports.
+- Preserve source comments around rewritten endpoint lists if ruamel node
+  mutations need more care.
 
-The current inverse edit slice keeps these operations as internal validated
-primitives. Splitting aggregate endpoint syntax is a larger source rewrite
-problem and should be solved as a first-class semantic edit primitive rather
-than hidden inside string-list mutation.
+## Non-Goal
+
+Do not add more public CLI verbs for small YAML list edits unless the command is
+clearly easier and safer than direct `.ksch.yaml` editing followed by
+`ksch validate`, `ksch gen`, and `ksch verify`.
