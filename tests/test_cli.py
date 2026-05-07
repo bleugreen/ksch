@@ -301,6 +301,15 @@ def test_cli_edit_connect_updates_configured_schema(
     assert "    - J1.D+@B6\n" in schema.read_text(encoding="utf-8")
 
 
+def test_cli_edit_help_does_not_surface_inverse_list_mutations() -> None:
+    result = runner.invoke(app, ["edit", "--help"])
+
+    assert result.exit_code == 0, result.output
+    assert "disconnect" not in result.stdout
+    assert "no-connect" not in result.stdout
+    assert "clear-no-connect" not in result.stdout
+
+
 def test_cli_edit_add_symbol_updates_configured_schema(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

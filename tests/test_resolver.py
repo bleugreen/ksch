@@ -45,3 +45,19 @@ def test_rejects_same_pin_on_multiple_nets() -> None:
 
     with pytest.raises(KschError, match="J1.VBUS@A4 is connected to both"):
         resolve_project(project, _context())
+
+
+def test_rejects_no_connect_on_connected_pin() -> None:
+    project = load_project_ir(Path("tests/fixtures/project/project.ksch.yaml"))
+    project.sheets["/"].no_connects.append("J1.D+@A6")
+
+    with pytest.raises(KschError, match="J1.D\\+@A6 is connected to USB_UP_DP"):
+        resolve_project(project, _context())
+
+
+def test_rejects_no_connect_that_expands_to_connected_duplicate_pin() -> None:
+    project = load_project_ir(Path("tests/fixtures/project/project.ksch.yaml"))
+    project.sheets["/"].no_connects.append("J1.VBUS/all")
+
+    with pytest.raises(KschError, match="J1.VBUS@A4 is connected to \\+5V"):
+        resolve_project(project, _context())

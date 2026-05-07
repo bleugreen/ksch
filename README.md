@@ -109,8 +109,6 @@ ksch validate schematic/project.ksch.yaml
 ksch fmt schematic/project.ksch.yaml
 ksch schema show
 ksch explain U1.USBDP_UP
-ksch edit add-symbol U1 Device:R --value 10k
-ksch edit connect PULLUP U1.1 U1.2
 ksch compile schematic/project.ksch.yaml --out kicad
 ksch import board.kicad_sch --out ksch
 ksch symbols search USB
@@ -198,15 +196,19 @@ The compiler validates symbol library ids, endpoint references, duplicate pin
 disambiguation, sheet ports, and no-connect endpoints before writing KiCad
 output.
 
-Use structured edit commands when changing schema from tools or agents:
+Edit `.ksch.yaml` directly as the normal authoring workflow, then validate and
+verify:
 
 ```bash
-ksch edit add-symbol R1 Device:R --value 10k
-ksch edit connect RESET R1.1 U1.RESET
+ksch validate schematic/project.ksch.yaml
+ksch gen
+ksch verify
 ```
 
-Edits are validated against the project graph and symbol libraries before the
-schema file is rewritten.
+The package also contains a structured edit core for tool, agent, and future
+semantic refactor operations. That layer validates candidate changes before
+writing and rejects connected no-connect endpoints, but it is not the primary
+human authoring interface.
 
 For agent environments, print the bundled skill:
 

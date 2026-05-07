@@ -63,6 +63,9 @@ Pin-name endpoints are preferred. `@PIN_NUMBER` disambiguates duplicate pin
 names, and `/all` intentionally expands all matching duplicate pins. Bare pin
 numbers are escape hatches for symbols whose pin names are not useful.
 
+Endpoints listed under `no_connects` must resolve to real symbol pins and must
+not also be connected to any net in the same sheet.
+
 ## Interfaces
 
 Each sheet owns its `interface`. Parent sheets connect to a child sheet with
