@@ -42,6 +42,17 @@ class DisconnectResult:
 
 
 @dataclass(frozen=True)
+class MoveEndpointsResult:
+    schema_path: Path
+    sheet_path: str
+    source_net: str
+    target_net: str
+    moved_endpoints: tuple[str, ...]
+    deleted_source_net: bool
+    changed: bool
+
+
+@dataclass(frozen=True)
 class NoConnectResult:
     schema_path: Path
     sheet_path: str
@@ -252,6 +263,102 @@ def disconnect_endpoints(
     )
 
 
+def move_endpoints(
+    root_schema: Path,
+    *,
+    sheet_path: str,
+    source_net: str,
+    target_net: str,
+    endpoints: list[str],
+) -> MoveEndpointsResult:
+    graph = ProjectGraph.from_schema(root_schema)
+    sheet = graph.sheet(sheet_path)
+    if sheet is None:
+        raise KschError(f"unknown sheet {sheet_path}")
+    if source_net not in sheet.nets:
+        raise KschError(f"unknown source net {source_net} in {sheet_path}")
+
+    requested = tuple(dict.fromkeys(endpoints))
+    for endpoint in requested:
+        existing_net = _fully_connected_net_for_endpoint(graph, sheet_path, endpoint)
+        if existing_net != source_net:
+            raise KschError(
+                f"{endpoint} is connected to {existing_net}, not {source_net} in {sheet_path}"
+            )
+
+    if not requested or source_net == target_net:
+        return MoveEndpointsResult(
+            schema_path=sheet.source_path,
+            sheet_path=sheet_path,
+            source_net=source_net,
+            target_net=target_net,
+            moved_endpoints=(),
+            deleted_source_net=False,
+            changed=False,
+        )
+
+    rewritten_source = _rewrite_net_endpoints(
+        graph,
+        sheet_path,
+        source_net,
+        add=[],
+        remove=list(requested),
+    )
+    rewritten_target = _rewrite_net_endpoints(
+        graph,
+        sheet_path,
+        target_net,
+        add=list(requested),
+        remove=[],
+    )
+    deleted_source_net = not rewritten_source
+    _validate_moved_endpoints(
+        graph,
+        sheet_path,
+        source_net=source_net,
+        target_net=target_net,
+        source_endpoints=rewritten_source,
+        target_endpoints=rewritten_target,
+        deleted_source_net=deleted_source_net,
+    )
+
+    data = load_yaml_file(sheet.source_path)
+    if not isinstance(data, dict):
+        raise KschError(f"{sheet.source_path} must contain a mapping")
+    nets = data.get("nets", {})
+    if not isinstance(nets, dict):
+        raise KschError(f"{sheet.source_path}: nets must be a mapping")
+    source_endpoints = nets.get(source_net)
+    if not isinstance(source_endpoints, list):
+        raise KschError(f"{sheet.source_path}: nets.{source_net} must be a list")
+
+    if rewritten_source:
+        source_endpoints[:] = rewritten_source
+    else:
+        del nets[source_net]
+
+    target_endpoints = nets.get(target_net)
+    if target_endpoints is None:
+        nets[target_net] = rewritten_target
+    elif isinstance(target_endpoints, list):
+        target_endpoints[:] = rewritten_target
+    else:
+        raise KschError(f"{sheet.source_path}: nets.{target_net} must be a list")
+
+    if deleted_source_net:
+        _remove_power_flag(data, sheet.source_path, source_net)
+    sheet.source_path.write_text(_dump_schema(data, sheet.source_path), encoding="utf-8")
+    return MoveEndpointsResult(
+        schema_path=sheet.source_path,
+        sheet_path=sheet_path,
+        source_net=source_net,
+        target_net=target_net,
+        moved_endpoints=requested,
+        deleted_source_net=deleted_source_net,
+        changed=True,
+    )
+
+
 def add_no_connects(
     root_schema: Path,
     *,
@@ -372,6 +479,50 @@ def _validate_rewritten_net(
     else:
         sheet.nets.pop(net_name, None)
     _validate_project(candidate)
+
+
+def _validate_moved_endpoints(
+    graph: ProjectGraph,
+    sheet_path: str,
+    *,
+    source_net: str,
+    target_net: str,
+    source_endpoints: list[str],
+    target_endpoints: list[str],
+    deleted_source_net: bool,
+) -> None:
+    candidate = graph.source.model_copy(deep=True)
+    sheet = candidate.sheets[sheet_path]
+    if source_endpoints:
+        sheet.nets[source_net] = source_endpoints
+    else:
+        sheet.nets.pop(source_net, None)
+    sheet.nets[target_net] = target_endpoints
+    if deleted_source_net:
+        sheet.power_flags = [flag for flag in sheet.power_flags if flag != source_net]
+    _validate_project(candidate)
+
+
+def _fully_connected_net_for_endpoint(
+    graph: ProjectGraph,
+    sheet_path: str,
+    endpoint_text: str,
+) -> str:
+    resolved = graph.resolve_endpoint(sheet_path, endpoint_text)
+    endpoint_nets = [
+        graph.endpoint_nets.get(resolved_endpoint_key(endpoint)) for endpoint in resolved
+    ]
+    nets = {net_name for net_name in endpoint_nets if net_name is not None}
+    if not nets:
+        raise KschError(f"{endpoint_text} is not connected in {sheet_path}")
+    if any(net_name is None for net_name in endpoint_nets):
+        raise KschError(f"{endpoint_text} is not fully connected in {sheet_path}")
+    if len(nets) > 1:
+        rendered = ", ".join(sorted(nets))
+        raise KschError(
+            f"{endpoint_text} resolves to endpoints on multiple nets: {rendered}"
+        )
+    return next(iter(nets))
 
 
 def _rewrite_net_endpoints(
@@ -509,6 +660,17 @@ def _validate_project(project: ProjectIR) -> None:
         LibraryContext(symbols=symbols, footprints={}),
         validate_declared_symbols=True,
     )
+
+
+def _remove_power_flag(data: dict[str, Any], path: Path, net_name: str) -> None:
+    power_flags = data.get("power_flags")
+    if power_flags is None:
+        return
+    if not isinstance(power_flags, list):
+        raise KschError(f"{path}: power_flags must be a list")
+    power_flags[:] = [flag for flag in power_flags if flag != net_name]
+    if not power_flags:
+        data.pop("power_flags", None)
 
 
 def _dump_schema(data: dict[str, Any], path: Path) -> str:

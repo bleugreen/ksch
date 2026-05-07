@@ -8,6 +8,7 @@ from ksch.edit import (
     clear_no_connects,
     connect_endpoints,
     disconnect_endpoints,
+    move_endpoints,
 )
 from ksch.errors import KschError
 from ksch.graph import ProjectGraph
@@ -39,6 +40,8 @@ def _write_edit_project(tmp_path: Path) -> Path:
                 "    - J1.D+@A6",
                 "  VBUS:",
                 "    - J1.VBUS/all",
+                "power_flags:",
+                "  - VBUS",
                 "",
             ]
         ),
@@ -188,6 +191,135 @@ def test_disconnect_endpoints_rejects_missing_endpoint_without_writing(
             sheet_path="/",
             net_name="USB_D_P",
             endpoints=["J1.D-@A7"],
+        )
+
+    assert schema.read_text(encoding="utf-8") == before
+
+
+def test_move_endpoints_splits_source_all_expression(tmp_path: Path) -> None:
+    schema = _write_edit_project(tmp_path)
+
+    result = move_endpoints(
+        schema,
+        sheet_path="/",
+        source_net="VBUS",
+        target_net="USB_D_P",
+        endpoints=["J1.VBUS@A4"],
+    )
+
+    assert result.changed is True
+    assert result.moved_endpoints == ("J1.VBUS@A4",)
+    assert result.deleted_source_net is False
+    text = schema.read_text(encoding="utf-8")
+    assert "  USB_D_P:\n    - J1.D+@A6\n    - J1.VBUS@A4\n" in text
+    assert "  VBUS:\n    - J1.VBUS@B4\n" in text
+    assert "J1.VBUS/all" not in text
+    assert "power_flags:\n  - VBUS\n" in text
+    graph = ProjectGraph.from_schema(schema)
+    assert graph.net_for_endpoint("/", "J1.VBUS@A4") == "USB_D_P"
+    assert graph.net_for_endpoint("/", "J1.VBUS@B4") == "VBUS"
+
+
+def test_move_endpoints_collapses_target_duplicate_group(tmp_path: Path) -> None:
+    schema = _write_edit_project(tmp_path)
+    schema.write_text(
+        schema.read_text(encoding="utf-8").replace(
+            "  VBUS:\n    - J1.VBUS/all\n",
+            "  USB_D_P_SPARE:\n    - J1.D+@B6\n  VBUS:\n    - J1.VBUS/all\n",
+        ),
+        encoding="utf-8",
+    )
+
+    result = move_endpoints(
+        schema,
+        sheet_path="/",
+        source_net="USB_D_P_SPARE",
+        target_net="USB_D_P",
+        endpoints=["J1.D+@B6"],
+    )
+
+    assert result.changed is True
+    assert result.moved_endpoints == ("J1.D+@B6",)
+    assert result.deleted_source_net is True
+    text = schema.read_text(encoding="utf-8")
+    assert "  USB_D_P:\n    - J1.D+/all\n" in text
+    assert "USB_D_P_SPARE" not in text
+    assert "J1.D+@A6" not in text
+    assert "J1.D+@B6" not in text
+
+
+def test_move_endpoints_can_create_target_and_removes_deleted_source_power_flag(
+    tmp_path: Path,
+) -> None:
+    schema = _write_edit_project(tmp_path)
+
+    result = move_endpoints(
+        schema,
+        sheet_path="/",
+        source_net="VBUS",
+        target_net="RAW_VBUS",
+        endpoints=["J1.VBUS/all"],
+    )
+
+    assert result.changed is True
+    assert result.deleted_source_net is True
+    text = schema.read_text(encoding="utf-8")
+    assert "  RAW_VBUS:\n    - J1.VBUS/all\n" in text
+    assert "  VBUS:" not in text
+    assert "power_flags" not in text
+    assert ProjectGraph.from_schema(schema).net_for_endpoint("/", "J1.VBUS/all") == "RAW_VBUS"
+
+
+def test_move_endpoints_rejects_wrong_source_without_writing(tmp_path: Path) -> None:
+    schema = _write_edit_project(tmp_path)
+    before = schema.read_text(encoding="utf-8")
+
+    with pytest.raises(
+        KschError,
+        match="J1.VBUS@A4 is connected to VBUS, not USB_D_P",
+    ):
+        move_endpoints(
+            schema,
+            sheet_path="/",
+            source_net="USB_D_P",
+            target_net="GND",
+            endpoints=["J1.VBUS@A4"],
+        )
+
+    assert schema.read_text(encoding="utf-8") == before
+
+
+def test_move_endpoints_rejects_missing_endpoint_without_writing(
+    tmp_path: Path,
+) -> None:
+    schema = _write_edit_project(tmp_path)
+    before = schema.read_text(encoding="utf-8")
+
+    with pytest.raises(KschError, match="J1.D-@A7 is not connected in /"):
+        move_endpoints(
+            schema,
+            sheet_path="/",
+            source_net="USB_D_P",
+            target_net="GND",
+            endpoints=["J1.D-@A7"],
+        )
+
+    assert schema.read_text(encoding="utf-8") == before
+
+
+def test_move_endpoints_rejects_partially_matching_group_without_writing(
+    tmp_path: Path,
+) -> None:
+    schema = _write_edit_project(tmp_path)
+    before = schema.read_text(encoding="utf-8")
+
+    with pytest.raises(KschError, match="J1.D\\+/all is not fully connected in /"):
+        move_endpoints(
+            schema,
+            sheet_path="/",
+            source_net="USB_D_P",
+            target_net="DIFF_PAIR",
+            endpoints=["J1.D+/all"],
         )
 
     assert schema.read_text(encoding="utf-8") == before
