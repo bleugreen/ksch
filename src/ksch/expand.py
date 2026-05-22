@@ -4,6 +4,8 @@ from ksch.model.ir import ChildInstanceIR, ProjectIR, SheetIR
 from ksch.model.source import SourceDocument
 from ksch.schema.loader import load_yaml_file
 
+NO_CONNECT = "nc"
+
 
 def _load_source(path: Path) -> SourceDocument:
     return SourceDocument.model_validate(load_yaml_file(path))
@@ -17,17 +19,62 @@ def _join_sheet_path(parent_path: str, child_name: str) -> str:
 
 def _sheet_ir(path: str, source_path: Path, source: SourceDocument) -> SheetIR:
     title = source.sheet.title if source.sheet else source.project.title if source.project else None
+    nets, net_endpoint_paths, no_connects, no_connect_paths = _normalize_connects(source)
     return SheetIR(
         path=path,
         source_path=source_path,
         title=title,
         interface=source.interface,
         symbols=source.symbols,
-        nets=source.nets,
+        nets=nets,
+        net_endpoint_paths=net_endpoint_paths,
         power_flags=source.power_flags,
-        no_connects=source.no_connects,
+        no_connects=no_connects,
+        no_connect_paths=no_connect_paths,
         assertions=source.assertions,
     )
+
+
+def _normalize_connects(
+    source: SourceDocument,
+) -> tuple[dict[str, list[str]], dict[str, list[str]], list[str], list[str]]:
+    nets: dict[str, list[str]] = {}
+    net_endpoint_paths: dict[str, list[str]] = {}
+    no_connects: list[str] = []
+    no_connect_paths: list[str] = []
+    for ref, symbol in source.symbols.items():
+        for selector, net_name in symbol.connects.items():
+            endpoint = f"{ref}.{selector}"
+            if net_name == NO_CONNECT:
+                no_connects.append(endpoint)
+                no_connect_paths.append(f"symbols.{ref}.connects.{selector}")
+            else:
+                nets.setdefault(net_name, []).append(endpoint)
+                net_endpoint_paths.setdefault(net_name, []).append(
+                    f"symbols.{ref}.connects.{selector}"
+                )
+    for child_name, child in source.sheets.items():
+        for port, net_name in child.connects.items():
+            if net_name == NO_CONNECT:
+                raise ValueError(f"sheet instance {child_name}.{port} cannot connect to nc")
+            nets.setdefault(net_name, []).append(f"{child_name}.{port}")
+            net_endpoint_paths.setdefault(net_name, []).append(
+                f"sheets.{child_name}.connects.{port}"
+            )
+    for net_name, endpoint_texts in list(nets.items()):
+        paired = sorted(
+            zip(endpoint_texts, net_endpoint_paths.get(net_name, []), strict=False),
+            key=lambda item: item[0],
+        )
+        nets[net_name] = [endpoint for endpoint, _path in paired]
+        net_endpoint_paths[net_name] = [path for _endpoint, path in paired]
+    no_connect_pairs = sorted(
+        zip(no_connects, no_connect_paths, strict=False),
+        key=lambda item: item[0],
+    )
+    no_connects = [endpoint for endpoint, _path in no_connect_pairs]
+    no_connect_paths = [path for _endpoint, path in no_connect_pairs]
+    return nets, net_endpoint_paths, no_connects, no_connect_paths
 
 
 def _load_sheet_tree(path: Path, sheet_path: str, sheets: dict[str, SheetIR]) -> None:

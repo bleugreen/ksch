@@ -44,6 +44,7 @@ from ksch.net_routing import (
 from ksch.placed import (
     PlacedHierarchicalLabel,
     PlacedItem,
+    PlacedLabel,
     PlacedNoConnect,
     PlacedProject,
     PlacedProperty,
@@ -52,6 +53,7 @@ from ksch.placed import (
     PlacedSheetPin,
     PlacedSymbol,
     PlacedSymbolPin,
+    PlacedWire,
 )
 from ksch.placed_normalize import normalize_placed_project
 from ksch.placement import (
@@ -789,6 +791,74 @@ def _pin_point_with_orientation(
     )
 
 
+def _separate_cross_net_symbol_pin_contacts(
+    project: ResolvedProject,
+    sheet_path: str,
+    positions: dict[tuple[str, int], Point],
+    orientations: dict[tuple[str, int], SymbolOrientation],
+) -> dict[tuple[str, int], Point]:
+    adjusted = dict(positions)
+    for _attempt in range(20):
+        collided = _cross_net_symbol_pin_contact_refs(
+            project,
+            sheet_path,
+            adjusted,
+            orientations,
+        )
+        if not collided:
+            return adjusted
+        for key in sorted(collided):
+            position = adjusted.get(key)
+            if position is None:
+                continue
+            adjusted[key] = Point(x=position.x, y=_snap_grid(position.y + SCHEMATIC_GRID * 2))
+    return adjusted
+
+
+def _cross_net_symbol_pin_contact_refs(
+    project: ResolvedProject,
+    sheet_path: str,
+    positions: dict[tuple[str, int], Point],
+    orientations: dict[tuple[str, int], SymbolOrientation],
+) -> set[tuple[str, int]]:
+    sheet = project.source.sheets[sheet_path]
+    resolved_sheet = project.sheets.get(sheet_path)
+    if resolved_sheet is None:
+        return set()
+
+    point_nets: dict[tuple[float, float], tuple[frozenset[str], tuple[str, int]]] = {}
+    collided: set[tuple[str, int]] = set()
+    for net_name, endpoints in sorted(resolved_sheet.nets.items()):
+        for endpoint in endpoints:
+            if endpoint.kind is not EndpointKind.SYMBOL_PIN:
+                continue
+            ref = endpoint.ref or ""
+            symbol_decl = sheet.symbols.get(ref)
+            if symbol_decl is None:
+                continue
+            symbol_info = project.symbol_library.get(symbol_decl.lib)
+            if symbol_info is None:
+                continue
+            pin = _pin_by_number(symbol_info, endpoint.pin_number or "")
+            if pin is None:
+                continue
+            unit = pin.unit if pin.unit != 0 else 1
+            position = positions.get((ref, unit)) or positions.get((ref, 1))
+            if position is None:
+                continue
+            orientation = orientations.get((ref, unit))
+            pin_point = _pin_point_with_orientation(position, pin, symbol_info, orientation)
+            key = (ref, unit)
+            point = (pin_point.x, pin_point.y)
+            nets = frozenset({net_name})
+            existing = point_nets.get(point)
+            if existing is not None and existing[0].isdisjoint(nets):
+                collided.add(key)
+                continue
+            point_nets[point] = (nets, key)
+    return collided
+
+
 def _oriented_sheet_symbol_positions(
     project: ResolvedProject,
     sheet_path: str,
@@ -1182,6 +1252,12 @@ def _build_placed_sheet(project: ResolvedProject, sheet_path: str) -> PlacedShee
         positions,
         symbol_orientations,
     )
+    positions = _separate_cross_net_symbol_pin_contacts(
+        project,
+        sheet_path,
+        positions,
+        symbol_orientations,
+    )
     assigned_to_anchor, _assigned_anchor_pin, _assigned_ref_pin = _symbol_anchor_assignments(
         project,
         sheet_path,
@@ -1484,7 +1560,47 @@ def build_placed_project(project: ResolvedProject) -> PlacedProject:
     sheets: list[PlacedSheet] = []
     for sheet_path in sorted(project.source.sheets):
         sheets.append(_build_placed_sheet(project, sheet_path))
-    return normalize_placed_project(PlacedProject(name=project.name, sheets=tuple(sheets)))
+    placed = normalize_placed_project(PlacedProject(name=project.name, sheets=tuple(sheets)))
+    return _drop_hidden_cross_net_labels(placed)
+
+
+def _drop_hidden_cross_net_labels(project: PlacedProject) -> PlacedProject:
+    return PlacedProject(
+        name=project.name,
+        sheets=tuple(_drop_sheet_hidden_cross_net_labels(sheet) for sheet in project.sheets),
+    )
+
+
+def _drop_sheet_hidden_cross_net_labels(sheet: PlacedSheet) -> PlacedSheet:
+    point_nets: dict[tuple[float, float], list[frozenset[str]]] = {}
+    for item in sheet.items:
+        if isinstance(item, PlacedWire):
+            if item.nets:
+                point_nets.setdefault(item.start, []).append(item.nets)
+                point_nets.setdefault(item.end, []).append(item.nets)
+        elif isinstance(item, PlacedLabel) and not item.hidden and item.nets:
+            point_nets.setdefault(item.at, []).append(item.nets)
+
+    filtered: list[PlacedItem] = []
+    for item in sheet.items:
+        if (
+            isinstance(item, PlacedLabel)
+            and item.hidden
+            and item.nets
+            and any(item.nets.isdisjoint(nets) for nets in point_nets.get(item.at, []))
+        ):
+            continue
+        filtered.append(item)
+    return PlacedSheet(
+        path=sheet.path,
+        filename=sheet.filename,
+        uuid=sheet.uuid,
+        paper=sheet.paper,
+        lib_symbols=sheet.lib_symbols,
+        items=tuple(filtered),
+        instance_path=sheet.instance_path,
+        page=sheet.page,
+    )
 
 
 def write_project(

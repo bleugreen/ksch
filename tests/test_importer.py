@@ -58,10 +58,10 @@ def test_import_generated_fixture_roundtrips_connectivity(tmp_path: Path) -> Non
 
     root_text = imported.root_schema.read_text(encoding="utf-8")
     child_text = (imported_schema / "sheets" / "usb.ksch.yaml").read_text(encoding="utf-8")
-    assert "J1.VBUS/all" in root_text
-    assert "J1.D+/all" in root_text
-    assert "usb.+5V" in root_text
-    assert "U2.VBUS_DET" in child_text
+    assert "VBUS/all: +5V" in root_text
+    assert "D+/all: USB_UP_DP" in root_text
+    assert "connects:\n      +5V: +5V" in root_text
+    assert "VBUS_DET: +5V" in child_text
 
     result = runner.invoke(
         app,
@@ -141,7 +141,7 @@ def test_import_maps_kicad_unconnected_nets_to_no_connects(tmp_path: Path) -> No
         ],
     )
 
-    assert docs["/"]["no_connects"] == ["J1.SBU1"]
+    assert docs["/"]["symbols"]["J1"]["connects"] == {"SBU1": "nc"}
     assert "nets" not in docs["/"]
 
 

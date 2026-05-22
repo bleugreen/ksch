@@ -4,6 +4,7 @@ from ksch.expand import load_project_ir
 from ksch.geometry import PinPoint
 from ksch.kicad.symbols import index_symbol_library
 from ksch.local_topology import build_local_topology
+from ksch.migrate import migrate_file_to_connects
 from ksch.resolver import LibraryContext, resolve_project
 
 
@@ -26,6 +27,7 @@ nets:
 """,
         encoding="utf-8",
     )
+    migrate_file_to_connects(schema)
     project = load_project_ir(schema)
     symbols = index_symbol_library("Test", Path("tests/fixtures/kicad/symbols/Test.kicad_sym"))
     resolved = resolve_project(project, LibraryContext(symbols=symbols.symbols, footprints={}))
@@ -74,6 +76,7 @@ nets:
 """,
         encoding="utf-8",
     )
+    migrate_file_to_connects(schema)
     project = load_project_ir(schema)
     symbols = index_symbol_library("Test", Path("tests/fixtures/kicad/symbols/Test.kicad_sym"))
     resolved = resolve_project(project, LibraryContext(symbols=symbols.symbols, footprints={}))

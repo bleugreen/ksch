@@ -9,11 +9,8 @@ symbols:
   U2:
     lib: Test:USBHub
     value: USB2514B
-nets:
-  VBUS:
-    - U2.VBUS_DET
-  USB_UP_DP:
-    - U2.USBDP_UP
-no_connects:
-  - U2.USBDM_UP
-  - U2.GND/all
+    connects:
+      VBUS_DET: VBUS
+      USBDP_UP: USB_UP_DP
+      USBDM_UP: nc
+      GND/all: nc

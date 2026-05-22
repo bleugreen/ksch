@@ -2,12 +2,14 @@ import shutil
 import tempfile
 from collections.abc import Callable
 from importlib.resources import files
+from io import StringIO
 from pathlib import Path
 from typing import Annotated, NoReturn
 
 import typer
 from pydantic import ValidationError
 from rich.console import Console
+from ruamel.yaml import YAML
 
 from ksch import __version__
 from ksch.authoring import (
@@ -24,6 +26,7 @@ from ksch.expand import load_project_ir
 from ksch.explain import explain_project_target_lines, explain_symbol_lines
 from ksch.importer import ImportedProject, import_project
 from ksch.kicad.symbols import SymbolInfo, index_symbol_library
+from ksch.migrate import migrate_project_to_connects
 from ksch.project_context import load_project_context
 from ksch.resolver import LibraryContext, ResolvedProject, resolve_project
 from ksch.scaffold import create_project_from_kicad, create_starter_project, discover_kicad_roots
@@ -153,6 +156,15 @@ def _print_import_result(imported: ImportedProject) -> None:
     console.print(f"wrote {len(child_sheets)} child sheet schema{suffix}:")
     for path in child_sheets:
         console.print(f"- {path}")
+
+
+def _yaml_dump(data: object) -> str:
+    yaml = YAML()
+    yaml.default_flow_style = False
+    yaml.indent(mapping=2, sequence=4, offset=2)
+    output = StringIO()
+    yaml.dump(data, output)
+    return output.getvalue()
 
 
 def _load_authoring_symbols(
@@ -347,6 +359,22 @@ def import_command(
         _exit_error(_format_error(exc))
 
     _print_import_result(imported)
+
+
+@app.command("migrate-connects")
+def migrate_connects_command(
+    path: Annotated[Path, typer.Argument(help="Root .ksch.yaml project file to migrate.")],
+) -> None:
+    """Rewrite legacy top-level nets/no_connects into owner-local connects."""
+    try:
+        changed = migrate_project_to_connects(path)
+    except (KschError, ValidationError, ValueError, OSError) as exc:
+        _exit_error(_format_error(exc))
+    if not changed:
+        console.print("already migrated")
+        return
+    for changed_path in changed:
+        console.print(f"migrated {changed_path}")
 
 
 @app.command("check")
@@ -572,6 +600,45 @@ def doctor_command(
         raise typer.Exit(1)
     suffix = "" if warnings == 0 else f" with {warnings} warning(s)"
     console.print(f"doctor passed{suffix}")
+
+
+@app.command("net")
+def net_command(
+    net_name: Annotated[str, typer.Argument(help="Net name to inspect.")],
+    path: Annotated[
+        Path | None,
+        typer.Option(
+            "--schema",
+            help="Root .ksch.yaml project file. Defaults to ksch.toml schema.",
+        ),
+    ] = None,
+    config: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to ksch.toml or a project directory."),
+    ] = Path("ksch.toml"),
+    symbol_library: Annotated[
+        list[str] | None,
+        typer.Option("--symbol-library", help="Extra symbol library as NICKNAME=PATH."),
+    ] = None,
+) -> None:
+    """Print endpoints on one net as compact YAML."""
+    try:
+        project_config = _load_config_for_defaults(config, need_schema=path is None, need_out=False)
+        schema_path = path
+        if schema_path is None and project_config is not None:
+            schema_path = project_config.schema
+        if schema_path is None:
+            raise KschError("schema path is required when ksch.toml is not used")
+        resolved, _symbol_libraries = _resolved_project_context(
+            schema_path,
+            _configured_symbol_libraries(project_config, symbol_library),
+        )
+        endpoints: list[str] = []
+        for resolved_sheet in resolved.sheets.values():
+            endpoints.extend(endpoint.text for endpoint in resolved_sheet.nets.get(net_name, []))
+    except (KschError, ValidationError, ValueError, OSError) as exc:
+        _exit_error(_format_error(exc))
+    console.print(_yaml_dump({net_name: endpoints}), end="", markup=False)
 
 
 @app.command("explain")

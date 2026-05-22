@@ -12,6 +12,7 @@ from ksch.geometry import symbol_pin_coordinate
 from ksch.kicad.libraries import parse_library_table
 from ksch.kicad.sexpr import atom, load_sexpr_file
 from ksch.kicad.symbols import SymbolInfo, symbol_info_from_definition
+from ksch.migrate import migrate_document_to_connects
 from ksch.model.source import PinDirection
 from ksch.schema.formatter import format_schema_text
 from ksch.verify import run_kicad_cli
@@ -562,6 +563,7 @@ def _build_schema_documents(
             data["power_flags"] = sheet_power_flags
         if sheet_no_connects.get(sheet_path):
             data["no_connects"] = sorted(set(sheet_no_connects[sheet_path]))
+        migrate_document_to_connects(data)
         docs[sheet_path] = data
     return docs
 

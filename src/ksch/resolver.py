@@ -175,8 +175,9 @@ def resolve_project(
                         resolve_endpoint_text(project, sheet_path, endpoint_text, libraries)
                     )
                 except (KschError, ValueError) as exc:
+                    source_path = _net_endpoint_path(sheet, net_name, index)
                     raise KschError(
-                        f"{sheet.source_path}: nets.{net_name}[{index}]: {exc}"
+                        f"{sheet.source_path}: {source_path}: {exc}"
                     ) from exc
             for resolved_endpoint in resolved_endpoints:
                 endpoint_key = resolved_endpoint_key(resolved_endpoint)
@@ -203,8 +204,20 @@ def resolve_project(
                             f"{existing_net} in {sheet_path}"
                         )
             except (KschError, ValueError) as exc:
+                source_path = (
+                    sheet.no_connect_paths[index]
+                    if index < len(sheet.no_connect_paths)
+                    else f"no_connects[{index}]"
+                )
                 raise KschError(
-                    f"{sheet.source_path}: no_connects[{index}]: {exc}"
+                    f"{sheet.source_path}: {source_path}: {exc}"
                 ) from exc
         resolved.sheets[sheet_path] = resolved_sheet
     return resolved
+
+
+def _net_endpoint_path(sheet: SheetIR, net_name: str, index: int) -> str:
+    paths = sheet.net_endpoint_paths.get(net_name, [])
+    if index < len(paths):
+        return paths[index]
+    return f"nets.{net_name}[{index}]"

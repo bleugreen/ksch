@@ -9,6 +9,7 @@ from ksch.kicad.sexpr import atom, load_sexpr_file
 from ksch.kicad.symbols import SymbolInfo, SymbolPin, index_symbol_library
 from ksch.layout import Point, Rect
 from ksch.layout_problem import text_rect
+from ksch.migrate import migrate_file_to_connects
 from ksch.net_routing import (
     PassiveRailBank,
     PassiveRailBankMember,
@@ -53,6 +54,7 @@ from ksch.validation import placed_layout_problem
 def _compile_schema(tmp_path: Path, text: str) -> Path:
     schema = tmp_path / "project.ksch.yaml"
     schema.write_text(text, encoding="utf-8")
+    migrate_file_to_connects(schema)
     project = load_project_ir(schema)
     symbols = index_symbol_library("Test", Path("tests/fixtures/kicad/symbols/Test.kicad_sym"))
     resolved = resolve_project(project, LibraryContext(symbols=symbols.symbols, footprints={}))
@@ -1417,6 +1419,7 @@ nets:
 """,
         encoding="utf-8",
     )
+    migrate_file_to_connects(schema)
     project = load_project_ir(schema)
     symbols = index_symbol_library("Test", Path("tests/fixtures/kicad/symbols/Test.kicad_sym"))
     resolved = resolve_project(project, LibraryContext(symbols=symbols.symbols, footprints={}))
@@ -1861,7 +1864,13 @@ nets:
 
     assert positions["J1"][0] < min(positions[ref][0] for ref in ("F1", "L1", "L2", "L3", "L4"))
     assert max(positions[ref][0] for ref in ("F1", "L1", "L2", "L3", "L4")) < positions["U1"][0]
-    assert positions["F1"][0] < positions["L1"][0] < positions["L2"][0] < positions["L3"][0] < positions["L4"][0]
+    assert (
+        positions["F1"][0]
+        < positions["L1"][0]
+        < positions["L2"][0]
+        < positions["L3"][0]
+        < positions["L4"][0]
+    )
     assert chain_y_span <= 60.0
     assert max(abs(positions[ref][1] - positions["R1"][1]) for ref in ("L2", "L3")) <= 35.56
     assert max(abs(positions[ref][1] - positions["R2"][1]) for ref in ("L3", "L4")) <= 35.56
@@ -1889,6 +1898,7 @@ nets:
 """,
         encoding="utf-8",
     )
+    migrate_file_to_connects(schema)
     project = load_project_ir(schema)
     symbols = index_symbol_library("Test", Path("tests/fixtures/kicad/symbols/Test.kicad_sym"))
     resolved = resolve_project(project, LibraryContext(symbols=symbols.symbols, footprints={}))
@@ -2595,6 +2605,7 @@ nets:
 """,
         encoding="utf-8",
     )
+    migrate_file_to_connects(schema)
     project = load_project_ir(schema)
     symbols = index_symbol_library("Test", Path("tests/fixtures/kicad/symbols/Test.kicad_sym"))
     resolved = resolve_project(project, LibraryContext(symbols=symbols.symbols, footprints={}))
@@ -2678,6 +2689,7 @@ nets:
 """,
         encoding="utf-8",
     )
+    migrate_file_to_connects(schema)
     project = load_project_ir(schema)
     symbols = index_symbol_library("Test", Path("tests/fixtures/kicad/symbols/Test.kicad_sym"))
     resolved = resolve_project(project, LibraryContext(symbols=symbols.symbols, footprints={}))
@@ -2730,6 +2742,7 @@ nets:
 """,
         encoding="utf-8",
     )
+    migrate_file_to_connects(schema)
     project = load_project_ir(schema)
     symbols = index_symbol_library("Test", Path("tests/fixtures/kicad/symbols/Test.kicad_sym"))
     resolved = resolve_project(project, LibraryContext(symbols=symbols.symbols, footprints={}))
@@ -2805,6 +2818,7 @@ nets:
 """,
         encoding="utf-8",
     )
+    migrate_file_to_connects(schema)
     project = load_project_ir(schema)
     symbols = index_symbol_library("Test", Path("tests/fixtures/kicad/symbols/Test.kicad_sym"))
     resolved = resolve_project(project, LibraryContext(symbols=symbols.symbols, footprints={}))
@@ -2867,6 +2881,7 @@ nets:
 """,
         encoding="utf-8",
     )
+    migrate_file_to_connects(schema)
     project = load_project_ir(schema)
     symbols = index_symbol_library("Test", Path("tests/fixtures/kicad/symbols/Test.kicad_sym"))
     resolved = resolve_project(project, LibraryContext(symbols=symbols.symbols, footprints={}))
@@ -2939,6 +2954,7 @@ nets:
 """,
         encoding="utf-8",
     )
+    migrate_file_to_connects(schema)
     project = load_project_ir(schema)
     symbols = index_symbol_library("Test", Path("tests/fixtures/kicad/symbols/Test.kicad_sym"))
     resolved = resolve_project(project, LibraryContext(symbols=symbols.symbols, footprints={}))
@@ -3429,6 +3445,7 @@ def test_root_child_sheets_use_grid_and_two_sided_pins(tmp_path: Path) -> None:
             f"ksch: 1\nsheet:\n  id: {name}\ninterface:\n{interface}\n",
             encoding="utf-8",
         )
+    migrate_file_to_connects(root)
     project = load_project_ir(root)
     resolved = resolve_project(project, LibraryContext(symbols={}, footprints={}))
     out = tmp_path / "out"
@@ -3479,6 +3496,7 @@ interface:
 """,
         encoding="utf-8",
     )
+    migrate_file_to_connects(root)
     project = load_project_ir(root)
     resolved = resolve_project(project, LibraryContext(symbols={}, footprints={}))
     out = tmp_path / "out"
