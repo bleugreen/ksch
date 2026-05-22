@@ -1,0 +1,2154 @@
+{
+  "added_refs": [
+    "C1",
+    "C?",
+    "F?",
+    "J?",
+    "L?",
+    "R1",
+    "R?",
+    "U?",
+    "Y?"
+  ],
+  "after_bbox": {
+    "max_x": 391.16,
+    "max_y": 247.65,
+    "min_x": 45.72,
+    "min_y": 35.56
+  },
+  "after_counts": {
+    "hierarchical_label": 18,
+    "junction": 20,
+    "label": 84,
+    "no_connect": 6,
+    "symbol": 49,
+    "wire": 142
+  },
+  "after_sha256": "d1bcf3cb08ff07581326370efcc58d85144e74c590c3c3eea9d4638e812acfe8",
+  "before_bbox": {
+    "max_x": 391.16,
+    "max_y": 254.0,
+    "min_x": 27.94,
+    "min_y": 35.56
+  },
+  "before_counts": {
+    "hierarchical_label": 18,
+    "junction": 15,
+    "label": 108,
+    "no_connect": 6,
+    "symbol": 49,
+    "wire": 146
+  },
+  "before_sha256": "ea1fcd5a245b299b40f34ff45708b6cfcebc09e2eb756995fd41e5e66e3c06b8",
+  "label_text_count_changes": [
+    {
+      "after_count": 2,
+      "before_count": 4,
+      "kind": "label",
+      "text": "CAM_12V_FUSED"
+    },
+    {
+      "after_count": 2,
+      "before_count": 4,
+      "kind": "label",
+      "text": "CAM_COAX_CENTER"
+    },
+    {
+      "after_count": 0,
+      "before_count": 2,
+      "kind": "label",
+      "text": "CFG0"
+    },
+    {
+      "after_count": 0,
+      "before_count": 2,
+      "kind": "label",
+      "text": "CFG1"
+    },
+    {
+      "after_count": 1,
+      "before_count": 2,
+      "kind": "label",
+      "text": "CM5_5V_IN"
+    },
+    {
+      "after_count": 11,
+      "before_count": 14,
+      "kind": "label",
+      "text": "GMSL_1V8"
+    },
+    {
+      "after_count": 2,
+      "before_count": 3,
+      "kind": "label",
+      "text": "GMSL_SIOP_TERM"
+    },
+    {
+      "after_count": 28,
+      "before_count": 29,
+      "kind": "label",
+      "text": "GND"
+    },
+    {
+      "after_count": 6,
+      "before_count": 7,
+      "kind": "label",
+      "text": "GPIO_VREF"
+    },
+    {
+      "after_count": 1,
+      "before_count": 2,
+      "kind": "label",
+      "text": "POC_STAGE1"
+    },
+    {
+      "after_count": 1,
+      "before_count": 3,
+      "kind": "label",
+      "text": "POC_STAGE2"
+    },
+    {
+      "after_count": 1,
+      "before_count": 4,
+      "kind": "label",
+      "text": "POC_STAGE3"
+    },
+    {
+      "after_count": 1,
+      "before_count": 4,
+      "kind": "label",
+      "text": "POC_STAGE4"
+    }
+  ],
+  "moved_refs": [],
+  "removed_refs": [
+    "C38",
+    "C39",
+    "C40",
+    "C41",
+    "C42",
+    "C43",
+    "C44",
+    "C45",
+    "C46",
+    "C47",
+    "C48",
+    "C49",
+    "C50",
+    "C51",
+    "C52",
+    "C53",
+    "C54",
+    "C55",
+    "C57",
+    "C58",
+    "C59",
+    "C60",
+    "F4",
+    "J14",
+    "L2",
+    "L3",
+    "L4",
+    "L5",
+    "L6",
+    "L7",
+    "R31",
+    "R35",
+    "R50",
+    "R51",
+    "R52",
+    "R53",
+    "R54",
+    "R55",
+    "R56",
+    "R57",
+    "R58",
+    "R59",
+    "R60",
+    "U11",
+    "U12",
+    "U13",
+    "U5",
+    "Y3"
+  ],
+  "uuid_changes": {
+    "hierarchical_label": {
+      "added_uuid": 0,
+      "after": 18,
+      "before": 18,
+      "changed_geometry": [],
+      "common_uuid": 18,
+      "moved_or_text_changed": [
+        {
+          "distance": 224.125,
+          "from": {
+            "rot": 0.0,
+            "x": 381.0,
+            "y": 60.96
+          },
+          "ref": null,
+          "text": "GND",
+          "to": {
+            "rot": 0.0,
+            "x": 175.26,
+            "y": 149.86
+          },
+          "uuid": "cc026265-e241-50f1-8084-199c744fe9e5"
+        },
+        {
+          "distance": 103.144,
+          "from": {
+            "rot": 0.0,
+            "x": 111.76,
+            "y": 46.99
+          },
+          "ref": null,
+          "text": "VBAT_PROT",
+          "to": {
+            "rot": 0.0,
+            "x": 175.26,
+            "y": 128.27
+          },
+          "uuid": "eda78406-25e7-5c02-9507-fa15e03bddb3"
+        },
+        {
+          "distance": 34.314,
+          "from": {
+            "rot": 0.0,
+            "x": 157.48,
+            "y": 54.61
+          },
+          "ref": null,
+          "text": "CAM_GPIO0",
+          "to": {
+            "rot": 180.0,
+            "x": 156.21,
+            "y": 88.9
+          },
+          "uuid": "6c8ea380-217f-5944-b7fb-61f46bc707df"
+        },
+        {
+          "distance": 20.32,
+          "from": {
+            "rot": 0.0,
+            "x": 284.48,
+            "y": 68.58
+          },
+          "ref": null,
+          "text": "CAM_CSI_C_P",
+          "to": {
+            "rot": 0.0,
+            "x": 264.16,
+            "y": 68.58
+          },
+          "uuid": "021a88ef-02d6-5c1d-97dc-259a45924e81"
+        },
+        {
+          "distance": 20.32,
+          "from": {
+            "rot": 0.0,
+            "x": 284.48,
+            "y": 53.34
+          },
+          "ref": null,
+          "text": "CAM_CSI_D0_P",
+          "to": {
+            "rot": 0.0,
+            "x": 264.16,
+            "y": 53.34
+          },
+          "uuid": "02d8172f-f683-5796-a8b5-24037da5ec39"
+        },
+        {
+          "distance": 20.32,
+          "from": {
+            "rot": 0.0,
+            "x": 284.48,
+            "y": 63.5
+          },
+          "ref": null,
+          "text": "CAM_CSI_D2_P",
+          "to": {
+            "rot": 0.0,
+            "x": 264.16,
+            "y": 63.5
+          },
+          "uuid": "674feb6d-fdf9-5297-9c8c-68e16bd11ed3"
+        },
+        {
+          "distance": 20.32,
+          "from": {
+            "rot": 0.0,
+            "x": 284.48,
+            "y": 73.66
+          },
+          "ref": null,
+          "text": "CAM_CSI_D3_P",
+          "to": {
+            "rot": 0.0,
+            "x": 264.16,
+            "y": 73.66
+          },
+          "uuid": "b1bda6d3-3b06-568f-852c-c3f96d82388c"
+        },
+        {
+          "distance": 20.32,
+          "from": {
+            "rot": 0.0,
+            "x": 284.48,
+            "y": 58.42
+          },
+          "ref": null,
+          "text": "CAM_CSI_D1_P",
+          "to": {
+            "rot": 0.0,
+            "x": 264.16,
+            "y": 58.42
+          },
+          "uuid": "e9696d49-f091-5604-86ad-333d365874f2"
+        },
+        {
+          "distance": 6.35,
+          "from": {
+            "rot": 0.0,
+            "x": 137.16,
+            "y": 85.09
+          },
+          "ref": null,
+          "text": "CAM_I2C_SDA",
+          "to": {
+            "rot": 180.0,
+            "x": 143.51,
+            "y": 85.09
+          },
+          "uuid": "88d6e7f6-2db4-5e58-aa4d-2101273f08e3"
+        }
+      ],
+      "removed_uuid": 0
+    },
+    "junction": {
+      "added_uuid": 20,
+      "after": 20,
+      "before": 15,
+      "changed_geometry": [],
+      "common_uuid": 0,
+      "moved_or_text_changed": [],
+      "removed_uuid": 15
+    },
+    "label": {
+      "added_uuid": 2,
+      "after": 84,
+      "before": 108,
+      "changed_geometry": [],
+      "common_uuid": 82,
+      "moved_or_text_changed": [
+        {
+          "distance": 270.053,
+          "from": {
+            "rot": 0.0,
+            "x": 335.28,
+            "y": 146.05
+          },
+          "ref": null,
+          "text": "AP63200_BST",
+          "to": {
+            "rot": 0.0,
+            "x": 76.2,
+            "y": 69.85
+          },
+          "uuid": "3eba7d66-1a03-5ea4-8a75-44ad11025b6c"
+        },
+        {
+          "distance": 244.137,
+          "from": {
+            "rot": 0.0,
+            "x": 381.0,
+            "y": 40.64
+          },
+          "ref": null,
+          "text": "CAM_12V_FUSED",
+          "to": {
+            "rot": 180.0,
+            "x": 156.21,
+            "y": 135.89
+          },
+          "uuid": "1d16cdb1-1c5f-5c09-bf61-b5c6181fe5e5"
+        },
+        {
+          "distance": 222.862,
+          "from": {
+            "rot": 0.0,
+            "x": 317.5,
+            "y": 135.89
+          },
+          "ref": null,
+          "text": "GMSL_1V8",
+          "to": {
+            "rot": 0.0,
+            "x": 110.49,
+            "y": 53.34
+          },
+          "uuid": "f088409c-a1c1-5855-9c5f-e133dedc8aa5"
+        },
+        {
+          "distance": 200.278,
+          "from": {
+            "rot": 0.0,
+            "x": 38.1,
+            "y": 55.88
+          },
+          "ref": null,
+          "text": "GND",
+          "to": {
+            "rot": 0.0,
+            "x": 181.61,
+            "y": 195.58
+          },
+          "uuid": "e4434844-fde5-5c5c-96dc-2e8ac953f8a3"
+        },
+        {
+          "distance": 198.807,
+          "from": {
+            "rot": 0.0,
+            "x": 243.84,
+            "y": 144.78
+          },
+          "ref": null,
+          "text": "GND",
+          "to": {
+            "rot": 0.0,
+            "x": 55.88,
+            "y": 80.01
+          },
+          "uuid": "4c598a2f-18a1-57e1-a9a0-ac88cdadceee"
+        },
+        {
+          "distance": 195.765,
+          "from": {
+            "rot": 0.0,
+            "x": 228.6,
+            "y": 129.54
+          },
+          "ref": null,
+          "text": "CM5_5V_IN",
+          "to": {
+            "rot": 180.0,
+            "x": 45.72,
+            "y": 59.69
+          },
+          "uuid": "06a486f3-0edc-574e-ab59-a925cfb7b692"
+        },
+        {
+          "distance": 195.209,
+          "from": {
+            "rot": 0.0,
+            "x": 259.08,
+            "y": 119.38
+          },
+          "ref": null,
+          "text": "AP63200_SW",
+          "to": {
+            "rot": 0.0,
+            "x": 74.93,
+            "y": 54.61
+          },
+          "uuid": "7401fe80-ce5a-537e-afa2-3974ca5c2770"
+        },
+        {
+          "distance": 181.437,
+          "from": {
+            "rot": 0.0,
+            "x": 317.5,
+            "y": 189.23
+          },
+          "ref": null,
+          "text": "POC_STAGE1",
+          "to": {
+            "rot": 180.0,
+            "x": 140.97,
+            "y": 147.32
+          },
+          "uuid": "09bf36da-ba26-53ba-b9fa-a2bf76e36184"
+        },
+        {
+          "distance": 144.501,
+          "from": {
+            "rot": 0.0,
+            "x": 281.94,
+            "y": 201.93
+          },
+          "ref": null,
+          "text": "POC_STAGE4",
+          "to": {
+            "rot": 180.0,
+            "x": 140.97,
+            "y": 170.18
+          },
+          "uuid": "13505798-73dd-5dad-9ece-169321c1afc1"
+        },
+        {
+          "distance": 144.501,
+          "from": {
+            "rot": 0.0,
+            "x": 281.94,
+            "y": 194.31
+          },
+          "ref": null,
+          "text": "POC_STAGE3",
+          "to": {
+            "rot": 180.0,
+            "x": 140.97,
+            "y": 162.56
+          },
+          "uuid": "5c2e6809-62aa-5d14-838c-b6d4e1822ad1"
+        },
+        {
+          "distance": 141.113,
+          "from": {
+            "rot": 0.0,
+            "x": 152.4,
+            "y": 195.58
+          },
+          "ref": null,
+          "text": "GND",
+          "to": {
+            "rot": 180.0,
+            "x": 146.05,
+            "y": 54.61
+          },
+          "uuid": "851ab9bc-a1b7-59a6-aa6d-8aa46791907e"
+        },
+        {
+          "distance": 141.062,
+          "from": {
+            "rot": 0.0,
+            "x": 203.2,
+            "y": 233.68
+          },
+          "ref": null,
+          "text": "GPIO_VREF",
+          "to": {
+            "rot": 180.0,
+            "x": 208.28,
+            "y": 92.71
+          },
+          "uuid": "ee182380-007c-5553-8458-3b76de0cb3fc"
+        },
+        {
+          "distance": 121.19,
+          "from": {
+            "rot": 0.0,
+            "x": 142.24,
+            "y": 170.18
+          },
+          "ref": null,
+          "text": "GMSL_X1",
+          "to": {
+            "rot": 0.0,
+            "x": 153.67,
+            "y": 49.53
+          },
+          "uuid": "c34b6fa3-ac03-5ce5-9bbd-013ddfa1ea0b"
+        },
+        {
+          "distance": 120.677,
+          "from": {
+            "rot": 0.0,
+            "x": 156.21,
+            "y": 180.34
+          },
+          "ref": null,
+          "text": "GMSL_X2",
+          "to": {
+            "rot": 0.0,
+            "x": 153.67,
+            "y": 59.69
+          },
+          "uuid": "09c90a9f-de09-5b20-b1af-35bae8eb56d1"
+        },
+        {
+          "distance": 108.152,
+          "from": {
+            "rot": 0.0,
+            "x": 177.8,
+            "y": 236.22
+          },
+          "ref": null,
+          "text": "GMSL_XRES",
+          "to": {
+            "rot": 180.0,
+            "x": 284.48,
+            "y": 218.44
+          },
+          "uuid": "668401e7-bcfc-556c-9bbd-5a8df13ab2b4"
+        },
+        {
+          "distance": 108.152,
+          "from": {
+            "rot": 0.0,
+            "x": 177.8,
+            "y": 254.0
+          },
+          "ref": null,
+          "text": "GND",
+          "to": {
+            "rot": 180.0,
+            "x": 284.48,
+            "y": 236.22
+          },
+          "uuid": "db434b66-34f8-55b7-ad16-19b68a46d261"
+        },
+        {
+          "distance": 107.291,
+          "from": {
+            "rot": 0.0,
+            "x": 279.4,
+            "y": 158.75
+          },
+          "ref": null,
+          "text": "CAM_COAX_CENTER",
+          "to": {
+            "rot": 180.0,
+            "x": 176.53,
+            "y": 189.23
+          },
+          "uuid": "92f75517-7b1c-5280-8587-558d9f7e7ee5"
+        },
+        {
+          "distance": 70.539,
+          "from": {
+            "rot": 0.0,
+            "x": 177.8,
+            "y": 162.56
+          },
+          "ref": null,
+          "text": "GND",
+          "to": {
+            "rot": 180.0,
+            "x": 194.31,
+            "y": 93.98
+          },
+          "uuid": "6c270107-106b-5882-a037-31cab1c01131"
+        },
+        {
+          "distance": 68.686,
+          "from": {
+            "rot": 0.0,
+            "x": 147.32,
+            "y": 134.62
+          },
+          "ref": null,
+          "text": "AP63200_FB",
+          "to": {
+            "rot": 0.0,
+            "x": 109.22,
+            "y": 77.47
+          },
+          "uuid": "fc3fc3a2-eb64-5830-9ff3-bc5358d4b074"
+        },
+        {
+          "distance": 60.986,
+          "from": {
+            "rot": 0.0,
+            "x": 152.4,
+            "y": 121.92
+          },
+          "ref": null,
+          "text": "GND",
+          "to": {
+            "rot": 0.0,
+            "x": 100.33,
+            "y": 90.17
+          },
+          "uuid": "1d24ab96-cb6e-5993-bd57-616f3171c8bc"
+        },
+        {
+          "distance": 49.676,
+          "from": {
+            "rot": 0.0,
+            "x": 182.88,
+            "y": 181.61
+          },
+          "ref": null,
+          "text": "POC_STAGE2",
+          "to": {
+            "rot": 180.0,
+            "x": 140.97,
+            "y": 154.94
+          },
+          "uuid": "8120a1f9-5bfd-5c14-97fa-01a425d12435"
+        },
+        {
+          "distance": 24.429,
+          "from": {
+            "rot": 0.0,
+            "x": 304.8,
+            "y": 229.87
+          },
+          "ref": null,
+          "text": "GMSL_1V8",
+          "to": {
+            "rot": 180.0,
+            "x": 328.93,
+            "y": 226.06
+          },
+          "uuid": "14bfd1ca-dce0-5c0a-be22-6360b0733002"
+        },
+        {
+          "distance": 15.24,
+          "from": {
+            "rot": 0.0,
+            "x": 208.28,
+            "y": 73.66
+          },
+          "ref": null,
+          "text": "GMSL_X2",
+          "to": {
+            "rot": 180.0,
+            "x": 223.52,
+            "y": 73.66
+          },
+          "uuid": "0399960e-cdad-58ff-9ba7-13da49dcd2d9"
+        },
+        {
+          "distance": 15.24,
+          "from": {
+            "rot": 0.0,
+            "x": 251.46,
+            "y": 190.5
+          },
+          "ref": null,
+          "text": "GMSL_1V0",
+          "to": {
+            "rot": 0.0,
+            "x": 251.46,
+            "y": 175.26
+          },
+          "uuid": "0a32da59-ac1a-5405-9f30-982871a6d104"
+        },
+        {
+          "distance": 15.24,
+          "from": {
+            "rot": 0.0,
+            "x": 208.28,
+            "y": 68.58
+          },
+          "ref": null,
+          "text": "CAM_GPIO1",
+          "to": {
+            "rot": 180.0,
+            "x": 223.52,
+            "y": 68.58
+          },
+          "uuid": "44838d49-b5f8-551f-8063-df37a821fe37"
+        },
+        {
+          "distance": 15.24,
+          "from": {
+            "rot": 0.0,
+            "x": 208.28,
+            "y": 78.74
+          },
+          "ref": null,
+          "text": "GMSL_SIO",
+          "to": {
+            "rot": 180.0,
+            "x": 223.52,
+            "y": 78.74
+          },
+          "uuid": "cfed6fc7-5270-5846-a2f8-f45cf3478bf6"
+        },
+        {
+          "distance": 9.919,
+          "from": {
+            "rot": 0.0,
+            "x": 157.48,
+            "y": 77.47
+          },
+          "ref": null,
+          "text": "GPIO_VREF",
+          "to": {
+            "rot": 180.0,
+            "x": 149.86,
+            "y": 71.12
+          },
+          "uuid": "9515c384-a888-5240-9279-8cf31cf613a7"
+        },
+        {
+          "distance": 1.27,
+          "from": {
+            "rot": 0.0,
+            "x": 193.04,
+            "y": 81.28
+          },
+          "ref": null,
+          "text": "GMSL_SIOP_TERM",
+          "to": {
+            "rot": 180.0,
+            "x": 191.77,
+            "y": 81.28
+          },
+          "uuid": "4b7d2d7f-7042-596c-b7cb-a4b5ecadaeaf"
+        },
+        {
+          "distance": 0.0,
+          "from": {
+            "rot": 0.0,
+            "x": 223.52,
+            "y": 66.04
+          },
+          "ref": null,
+          "text": "CAM_I2C_SCL",
+          "to": {
+            "rot": 180.0,
+            "x": 223.52,
+            "y": 66.04
+          },
+          "uuid": "0b955ad9-ce66-5f49-92a1-197634b1d97c"
+        },
+        {
+          "distance": 0.0,
+          "from": {
+            "rot": 0.0,
+            "x": 314.96,
+            "y": 77.47
+          },
+          "ref": null,
+          "text": "GPIO_VREF",
+          "to": {
+            "rot": 180.0,
+            "x": 314.96,
+            "y": 77.47
+          },
+          "uuid": "166ebce9-c38b-5008-b22d-0457b5c9aebd"
+        },
+        {
+          "distance": 0.0,
+          "from": {
+            "rot": 0.0,
+            "x": 223.52,
+            "y": 76.2
+          },
+          "ref": null,
+          "text": "GMSL_XRES",
+          "to": {
+            "rot": 180.0,
+            "x": 223.52,
+            "y": 76.2
+          },
+          "uuid": "25d036bf-3f14-5bed-a0ac-319190c583eb"
+        },
+        {
+          "distance": 0.0,
+          "from": {
+            "rot": 0.0,
+            "x": 340.36,
+            "y": 199.39
+          },
+          "ref": null,
+          "text": "GMSL_1V0",
+          "to": {
+            "rot": 180.0,
+            "x": 340.36,
+            "y": 199.39
+          },
+          "uuid": "547fb0de-20a4-5a0c-96be-af6a3d11cd3d"
+        },
+        {
+          "distance": 0.0,
+          "from": {
+            "rot": 0.0,
+            "x": 223.52,
+            "y": 93.98
+          },
+          "ref": null,
+          "text": "CAM_GPIO0",
+          "to": {
+            "rot": 180.0,
+            "x": 223.52,
+            "y": 93.98
+          },
+          "uuid": "7531b924-9ce2-5692-b2c8-fabe2aa94222"
+        },
+        {
+          "distance": 0.0,
+          "from": {
+            "rot": 0.0,
+            "x": 314.96,
+            "y": 46.99
+          },
+          "ref": null,
+          "text": "GMSL_1V2",
+          "to": {
+            "rot": 180.0,
+            "x": 314.96,
+            "y": 46.99
+          },
+          "uuid": "90fefc6d-1e59-5954-aff8-be55c40676c2"
+        },
+        {
+          "distance": 0.0,
+          "from": {
+            "rot": 0.0,
+            "x": 231.14,
+            "y": 177.8
+          },
+          "ref": null,
+          "text": "GMSL_1V8",
+          "to": {
+            "rot": 180.0,
+            "x": 231.14,
+            "y": 177.8
+          },
+          "uuid": "9da6c91b-05cb-5ff7-a896-6964dcda0962"
+        },
+        {
+          "distance": 0.0,
+          "from": {
+            "rot": 0.0,
+            "x": 304.8,
+            "y": 168.91
+          },
+          "ref": null,
+          "text": "GMSL_1V8",
+          "to": {
+            "rot": 180.0,
+            "x": 304.8,
+            "y": 168.91
+          },
+          "uuid": "a4284c0c-14e5-5256-b2a6-11b17783045c"
+        },
+        {
+          "distance": 0.0,
+          "from": {
+            "rot": 0.0,
+            "x": 213.36,
+            "y": 83.82
+          },
+          "ref": null,
+          "text": "GMSL_CAPVDD",
+          "to": {
+            "rot": 180.0,
+            "x": 213.36,
+            "y": 83.82
+          },
+          "uuid": "b933bf80-7b64-54d5-9a21-435982268075"
+        },
+        {
+          "distance": 0.0,
+          "from": {
+            "rot": 0.0,
+            "x": 231.14,
+            "y": 223.52
+          },
+          "ref": null,
+          "text": "GMSL_1V8",
+          "to": {
+            "rot": 180.0,
+            "x": 231.14,
+            "y": 223.52
+          },
+          "uuid": "cfd26dfc-820e-5c51-b01e-36f049a8d3a5"
+        },
+        {
+          "distance": 0.0,
+          "from": {
+            "rot": 0.0,
+            "x": 223.52,
+            "y": 71.12
+          },
+          "ref": null,
+          "text": "GMSL_X1",
+          "to": {
+            "rot": 180.0,
+            "x": 223.52,
+            "y": 71.12
+          },
+          "uuid": "cfff6ad7-1406-59cc-a3ed-df04f693d022"
+        },
+        {
+          "distance": 0.0,
+          "from": {
+            "rot": 0.0,
+            "x": 223.52,
+            "y": 60.96
+          },
+          "ref": null,
+          "text": "CAM_I2C_SDA",
+          "to": {
+            "rot": 180.0,
+            "x": 223.52,
+            "y": 60.96
+          },
+          "uuid": "f3f22149-a35d-524b-8aa4-db987a4b39e1"
+        },
+        {
+          "distance": 0.0,
+          "from": {
+            "rot": 0.0,
+            "x": 223.52,
+            "y": 44.45
+          },
+          "ref": null,
+          "text": "GMSL_1V8",
+          "to": {
+            "rot": 180.0,
+            "x": 223.52,
+            "y": 44.45
+          },
+          "uuid": "f6d8c596-25a7-5ad1-8831-0069b6ce473e"
+        }
+      ],
+      "removed_uuid": 26
+    },
+    "no_connect": {
+      "added_uuid": 0,
+      "after": 6,
+      "before": 6,
+      "changed_geometry": [],
+      "common_uuid": 6,
+      "moved_or_text_changed": [],
+      "removed_uuid": 0
+    },
+    "symbol": {
+      "added_uuid": 2,
+      "after": 49,
+      "before": 49,
+      "changed_geometry": [],
+      "common_uuid": 47,
+      "moved_or_text_changed": [
+        {
+          "distance": 254.219,
+          "from": {
+            "rot": 0.0,
+            "x": 330.2,
+            "y": 142.24
+          },
+          "ref": "C?",
+          "text": null,
+          "to": {
+            "rot": 0.0,
+            "x": 88.9,
+            "y": 62.23
+          },
+          "uuid": "e7fa2ac2-a30b-5b7b-978a-21b1e158af17"
+        },
+        {
+          "distance": 225.664,
+          "from": {
+            "rot": 0.0,
+            "x": 381.0,
+            "y": 50.8
+          },
+          "ref": "C?",
+          "text": null,
+          "to": {
+            "rot": 0.0,
+            "x": 175.26,
+            "y": 143.51
+          },
+          "uuid": "81746aef-75be-55fa-b02c-ad78ba42abd8"
+        },
+        {
+          "distance": 222.544,
+          "from": {
+            "rot": 0.0,
+            "x": 312.42,
+            "y": 132.08
+          },
+          "ref": "L?",
+          "text": null,
+          "to": {
+            "rot": 90.0,
+            "x": 102.87,
+            "y": 57.15
+          },
+          "uuid": "7ff9e3a1-8847-5c87-a925-52abe2ce36a8"
+        },
+        {
+          "distance": 202.954,
+          "from": {
+            "rot": 0.0,
+            "x": 38.1,
+            "y": 45.72
+          },
+          "ref": "J?",
+          "text": null,
+          "to": {
+            "rot": 0.0,
+            "x": 181.61,
+            "y": 189.23
+          },
+          "uuid": "41d29e4c-1bbb-58ca-be8d-4ba8d47ee665"
+        },
+        {
+          "distance": 198.807,
+          "from": {
+            "rot": 0.0,
+            "x": 243.84,
+            "y": 132.08
+          },
+          "ref": "U?",
+          "text": null,
+          "to": {
+            "rot": 0.0,
+            "x": 55.88,
+            "y": 67.31
+          },
+          "uuid": "79d1ebc0-73ca-5582-af3b-ad3fd38ead3b"
+        },
+        {
+          "distance": 172.168,
+          "from": {
+            "rot": 0.0,
+            "x": 312.42,
+            "y": 101.6
+          },
+          "ref": "L?",
+          "text": null,
+          "to": {
+            "rot": 0.0,
+            "x": 156.21,
+            "y": 173.99
+          },
+          "uuid": "1e507477-8d7f-590d-b05d-a4a8d4727446"
+        },
+        {
+          "distance": 169.106,
+          "from": {
+            "rot": 0.0,
+            "x": 312.42,
+            "y": 223.52
+          },
+          "ref": "L?",
+          "text": null,
+          "to": {
+            "rot": 0.0,
+            "x": 156.21,
+            "y": 158.75
+          },
+          "uuid": "81671932-4cbc-54b0-b1c9-bb1c409d721f"
+        },
+        {
+          "distance": 161.734,
+          "from": {
+            "rot": 0.0,
+            "x": 312.42,
+            "y": 193.04
+          },
+          "ref": "L?",
+          "text": null,
+          "to": {
+            "rot": 0.0,
+            "x": 156.21,
+            "y": 151.13
+          },
+          "uuid": "6f2e4f69-fa93-5212-bdc2-86994a87f641"
+        },
+        {
+          "distance": 157.367,
+          "from": {
+            "rot": 0.0,
+            "x": 312.42,
+            "y": 162.56
+          },
+          "ref": "L?",
+          "text": null,
+          "to": {
+            "rot": 0.0,
+            "x": 156.21,
+            "y": 143.51
+          },
+          "uuid": "46cfe112-b333-526b-9cdc-2e6a2479b86b"
+        },
+        {
+          "distance": 146.138,
+          "from": {
+            "rot": 0.0,
+            "x": 203.2,
+            "y": 243.84
+          },
+          "ref": "R?",
+          "text": null,
+          "to": {
+            "rot": 0.0,
+            "x": 208.28,
+            "y": 97.79
+          },
+          "uuid": "bc990360-c553-50d9-929c-c80823fa8ad7"
+        },
+        {
+          "distance": 134.608,
+          "from": {
+            "rot": 0.0,
+            "x": 287.02,
+            "y": 198.12
+          },
+          "ref": "L?",
+          "text": null,
+          "to": {
+            "rot": 0.0,
+            "x": 156.21,
+            "y": 166.37
+          },
+          "uuid": "953226df-0c4a-5830-8be2-0d1f0b7513b0"
+        },
+        {
+          "distance": 131.112,
+          "from": {
+            "rot": 0.0,
+            "x": 203.2,
+            "y": 198.12
+          },
+          "ref": "R?",
+          "text": null,
+          "to": {
+            "rot": 0.0,
+            "x": 194.31,
+            "y": 67.31
+          },
+          "uuid": "f7c849fb-7097-5e5e-9ad1-c88bb36d8f5f"
+        },
+        {
+          "distance": 129.677,
+          "from": {
+            "rot": 0.0,
+            "x": 304.8,
+            "y": 154.94
+          },
+          "ref": "R?",
+          "text": null,
+          "to": {
+            "rot": 0.0,
+            "x": 176.53,
+            "y": 173.99
+          },
+          "uuid": "e54518e5-7f7c-5010-801a-d4b0173526fb"
+        },
+        {
+          "distance": 115.577,
+          "from": {
+            "rot": 0.0,
+            "x": 152.4,
+            "y": 170.18
+          },
+          "ref": "Y?",
+          "text": null,
+          "to": {
+            "rot": 270.0,
+            "x": 153.67,
+            "y": 54.61
+          },
+          "uuid": "6ad29d16-77ce-5195-ad7a-d90f6733f12e"
+        },
+        {
+          "distance": 108.301,
+          "from": {
+            "rot": 0.0,
+            "x": 106.68,
+            "y": 50.8
+          },
+          "ref": "F?",
+          "text": null,
+          "to": {
+            "rot": 0.0,
+            "x": 175.26,
+            "y": 134.62
+          },
+          "uuid": "b98464b8-4407-5f8b-bd6d-79c44326111f"
+        },
+        {
+          "distance": 108.152,
+          "from": {
+            "rot": 0.0,
+            "x": 177.8,
+            "y": 246.38
+          },
+          "ref": "R?",
+          "text": null,
+          "to": {
+            "rot": 0.0,
+            "x": 284.48,
+            "y": 228.6
+          },
+          "uuid": "caedeeae-592a-5ec4-89d3-4d135876c936"
+        },
+        {
+          "distance": 69.305,
+          "from": {
+            "rot": 0.0,
+            "x": 177.8,
+            "y": 154.94
+          },
+          "ref": "R?",
+          "text": null,
+          "to": {
+            "rot": 0.0,
+            "x": 194.31,
+            "y": 87.63
+          },
+          "uuid": "4e5021e8-5cfb-5c5e-a5ac-9166c9454868"
+        },
+        {
+          "distance": 59.093,
+          "from": {
+            "rot": 0.0,
+            "x": 152.4,
+            "y": 111.76
+          },
+          "ref": "R?",
+          "text": null,
+          "to": {
+            "rot": 0.0,
+            "x": 100.33,
+            "y": 83.82
+          },
+          "uuid": "b6074e9a-1e52-52a8-93c2-81af88af0e2e"
+        },
+        {
+          "distance": 49.546,
+          "from": {
+            "rot": 0.0,
+            "x": 177.8,
+            "y": 215.9
+          },
+          "ref": "R?",
+          "text": null,
+          "to": {
+            "rot": 0.0,
+            "x": 176.53,
+            "y": 166.37
+          },
+          "uuid": "508c4514-24d8-59d6-b232-98bbf031eca6"
+        },
+        {
+          "distance": 31.418,
+          "from": {
+            "rot": 0.0,
+            "x": 152.4,
+            "y": 50.8
+          },
+          "ref": "R?",
+          "text": null,
+          "to": {
+            "rot": 0.0,
+            "x": 160.02,
+            "y": 81.28
+          },
+          "uuid": "ba76d6a8-db3d-5e22-bbc6-7caf34b2b0ee"
+        },
+        {
+          "distance": 26.7,
+          "from": {
+            "rot": 0.0,
+            "x": 177.8,
+            "y": 185.42
+          },
+          "ref": "R?",
+          "text": null,
+          "to": {
+            "rot": 0.0,
+            "x": 176.53,
+            "y": 158.75
+          },
+          "uuid": "6af1f3a6-5f69-5796-a4c6-bbe65d722b6b"
+        }
+      ],
+      "removed_uuid": 2
+    },
+    "wire": {
+      "added_uuid": 45,
+      "after": 142,
+      "before": 146,
+      "changed_geometry": [
+        {
+          "center_distance": 248.798,
+          "from_bbox": {
+            "max_x": 330.2,
+            "max_y": 138.43,
+            "min_x": 330.2,
+            "min_y": 132.08
+          },
+          "to_bbox": {
+            "max_x": 99.06,
+            "max_y": 57.15,
+            "min_x": 88.9,
+            "min_y": 57.15
+          },
+          "uuid": "fc12be41-1b15-59d0-b1f6-300c4bbb3208"
+        },
+        {
+          "center_distance": 233.656,
+          "from_bbox": {
+            "max_x": 330.2,
+            "max_y": 162.56,
+            "min_x": 261.62,
+            "min_y": 162.56
+          },
+          "to_bbox": {
+            "max_x": 88.9,
+            "max_y": 67.31,
+            "min_x": 76.2,
+            "min_y": 67.31
+          },
+          "uuid": "bf857030-67ff-550d-ae5c-509792abf887"
+        },
+        {
+          "center_distance": 224.888,
+          "from_bbox": {
+            "max_x": 381.0,
+            "max_y": 60.96,
+            "min_x": 381.0,
+            "min_y": 54.61
+          },
+          "to_bbox": {
+            "max_x": 175.26,
+            "max_y": 149.86,
+            "min_x": 175.26,
+            "min_y": 147.32
+          },
+          "uuid": "6ce41b80-80a7-5391-8635-658f2861f8a9"
+        },
+        {
+          "center_distance": 218.703,
+          "from_bbox": {
+            "max_x": 317.5,
+            "max_y": 129.54,
+            "min_x": 259.08,
+            "min_y": 129.54
+          },
+          "to_bbox": {
+            "max_x": 88.9,
+            "max_y": 57.15,
+            "min_x": 74.93,
+            "min_y": 57.15
+          },
+          "uuid": "e2986f36-5874-51ec-8083-e3269d0f51d5"
+        },
+        {
+          "center_distance": 201.611,
+          "from_bbox": {
+            "max_x": 38.1,
+            "max_y": 55.88,
+            "min_x": 38.1,
+            "min_y": 50.8
+          },
+          "to_bbox": {
+            "max_x": 181.61,
+            "max_y": 195.58,
+            "min_x": 181.61,
+            "min_y": 194.31
+          },
+          "uuid": "ea66fe34-58d2-5c89-921a-ea0e3c9b1a52"
+        },
+        {
+          "center_distance": 198.807,
+          "from_bbox": {
+            "max_x": 243.84,
+            "max_y": 144.78,
+            "min_x": 243.84,
+            "min_y": 139.70000000000002
+          },
+          "to_bbox": {
+            "max_x": 55.88,
+            "max_y": 80.01,
+            "min_x": 55.88,
+            "min_y": 74.93
+          },
+          "uuid": "3576aa5c-8869-5e33-ad76-71cd8b3da652"
+        },
+        {
+          "center_distance": 197.007,
+          "from_bbox": {
+            "max_x": 259.08,
+            "max_y": 129.54,
+            "min_x": 254.0,
+            "min_y": 129.54
+          },
+          "to_bbox": {
+            "max_x": 74.93,
+            "max_y": 64.77,
+            "min_x": 66.04,
+            "min_y": 64.77
+          },
+          "uuid": "1da73ae9-7721-5bde-b5de-e0d9c8c86d6e"
+        },
+        {
+          "center_distance": 196.506,
+          "from_bbox": {
+            "max_x": 259.08,
+            "max_y": 129.54,
+            "min_x": 259.08,
+            "min_y": 119.38
+          },
+          "to_bbox": {
+            "max_x": 74.93,
+            "max_y": 57.15,
+            "min_x": 74.93,
+            "min_y": 54.61
+          },
+          "uuid": "97ad24b4-48da-570e-a4d8-4985d0c47540"
+        },
+        {
+          "center_distance": 171.568,
+          "from_bbox": {
+            "max_x": 317.5,
+            "max_y": 189.23,
+            "min_x": 312.42,
+            "min_y": 189.23
+          },
+          "to_bbox": {
+            "max_x": 156.21,
+            "max_y": 147.32,
+            "min_x": 140.97,
+            "min_y": 147.32
+          },
+          "uuid": "9309e866-33cb-5921-87db-8f5c1db2f143"
+        },
+        {
+          "center_distance": 143.6,
+          "from_bbox": {
+            "max_x": 203.2,
+            "max_y": 240.03,
+            "min_x": 203.2,
+            "min_y": 233.68
+          },
+          "to_bbox": {
+            "max_x": 208.28,
+            "max_y": 93.98,
+            "min_x": 208.28,
+            "min_y": 92.71
+          },
+          "uuid": "c01ad207-b0b0-50dd-8a24-b7afaa1f3569"
+        },
+        {
+          "center_distance": 139.55,
+          "from_bbox": {
+            "max_x": 287.02,
+            "max_y": 201.93,
+            "min_x": 281.94,
+            "min_y": 201.93
+          },
+          "to_bbox": {
+            "max_x": 156.21,
+            "max_y": 170.18,
+            "min_x": 140.97,
+            "min_y": 170.18
+          },
+          "uuid": "b8670039-2eb7-5a4a-a0f5-d0a0f8aa5f0e"
+        },
+        {
+          "center_distance": 139.55,
+          "from_bbox": {
+            "max_x": 287.02,
+            "max_y": 194.31,
+            "min_x": 281.94,
+            "min_y": 194.31
+          },
+          "to_bbox": {
+            "max_x": 156.21,
+            "max_y": 162.56,
+            "min_x": 140.97,
+            "min_y": 162.56
+          },
+          "uuid": "bbd3fc4c-a15a-50fb-a444-7ad48eedaf14"
+        },
+        {
+          "center_distance": 130.909,
+          "from_bbox": {
+            "max_x": 152.4,
+            "max_y": 195.58,
+            "min_x": 152.4,
+            "min_y": 175.26000000000002
+          },
+          "to_bbox": {
+            "max_x": 148.59,
+            "max_y": 54.61,
+            "min_x": 146.05,
+            "min_y": 54.61
+          },
+          "uuid": "8e4f26ab-455d-576b-8c0c-0151cd9ecbdc"
+        },
+        {
+          "center_distance": 120.299,
+          "from_bbox": {
+            "max_x": 148.59,
+            "max_y": 170.18,
+            "min_x": 142.24,
+            "min_y": 170.18
+          },
+          "to_bbox": {
+            "max_x": 153.67,
+            "max_y": 50.8,
+            "min_x": 153.67,
+            "min_y": 49.53
+          },
+          "uuid": "963afbbb-c945-59e3-b3ca-49911a43d69d"
+        },
+        {
+          "center_distance": 108.152,
+          "from_bbox": {
+            "max_x": 177.8,
+            "max_y": 242.57,
+            "min_x": 177.8,
+            "min_y": 236.22
+          },
+          "to_bbox": {
+            "max_x": 284.48,
+            "max_y": 224.79,
+            "min_x": 284.48,
+            "min_y": 218.44
+          },
+          "uuid": "9a666306-a7f8-5230-b719-ebf8d5238ba4"
+        },
+        {
+          "center_distance": 108.152,
+          "from_bbox": {
+            "max_x": 177.8,
+            "max_y": 254.0,
+            "min_x": 177.8,
+            "min_y": 250.19
+          },
+          "to_bbox": {
+            "max_x": 284.48,
+            "max_y": 236.22,
+            "min_x": 284.48,
+            "min_y": 232.41
+          },
+          "uuid": "bbf4f7ff-3961-545a-a02b-02b922929ef7"
+        },
+        {
+          "center_distance": 71.247,
+          "from_bbox": {
+            "max_x": 152.4,
+            "max_y": 134.62,
+            "min_x": 147.32,
+            "min_y": 134.62
+          },
+          "to_bbox": {
+            "max_x": 109.22,
+            "max_y": 77.47,
+            "min_x": 105.41,
+            "min_y": 77.47
+          },
+          "uuid": "bb654f80-048d-5a2e-a70c-5beef182a43d"
+        },
+        {
+          "center_distance": 69.922,
+          "from_bbox": {
+            "max_x": 177.8,
+            "max_y": 162.56,
+            "min_x": 177.8,
+            "min_y": 158.75
+          },
+          "to_bbox": {
+            "max_x": 194.31,
+            "max_y": 93.98,
+            "min_x": 194.31,
+            "min_y": 91.44
+          },
+          "uuid": "cca46458-5cbb-5a84-9c52-90b7dd2a0191"
+        },
+        {
+          "center_distance": 60.017,
+          "from_bbox": {
+            "max_x": 152.4,
+            "max_y": 121.92,
+            "min_x": 152.4,
+            "min_y": 115.57000000000001
+          },
+          "to_bbox": {
+            "max_x": 100.33,
+            "max_y": 90.17,
+            "min_x": 100.33,
+            "min_y": 87.63
+          },
+          "uuid": "7acad7ef-550c-5c06-acc7-4336bfd2f9da"
+        },
+        {
+          "center_distance": 34.437,
+          "from_bbox": {
+            "max_x": 157.48,
+            "max_y": 54.61,
+            "min_x": 152.4,
+            "min_y": 54.61
+          },
+          "to_bbox": {
+            "max_x": 160.02,
+            "max_y": 88.9,
+            "min_x": 156.21,
+            "min_y": 88.9
+          },
+          "uuid": "fd787ea4-ca62-5d60-9210-c001af94f9a7"
+        },
+        {
+          "center_distance": 10.16,
+          "from_bbox": {
+            "max_x": 284.48,
+            "max_y": 73.66000000000001,
+            "min_x": 260.35,
+            "min_y": 73.66000000000001
+          },
+          "to_bbox": {
+            "max_x": 264.16,
+            "max_y": 73.66,
+            "min_x": 260.35,
+            "min_y": 73.66
+          },
+          "uuid": "597d28f0-8122-56c9-964a-dc30b1a5e4fc"
+        },
+        {
+          "center_distance": 10.16,
+          "from_bbox": {
+            "max_x": 284.48,
+            "max_y": 63.50000000000001,
+            "min_x": 260.35,
+            "min_y": 63.50000000000001
+          },
+          "to_bbox": {
+            "max_x": 264.16,
+            "max_y": 63.5,
+            "min_x": 260.35,
+            "min_y": 63.5
+          },
+          "uuid": "5a3889a0-26f1-5d26-98ae-e53e96880147"
+        },
+        {
+          "center_distance": 10.16,
+          "from_bbox": {
+            "max_x": 284.48,
+            "max_y": 58.42,
+            "min_x": 260.35,
+            "min_y": 58.42
+          },
+          "to_bbox": {
+            "max_x": 264.16,
+            "max_y": 58.42,
+            "min_x": 260.35,
+            "min_y": 58.42
+          },
+          "uuid": "a86afa54-eb2e-52d5-810a-a1d496ab312d"
+        },
+        {
+          "center_distance": 10.16,
+          "from_bbox": {
+            "max_x": 284.48,
+            "max_y": 53.34,
+            "min_x": 260.35,
+            "min_y": 53.34
+          },
+          "to_bbox": {
+            "max_x": 264.16,
+            "max_y": 53.34,
+            "min_x": 260.35,
+            "min_y": 53.34
+          },
+          "uuid": "df0e773a-8c31-5cc5-a0db-b1c15825630e"
+        },
+        {
+          "center_distance": 10.16,
+          "from_bbox": {
+            "max_x": 284.48,
+            "max_y": 68.58,
+            "min_x": 260.35,
+            "min_y": 68.58
+          },
+          "to_bbox": {
+            "max_x": 264.16,
+            "max_y": 68.58,
+            "min_x": 260.35,
+            "min_y": 68.58
+          },
+          "uuid": "e6881c7f-0650-534e-97f4-461d945a64fd"
+        },
+        {
+          "center_distance": 7.62,
+          "from_bbox": {
+            "max_x": 227.33,
+            "max_y": 68.58,
+            "min_x": 208.28,
+            "min_y": 68.58
+          },
+          "to_bbox": {
+            "max_x": 227.33,
+            "max_y": 68.58,
+            "min_x": 223.52,
+            "min_y": 68.58
+          },
+          "uuid": "1af80b0e-14d1-5d27-bfb0-bad8ffccdd94"
+        },
+        {
+          "center_distance": 7.62,
+          "from_bbox": {
+            "max_x": 227.33,
+            "max_y": 73.66000000000001,
+            "min_x": 208.28,
+            "min_y": 73.66000000000001
+          },
+          "to_bbox": {
+            "max_x": 227.33,
+            "max_y": 73.66,
+            "min_x": 223.52,
+            "min_y": 73.66
+          },
+          "uuid": "a7f9c75c-b3c5-5f45-adc2-44defb4770e2"
+        },
+        {
+          "center_distance": 7.62,
+          "from_bbox": {
+            "max_x": 227.33,
+            "max_y": 78.74000000000001,
+            "min_x": 208.28,
+            "min_y": 78.74000000000001
+          },
+          "to_bbox": {
+            "max_x": 227.33,
+            "max_y": 78.74,
+            "min_x": 223.52,
+            "min_y": 78.74
+          },
+          "uuid": "a9b0a3a2-4600-5e74-b9cf-f4badb706694"
+        },
+        {
+          "center_distance": 7.405,
+          "from_bbox": {
+            "max_x": 157.48,
+            "max_y": 77.47,
+            "min_x": 152.4,
+            "min_y": 77.47
+          },
+          "to_bbox": {
+            "max_x": 152.4,
+            "max_y": 71.12,
+            "min_x": 149.86,
+            "min_y": 71.12
+          },
+          "uuid": "4e44958d-0b73-58b5-94a5-c9bcb301f367"
+        },
+        {
+          "center_distance": 4.016,
+          "from_bbox": {
+            "max_x": 330.2,
+            "max_y": 229.87,
+            "min_x": 304.8,
+            "min_y": 229.87
+          },
+          "to_bbox": {
+            "max_x": 328.93,
+            "max_y": 226.06,
+            "min_x": 308.61,
+            "min_y": 226.06
+          },
+          "uuid": "9d366df7-b46f-54e8-867e-afaf52b19493"
+        },
+        {
+          "center_distance": 3.175,
+          "from_bbox": {
+            "max_x": 152.4,
+            "max_y": 85.09,
+            "min_x": 137.16,
+            "min_y": 85.09
+          },
+          "to_bbox": {
+            "max_x": 152.4,
+            "max_y": 85.09,
+            "min_x": 143.51,
+            "min_y": 85.09
+          },
+          "uuid": "4579afd9-7a65-598b-93e8-7e0d270f9a3f"
+        },
+        {
+          "center_distance": 1.27,
+          "from_bbox": {
+            "max_x": 236.22,
+            "max_y": 220.98000000000002,
+            "min_x": 231.14,
+            "min_y": 220.98000000000002
+          },
+          "to_bbox": {
+            "max_x": 236.22,
+            "max_y": 220.98,
+            "min_x": 233.68,
+            "min_y": 220.98
+          },
+          "uuid": "38ad0ac2-4cd7-55bb-acbe-db5a695d8986"
+        },
+        {
+          "center_distance": 1.27,
+          "from_bbox": {
+            "max_x": 236.22,
+            "max_y": 177.8,
+            "min_x": 231.14,
+            "min_y": 177.8
+          },
+          "to_bbox": {
+            "max_x": 236.22,
+            "max_y": 177.8,
+            "min_x": 233.68,
+            "min_y": 177.8
+          },
+          "uuid": "cbf790cf-7cc5-54ce-b644-e64f8da09ae5"
+        },
+        {
+          "center_distance": 1.27,
+          "from_bbox": {
+            "max_x": 236.22,
+            "max_y": 175.26000000000002,
+            "min_x": 231.14,
+            "min_y": 175.26000000000002
+          },
+          "to_bbox": {
+            "max_x": 236.22,
+            "max_y": 175.26,
+            "min_x": 233.68,
+            "min_y": 175.26
+          },
+          "uuid": "d211f041-4f30-5db7-a9b6-13b5c32225df"
+        },
+        {
+          "center_distance": 1.27,
+          "from_bbox": {
+            "max_x": 236.22,
+            "max_y": 223.52,
+            "min_x": 231.14,
+            "min_y": 223.52
+          },
+          "to_bbox": {
+            "max_x": 236.22,
+            "max_y": 223.52,
+            "min_x": 233.68,
+            "min_y": 223.52
+          },
+          "uuid": "f955c682-68ee-5168-a16d-5d1dc16ce44c"
+        },
+        {
+          "center_distance": 0.635,
+          "from_bbox": {
+            "max_x": 227.33,
+            "max_y": 81.28,
+            "min_x": 193.04,
+            "min_y": 81.28
+          },
+          "to_bbox": {
+            "max_x": 227.33,
+            "max_y": 81.28,
+            "min_x": 194.31,
+            "min_y": 81.28
+          },
+          "uuid": "35d9ecfe-186c-5d20-994e-4401ac723f89"
+        },
+        {
+          "center_distance": 0.0,
+          "from_bbox": {
+            "max_x": 243.84,
+            "max_y": 190.5,
+            "min_x": 243.84,
+            "min_y": 185.42000000000002
+          },
+          "to_bbox": {
+            "max_x": 243.84,
+            "max_y": 190.5,
+            "min_x": 243.84,
+            "min_y": 185.42
+          },
+          "uuid": "1505b770-fa2b-55ee-9ab4-c4d49b825449"
+        },
+        {
+          "center_distance": 0.0,
+          "from_bbox": {
+            "max_x": 381.0,
+            "max_y": 121.92,
+            "min_x": 381.0,
+            "min_y": 115.57000000000001
+          },
+          "to_bbox": {
+            "max_x": 381.0,
+            "max_y": 121.92,
+            "min_x": 381.0,
+            "min_y": 115.57
+          },
+          "uuid": "2256f88e-12cc-56a9-b0df-7edb38b62d8f"
+        },
+        {
+          "center_distance": 0.0,
+          "from_bbox": {
+            "max_x": 355.6,
+            "max_y": 46.989999999999995,
+            "min_x": 355.6,
+            "min_y": 40.64
+          },
+          "to_bbox": {
+            "max_x": 355.6,
+            "max_y": 46.99,
+            "min_x": 355.6,
+            "min_y": 40.64
+          },
+          "uuid": "2cf62171-6c27-540c-9620-e41d6bb008fd"
+        },
+        {
+          "center_distance": 0.0,
+          "from_bbox": {
+            "max_x": 264.16,
+            "max_y": 60.96000000000001,
+            "min_x": 260.35,
+            "min_y": 60.96000000000001
+          },
+          "to_bbox": {
+            "max_x": 264.16,
+            "max_y": 60.96,
+            "min_x": 260.35,
+            "min_y": 60.96
+          },
+          "uuid": "305c9c62-3d53-52ed-8d55-16322e72e536"
+        },
+        {
+          "center_distance": 0.0,
+          "from_bbox": {
+            "max_x": 355.6,
+            "max_y": 121.92,
+            "min_x": 355.6,
+            "min_y": 115.57000000000001
+          },
+          "to_bbox": {
+            "max_x": 355.6,
+            "max_y": 121.92,
+            "min_x": 355.6,
+            "min_y": 115.57
+          },
+          "uuid": "370151d6-6c67-5188-b3b1-fbc0b568bc03"
+        },
+        {
+          "center_distance": 0.0,
+          "from_bbox": {
+            "max_x": 243.84,
+            "max_y": 236.22,
+            "min_x": 243.84,
+            "min_y": 231.14000000000001
+          },
+          "to_bbox": {
+            "max_x": 243.84,
+            "max_y": 236.22,
+            "min_x": 243.84,
+            "min_y": 231.14
+          },
+          "uuid": "686e219a-521f-5034-a54d-b989e78428e5"
+        },
+        {
+          "center_distance": 0.0,
+          "from_bbox": {
+            "max_x": 248.92000000000002,
+            "max_y": 44.45,
+            "min_x": 248.92000000000002,
+            "min_y": 35.56
+          },
+          "to_bbox": {
+            "max_x": 248.92,
+            "max_y": 44.45,
+            "min_x": 248.92,
+            "min_y": 35.56
+          },
+          "uuid": "7ea4d9bc-fd81-5239-a8d9-d8bb61ebb586"
+        },
+        {
+          "center_distance": 0.0,
+          "from_bbox": {
+            "max_x": 227.33,
+            "max_y": 60.96000000000001,
+            "min_x": 223.52,
+            "min_y": 60.96000000000001
+          },
+          "to_bbox": {
+            "max_x": 227.33,
+            "max_y": 60.96,
+            "min_x": 223.52,
+            "min_y": 60.96
+          },
+          "uuid": "9e112309-5d70-5001-a2f9-a1093b1b06d9"
+        },
+        {
+          "center_distance": 0.0,
+          "from_bbox": {
+            "max_x": 227.33,
+            "max_y": 83.82000000000001,
+            "min_x": 213.36,
+            "min_y": 83.82000000000001
+          },
+          "to_bbox": {
+            "max_x": 227.33,
+            "max_y": 83.82,
+            "min_x": 213.36,
+            "min_y": 83.82
+          },
+          "uuid": "a6f6a234-d2b4-53a7-8950-28b49ed3882e"
+        },
+        {
+          "center_distance": 0.0,
+          "from_bbox": {
+            "max_x": 330.2,
+            "max_y": 46.989999999999995,
+            "min_x": 314.96,
+            "min_y": 46.989999999999995
+          },
+          "to_bbox": {
+            "max_x": 330.2,
+            "max_y": 46.99,
+            "min_x": 314.96,
+            "min_y": 46.99
+          },
+          "uuid": "ad221cd1-9fcf-524d-ab4f-16b28e52e6f3"
+        },
+        {
+          "center_distance": 0.0,
+          "from_bbox": {
+            "max_x": 330.2,
+            "max_y": 121.92,
+            "min_x": 330.2,
+            "min_y": 115.57000000000001
+          },
+          "to_bbox": {
+            "max_x": 330.2,
+            "max_y": 121.92,
+            "min_x": 330.2,
+            "min_y": 115.57
+          },
+          "uuid": "b556c78a-47fd-53c3-ab07-76c2408ddd24"
+        },
+        {
+          "center_distance": 0.0,
+          "from_bbox": {
+            "max_x": 304.8,
+            "max_y": 97.78999999999999,
+            "min_x": 304.8,
+            "min_y": 91.44
+          },
+          "to_bbox": {
+            "max_x": 304.8,
+            "max_y": 97.79,
+            "min_x": 304.8,
+            "min_y": 91.44
+          },
+          "uuid": "cc85866d-4b15-5ec1-bc47-f8bfe9d97577"
+        },
+        {
+          "center_distance": 0.0,
+          "from_bbox": {
+            "max_x": 256.54,
+            "max_y": 220.98000000000002,
+            "min_x": 251.46,
+            "min_y": 220.98000000000002
+          },
+          "to_bbox": {
+            "max_x": 256.54,
+            "max_y": 220.98,
+            "min_x": 251.46,
+            "min_y": 220.98
+          },
+          "uuid": "e9c22711-c4d2-5c8b-a41c-e81cd83c4cf0"
+        }
+      ],
+      "common_uuid": 97,
+      "moved_or_text_changed": [],
+      "removed_uuid": 49
+    }
+  }
+}

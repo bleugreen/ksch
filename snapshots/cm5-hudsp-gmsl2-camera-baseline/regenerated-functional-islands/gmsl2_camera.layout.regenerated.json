@@ -1,0 +1,4492 @@
+{
+  "bbox": {
+    "max_x": 383.54,
+    "max_y": 294.64,
+    "min_x": 27.94,
+    "min_y": 40.64
+  },
+  "counts": {
+    "hierarchical_label": 18,
+    "junction": 55,
+    "label": 91,
+    "no_connect": 6,
+    "symbol": 49,
+    "wire": 156
+  },
+  "items": [
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 337.82,
+        "y": 162.56
+      },
+      "kind": "symbol",
+      "lib_id": "Device:C",
+      "ref": "C38",
+      "uuid": "81746aef-75be-55fa-b02c-ad78ba42abd8",
+      "value": "10nF 50V"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 177.8,
+        "y": 254.0
+      },
+      "kind": "symbol",
+      "lib_id": "Device:C",
+      "ref": "C39",
+      "uuid": "56255f58-fa5f-5c74-a021-6977c07fee2f",
+      "value": "10nF CAP_VDD close"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 264.16,
+        "y": 106.68
+      },
+      "kind": "symbol",
+      "lib_id": "Device:C",
+      "ref": "C40",
+      "uuid": "e7dbeb55-919f-504d-b7bc-af0b1897b2db",
+      "value": "10nF VDDIO close"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 213.36,
+        "y": 254.0
+      },
+      "kind": "symbol",
+      "lib_id": "Device:C",
+      "ref": "C41",
+      "uuid": "9b01aad7-c115-5285-bd35-3c57974c9f7e",
+      "value": "10uF 10V"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 124.46,
+        "y": 176.53
+      },
+      "kind": "symbol",
+      "lib_id": "Device:C",
+      "ref": "C42",
+      "uuid": "3c9897f0-64d4-5dbf-8e16-501b31f29152",
+      "value": "27pF"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 167.64,
+        "y": 179.07
+      },
+      "kind": "symbol",
+      "lib_id": "Device:C",
+      "ref": "C43",
+      "uuid": "ae793060-40f7-51b9-ab32-560146fbb0b9",
+      "value": "27pF"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 137.16,
+        "y": 184.15
+      },
+      "kind": "symbol",
+      "lib_id": "Device:C",
+      "ref": "C44",
+      "uuid": "6f3477cf-9e68-5482-af92-32c80f8e2cdc",
+      "value": "100nF GMSL AC-couple"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 185.42,
+        "y": 186.69
+      },
+      "kind": "symbol",
+      "lib_id": "Device:C",
+      "ref": "C45",
+      "uuid": "86558b0a-e4d1-5e47-ae93-cad603fd94d4",
+      "value": "100nF SIOP AC term"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 373.38,
+        "y": 162.56
+      },
+      "kind": "symbol",
+      "lib_id": "Device:C",
+      "ref": "C46",
+      "uuid": "e1074ea9-ec4f-5282-8cd0-4de978a575e0",
+      "value": "100nF 50V"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 63.5,
+        "y": 259.08
+      },
+      "kind": "symbol",
+      "lib_id": "Device:C",
+      "ref": "C47",
+      "uuid": "a6697102-7362-5502-ab7a-4f78b81ded0a",
+      "value": "10nF VTERM close"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 78.74,
+        "y": 55.88
+      },
+      "kind": "symbol",
+      "lib_id": "Device:C",
+      "ref": "C48",
+      "uuid": "5a75e308-e8f6-51fa-9d5b-91eb7055c78b",
+      "value": "10uF 10V"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 114.3,
+        "y": 55.88
+      },
+      "kind": "symbol",
+      "lib_id": "Device:C",
+      "ref": "C49",
+      "uuid": "de59c45d-e531-5a73-88e7-37336e453770",
+      "value": "10nF"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 332.74,
+        "y": 259.08
+      },
+      "kind": "symbol",
+      "lib_id": "Device:C",
+      "ref": "C50",
+      "uuid": "347a4609-4be6-5fe4-98c0-975920b554ad",
+      "value": "10uF 10V"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 368.3,
+        "y": 259.08
+      },
+      "kind": "symbol",
+      "lib_id": "Device:C",
+      "ref": "C51",
+      "uuid": "622b53ba-e48d-556d-ade2-9ec65aafbd9a",
+      "value": "10nF"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 99.06,
+        "y": 259.08
+      },
+      "kind": "symbol",
+      "lib_id": "Device:C",
+      "ref": "C52",
+      "uuid": "8d04ee71-8595-5a0e-876b-1581dc226ade",
+      "value": "10uF 10V"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 299.72,
+        "y": 106.68
+      },
+      "kind": "symbol",
+      "lib_id": "Device:C",
+      "ref": "C53",
+      "uuid": "e1252e18-528b-55d0-8d39-7a9a31fab752",
+      "value": "10uF 10V"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 66.04,
+        "y": 113.03
+      },
+      "kind": "symbol",
+      "lib_id": "Device:C",
+      "ref": "C54",
+      "uuid": "f0285e23-6d9f-5c5f-b27d-24a75f1a7a22",
+      "value": "10uF 10V"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 175.26,
+        "y": 107.95
+      },
+      "kind": "symbol",
+      "lib_id": "Device:C",
+      "ref": "C55",
+      "uuid": "e7fa2ac2-a30b-5b7b-978a-21b1e158af17",
+      "value": "100nF"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 149.86,
+        "y": 55.88
+      },
+      "kind": "symbol",
+      "lib_id": "Device:C",
+      "ref": "C57",
+      "uuid": "73e3de25-e68d-59eb-aa31-779b1cfdabb1",
+      "value": "22uF 10V"
+    },
+    {
+      "at": {
+        "rot": 180.0,
+        "x": 132.08,
+        "y": 113.03
+      },
+      "kind": "symbol",
+      "lib_id": "Device:C",
+      "ref": "C58",
+      "uuid": "2e8f0ac5-59df-5e7e-a39f-8a0bf509b184",
+      "value": "100pF"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 185.42,
+        "y": 55.88
+      },
+      "kind": "symbol",
+      "lib_id": "Device:C",
+      "ref": "C59",
+      "uuid": "9f1bd8a4-5812-5a3c-9c36-a192085fc742",
+      "value": "1uF"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 220.98,
+        "y": 55.88
+      },
+      "kind": "symbol",
+      "lib_id": "Device:C",
+      "ref": "C60",
+      "uuid": "9816cc87-2c03-5584-94ef-f9b882af0808",
+      "value": "1uF"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 106.68,
+        "y": 106.68
+      },
+      "kind": "symbol",
+      "lib_id": "Device:Fuse",
+      "ref": "F4",
+      "uuid": "b98464b8-4407-5f8b-bd6d-79c44326111f",
+      "value": "500mA camera PoC fuse"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 38.1,
+        "y": 104.14
+      },
+      "kind": "symbol",
+      "lib_id": "Connector:Conn_Coaxial",
+      "ref": "J14",
+      "uuid": "41d29e4c-1bbb-58ca-be8d-4ba8d47ee665",
+      "value": "KH-FAKRA-Z-CB"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 312.42,
+        "y": 106.68
+      },
+      "kind": "symbol",
+      "lib_id": "Device:L",
+      "ref": "L2",
+      "uuid": "1e507477-8d7f-590d-b05d-a4a8d4727446",
+      "value": "100uH PoC"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 149.86,
+        "y": 106.68
+      },
+      "kind": "symbol",
+      "lib_id": "Device:L",
+      "ref": "L3",
+      "uuid": "7ff9e3a1-8847-5c87-a925-52abe2ce36a8",
+      "value": "SRN4018-4R7M"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 312.42,
+        "y": 149.86
+      },
+      "kind": "symbol",
+      "lib_id": "Device:L",
+      "ref": "L4",
+      "uuid": "46cfe112-b333-526b-9cdc-2e6a2479b86b",
+      "value": "0.47uH PoC"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 312.42,
+        "y": 193.04
+      },
+      "kind": "symbol",
+      "lib_id": "Device:L",
+      "ref": "L5",
+      "uuid": "6f2e4f69-fa93-5212-bdc2-86994a87f641",
+      "value": "0.47uH PoC"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 312.42,
+        "y": 236.22
+      },
+      "kind": "symbol",
+      "lib_id": "Device:L",
+      "ref": "L6",
+      "uuid": "81671932-4cbc-54b0-b1c9-bb1c409d721f",
+      "value": "6.8uH PoC"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 312.42,
+        "y": 279.4
+      },
+      "kind": "symbol",
+      "lib_id": "Device:L",
+      "ref": "L7",
+      "uuid": "953226df-0c4a-5830-8be2-0d1f0b7513b0",
+      "value": "22uH PoC"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 312.42,
+        "y": 154.94
+      },
+      "kind": "symbol",
+      "lib_id": "Device:R",
+      "ref": "R31",
+      "uuid": "e54518e5-7f7c-5010-801a-d4b0173526fb",
+      "value": "5.1k PoC damp"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 119.38,
+        "y": 163.83
+      },
+      "kind": "symbol",
+      "lib_id": "Device:R",
+      "ref": "R35",
+      "uuid": "5aba66fd-2f28-514a-96fb-ce0744e24b9b",
+      "value": "4.99k"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 99.06,
+        "y": 166.37
+      },
+      "kind": "symbol",
+      "lib_id": "Device:R",
+      "ref": "R50",
+      "uuid": "746a37ee-4f90-5984-9e92-1bcb9443959c",
+      "value": "10k"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 86.36,
+        "y": 168.91
+      },
+      "kind": "symbol",
+      "lib_id": "Device:R",
+      "ref": "R51",
+      "uuid": "f7c849fb-7097-5e5e-9ad1-c88bb36d8f5f",
+      "value": "10k CFG0=I2C 0x50"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 195.58,
+        "y": 184.15
+      },
+      "kind": "symbol",
+      "lib_id": "Device:R",
+      "ref": "R52",
+      "uuid": "bc990360-c553-50d9-929c-c80823fa8ad7",
+      "value": "10k 1% CFG1=6G coax GMSL2"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 175.26,
+        "y": 186.69
+      },
+      "kind": "symbol",
+      "lib_id": "Device:R",
+      "ref": "R53",
+      "uuid": "4e5021e8-5cfb-5c5e-a5ac-9166c9454868",
+      "value": "49.9R 1% SIOP term"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 312.42,
+        "y": 241.3
+      },
+      "kind": "symbol",
+      "lib_id": "Device:R",
+      "ref": "R54",
+      "uuid": "6af1f3a6-5f69-5796-a4c6-bbe65d722b6b",
+      "value": "5.1k PoC damp"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 312.42,
+        "y": 63.5
+      },
+      "kind": "symbol",
+      "lib_id": "Device:R",
+      "ref": "R55",
+      "uuid": "508c4514-24d8-59d6-b232-98bbf031eca6",
+      "value": "5.1k PoC damp"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 147.32,
+        "y": 181.61
+      },
+      "kind": "symbol",
+      "lib_id": "Device:R",
+      "ref": "R56",
+      "uuid": "caedeeae-592a-5ec4-89d3-4d135876c936",
+      "value": "402R 1%"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 205.74,
+        "y": 191.77
+      },
+      "kind": "symbol",
+      "lib_id": "Device:R",
+      "ref": "R57",
+      "uuid": "ba76d6a8-db3d-5e22-bbc6-7caf34b2b0ee",
+      "value": "10k"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 60.96,
+        "y": 158.75
+      },
+      "kind": "symbol",
+      "lib_id": "Device:R",
+      "ref": "R58",
+      "uuid": "8d256d99-7c64-5054-9f13-430c9d48d750",
+      "value": "4.99k"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 142.24,
+        "y": 106.68
+      },
+      "kind": "symbol",
+      "lib_id": "Device:R",
+      "ref": "R59",
+      "uuid": "b6074e9a-1e52-52a8-93c2-81af88af0e2e",
+      "value": "62.0k 1%"
+    },
+    {
+      "at": {
+        "rot": 180.0,
+        "x": 142.24,
+        "y": 119.38
+      },
+      "kind": "symbol",
+      "lib_id": "Device:R",
+      "ref": "R60",
+      "uuid": "96f43c30-1abc-5aa2-b9c5-2d6be140f132",
+      "value": "76.8k 1%"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 99.06,
+        "y": 106.68
+      },
+      "kind": "symbol",
+      "lib_id": "Regulator_Switching:AP63200WU",
+      "ref": "U11",
+      "uuid": "79d1ebc0-73ca-5582-af3b-ad3fd38ead3b",
+      "value": "AP63200WU-7"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 243.84,
+        "y": 236.22
+      },
+      "kind": "symbol",
+      "lib_id": "Regulator_Linear:TLV73310PDBV",
+      "ref": "U12",
+      "uuid": "1bcde9e7-0267-56cd-afcd-3b1f12564b7d",
+      "value": "TLV73310PDBVR"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 243.84,
+        "y": 281.94
+      },
+      "kind": "symbol",
+      "lib_id": "Regulator_Linear:TLV73312PDBV",
+      "ref": "U13",
+      "uuid": "a246d1fa-4149-5100-bc0c-a8b474fd86bb",
+      "value": "TLV73312PDBVR"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 243.84,
+        "y": 172.72
+      },
+      "kind": "symbol",
+      "lib_id": "cm5hudsp:MAX96714",
+      "ref": "U5",
+      "uuid": "dff4401c-f110-5d9e-bdba-504427545518",
+      "value": "MAX96714GTJ/VY+T"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 88.9,
+        "y": 185.42
+      },
+      "kind": "symbol",
+      "lib_id": "Device:Crystal_GND24",
+      "ref": "Y3",
+      "uuid": "6ad29d16-77ce-5195-ad7a-d90f6733f12e",
+      "value": "25MHz"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 66.04,
+        "y": 40.64
+      },
+      "kind": "symbol",
+      "lib_id": "power:PWR_FLAG",
+      "ref": "#FLG890381",
+      "uuid": "7ac76ecd-b164-5ded-bfc6-e1cff038a0e0",
+      "value": "PWR_FLAG"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 66.04,
+          "y": 40.64
+        },
+        {
+          "x": 71.12,
+          "y": 40.64
+        }
+      ],
+      "uuid": "9edc3beb-a9f9-5ca9-bd11-60dda46b7e7f"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 71.12,
+        "y": 40.64
+      },
+      "kind": "label",
+      "text": "GMSL_1V8",
+      "uuid": "7599fc2a-2574-538f-b6ce-de47645b62d5"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 383.54,
+          "y": 142.24
+        },
+        {
+          "x": 383.54,
+          "y": 146.05
+        }
+      ],
+      "uuid": "9bc12226-3dbf-5571-9566-6a8fd9c7ad1d"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 383.54,
+          "y": 146.05
+        },
+        {
+          "x": 383.54,
+          "y": 158.75
+        }
+      ],
+      "uuid": "425873b8-ebfd-58f1-afce-17daf3461f0d"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 337.82,
+          "y": 158.75
+        },
+        {
+          "x": 383.54,
+          "y": 158.75
+        }
+      ],
+      "uuid": "cc6c9b1a-e989-5c82-91e6-b74699f5e936"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 373.38,
+          "y": 158.75
+        },
+        {
+          "x": 383.54,
+          "y": 158.75
+        }
+      ],
+      "uuid": "f4e56937-21a6-5ea0-88a3-6ab0cc0d848e"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 312.42,
+          "y": 146.05
+        },
+        {
+          "x": 383.54,
+          "y": 146.05
+        }
+      ],
+      "uuid": "77399b5a-c17c-5f8f-b7d6-05f575902ef3"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 327.66,
+          "y": 166.37
+        },
+        {
+          "x": 327.66,
+          "y": 172.72
+        }
+      ],
+      "uuid": "274d5538-6ee6-5fdf-a72b-833f1d006e42"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 327.66,
+          "y": 166.37
+        },
+        {
+          "x": 337.82,
+          "y": 166.37
+        }
+      ],
+      "uuid": "f8b2040e-5e3b-54c6-b049-c335c11e7738"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 327.66,
+          "y": 166.37
+        },
+        {
+          "x": 373.38,
+          "y": 166.37
+        }
+      ],
+      "uuid": "b5efa2b5-3221-5d43-a76d-7454b359a246"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 327.66,
+        "y": 166.37
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "fabcf2c7-27e2-545f-93c2-b4a032252ba5"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 327.66,
+        "y": 172.72
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "8b783d63-547a-56e1-8a1a-b5edec35c230"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 383.54,
+        "y": 142.24
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "96211fe3-9a4b-58ba-90d9-50a51cf576ff"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 383.54,
+        "y": 146.05
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "61898942-2a9f-52c0-8d1e-a6d39da5fa1f"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 383.54,
+        "y": 158.75
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "fab7d7db-f0df-5c4d-a033-29e2dd07c614"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 383.54,
+        "y": 142.24
+      },
+      "kind": "label",
+      "text": "CAM_12V_FUSED",
+      "uuid": "4b123412-ae64-594b-ae14-bacea81ab69f"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 327.66,
+        "y": 172.72
+      },
+      "kind": "label",
+      "text": "GND",
+      "uuid": "007ebab5-1ea3-53de-83a0-5029321cbca0"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 332.74,
+          "y": 255.27
+        },
+        {
+          "x": 368.3,
+          "y": 255.27
+        }
+      ],
+      "uuid": "026c8e67-17f6-56ec-8d29-a19bc9f13100"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 368.3,
+          "y": 255.27
+        },
+        {
+          "x": 383.54,
+          "y": 255.27
+        }
+      ],
+      "uuid": "4993fa6c-bb28-543d-9d97-1aa06331f2e5"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 332.74,
+          "y": 262.89
+        },
+        {
+          "x": 368.3,
+          "y": 262.89
+        }
+      ],
+      "uuid": "4d5ab702-6946-55ea-b8cc-b6d66cad8494"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 368.3,
+          "y": 262.89
+        },
+        {
+          "x": 368.3,
+          "y": 274.32
+        }
+      ],
+      "uuid": "252d1c93-9c14-5ccc-abd3-f8e0ebbe5598"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 332.74,
+        "y": 255.27
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "bbd01101-9a94-5216-ad70-924a0a8aa738"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 332.74,
+        "y": 262.89
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "5ca36f5d-4144-5c1d-8063-760dd089233a"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 368.3,
+        "y": 255.27
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "5826c0ce-beec-571a-8d8f-d979de7a5b9f"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 368.3,
+        "y": 262.89
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "90b125b4-ec11-554d-9f20-19ac510936e2"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 368.3,
+        "y": 274.32
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "fca0f666-d4c3-55ee-8961-c8010953fb3a"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 383.54,
+        "y": 255.27
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "680b3d79-b3d5-5d5d-978e-c86d232b7fd3"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 383.54,
+        "y": 255.27
+      },
+      "kind": "label",
+      "text": "GMSL_1V0",
+      "uuid": "03f5c0ec-8f0d-5c84-be7d-d7611fc52cbf"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 368.3,
+        "y": 274.32
+      },
+      "kind": "label",
+      "text": "GND",
+      "uuid": "413ce51d-12dc-55ab-b32d-f731da150fe4"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 63.5,
+          "y": 255.27
+        },
+        {
+          "x": 99.06,
+          "y": 255.27
+        }
+      ],
+      "uuid": "31d01a80-188f-5f2d-89da-bce4a1291b6f"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 99.06,
+          "y": 255.27
+        },
+        {
+          "x": 114.3,
+          "y": 255.27
+        }
+      ],
+      "uuid": "d937cf7c-9b13-5b5e-ae8b-c37988e9db86"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 63.5,
+          "y": 262.89
+        },
+        {
+          "x": 99.06,
+          "y": 262.89
+        }
+      ],
+      "uuid": "866308d6-df1f-554a-bc3f-a6f55f6c8ebd"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 99.06,
+          "y": 262.89
+        },
+        {
+          "x": 99.06,
+          "y": 274.32
+        }
+      ],
+      "uuid": "240034f5-15ae-5dff-b760-bd5464a855b6"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 63.5,
+        "y": 255.27
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "2ca5dfd4-f6c2-5f83-8aea-b228206f851d"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 63.5,
+        "y": 262.89
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "3ce5cf8b-2037-5f3a-aac7-3a1ee9c866b5"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 99.06,
+        "y": 255.27
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "3314dce3-90f2-5152-8736-5336d5002f34"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 99.06,
+        "y": 262.89
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "d4f355fe-ea76-5f4a-8f05-3b65b36cf235"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 99.06,
+        "y": 274.32
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "b4850292-4381-5d8d-8179-630955bd13cc"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 114.3,
+        "y": 255.27
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "6520c47b-b68a-57e9-8e3e-7b320d77cd2b"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 114.3,
+        "y": 255.27
+      },
+      "kind": "label",
+      "text": "GMSL_1V2",
+      "uuid": "cc7c1339-ee89-5ef3-8390-a4be45d9f981"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 99.06,
+        "y": 274.32
+      },
+      "kind": "label",
+      "text": "GND",
+      "uuid": "3f3f2a9c-acd7-58e9-be58-587dbd30a875"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 78.74,
+          "y": 52.07
+        },
+        {
+          "x": 114.3,
+          "y": 52.07
+        }
+      ],
+      "uuid": "f1363f7c-d8c6-5f5f-8c8a-6c14cca2eb94"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 114.3,
+          "y": 52.07
+        },
+        {
+          "x": 149.86,
+          "y": 52.07
+        }
+      ],
+      "uuid": "1bfc199a-2722-5544-9c4c-50ac271d149b"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 149.86,
+          "y": 52.07
+        },
+        {
+          "x": 185.42,
+          "y": 52.07
+        }
+      ],
+      "uuid": "2e941edf-019e-5740-8a9f-3b6d1f698bc0"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 185.42,
+          "y": 52.07
+        },
+        {
+          "x": 220.98,
+          "y": 52.07
+        }
+      ],
+      "uuid": "00f82e74-fdbd-52e7-bdc2-9e3d0559c1bc"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 220.98,
+          "y": 52.07
+        },
+        {
+          "x": 236.22,
+          "y": 52.07
+        }
+      ],
+      "uuid": "85aa5144-c2ed-5f07-bc92-0e0e4f843978"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 78.74,
+          "y": 59.69
+        },
+        {
+          "x": 114.3,
+          "y": 59.69
+        }
+      ],
+      "uuid": "c43c784d-b674-5950-a378-f5d851aa6d5d"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 114.3,
+          "y": 59.69
+        },
+        {
+          "x": 149.86,
+          "y": 59.69
+        }
+      ],
+      "uuid": "9298af22-20c6-59ae-8b05-5711715fa6a1"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 149.86,
+          "y": 59.69
+        },
+        {
+          "x": 185.42,
+          "y": 59.69
+        }
+      ],
+      "uuid": "adbbaabb-fa5b-5157-8862-3788e48e29c4"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 185.42,
+          "y": 59.69
+        },
+        {
+          "x": 220.98,
+          "y": 59.69
+        }
+      ],
+      "uuid": "23be91a7-ec76-5cf9-a165-21d63889bf74"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 149.86,
+          "y": 59.69
+        },
+        {
+          "x": 149.86,
+          "y": 71.12
+        }
+      ],
+      "uuid": "951f2769-996a-5f29-ba4c-30a4b2fe6711"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 78.74,
+        "y": 52.07
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "20b55f0a-3ce4-59af-91e0-ee0a6ab28f5a"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 78.74,
+        "y": 59.69
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "e1153903-51af-5919-98bc-77d48a7913c7"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 114.3,
+        "y": 52.07
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "fa956e4f-b134-52cd-b1da-23d994073096"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 114.3,
+        "y": 59.69
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "9ce67ca2-956f-5161-8443-0f3a9c0b8df3"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 149.86,
+        "y": 52.07
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "2e97eb42-70f6-57ac-834d-c4c81da9d9b6"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 149.86,
+        "y": 59.69
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "e2b84f5a-adc7-593d-a9c3-b45b652712d0"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 149.86,
+        "y": 71.12
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "4f52b6d0-91f7-5f59-abe0-7e15577c96c6"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 185.42,
+        "y": 52.07
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "2866a20c-8419-5259-a8ec-6688102a693d"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 185.42,
+        "y": 59.69
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "8d269da2-eee7-5326-8e4d-25abf6048125"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 220.98,
+        "y": 52.07
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "6342db68-11e9-5703-bb17-e8087b44518f"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 220.98,
+        "y": 59.69
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "e6161d24-c11e-5b7f-bd7a-bfbb02245daf"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 236.22,
+        "y": 52.07
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "4e68bee9-c4c9-5f81-8291-b65917420082"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 236.22,
+        "y": 52.07
+      },
+      "kind": "label",
+      "text": "GMSL_1V8",
+      "uuid": "97d53c81-7100-5fe7-916a-d8b2ad519108"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 149.86,
+        "y": 71.12
+      },
+      "kind": "label",
+      "text": "GND",
+      "uuid": "d68d491e-3579-5cbd-aa2c-ac127d68e759"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 175.26,
+          "y": 111.76
+        },
+        {
+          "x": 180.34,
+          "y": 111.76
+        }
+      ],
+      "uuid": "db709f0b-6d0e-5010-b930-d9b4e7162797"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 109.22,
+          "y": 106.68
+        },
+        {
+          "x": 116.84,
+          "y": 106.68
+        }
+      ],
+      "uuid": "604524f4-a23f-5dd1-90ba-092501d11c61"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 116.84,
+          "y": 106.68
+        },
+        {
+          "x": 116.84,
+          "y": 127.0
+        }
+      ],
+      "uuid": "17dee425-069f-581e-ad63-d0812aa832a4"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 116.84,
+          "y": 127.0
+        },
+        {
+          "x": 175.26,
+          "y": 127.0
+        }
+      ],
+      "uuid": "ac90b320-a76f-5f4d-aa89-6ee0bdcf17c4"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 175.26,
+          "y": 111.76
+        },
+        {
+          "x": 175.26,
+          "y": 127.0
+        }
+      ],
+      "uuid": "95186370-bf43-572d-bfc7-ebde4cfe8a87"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 116.84,
+        "y": 106.68
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "46f625cb-81e0-5366-a34c-b3780e62327e"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 116.84,
+        "y": 127.0
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "132f22ec-cea5-5f71-bdd8-43754e4c725d"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 175.26,
+        "y": 111.76
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "6e4c88f9-78fb-5fa5-b6e6-eef344164a32"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 175.26,
+        "y": 127.0
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "c55e1bf4-77de-567b-b657-f9ed8fdc5f1b"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 180.34,
+        "y": 111.76
+      },
+      "kind": "label",
+      "text": "AP63200_BST",
+      "uuid": "b2c1fe05-17f8-5594-bf39-314ebf1a856d"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 190.5,
+          "y": 187.96
+        },
+        {
+          "x": 195.58,
+          "y": 187.96
+        }
+      ],
+      "uuid": "06aaff0f-9722-5719-8538-186222d656e8"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 220.98,
+          "y": 187.96
+        },
+        {
+          "x": 227.33,
+          "y": 187.96
+        }
+      ],
+      "uuid": "8dc8fb64-98dd-5de0-b462-1255581ca6db"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 220.98,
+          "y": 187.96
+        },
+        {
+          "x": 220.98,
+          "y": 198.12
+        }
+      ],
+      "uuid": "6fc14774-f381-580b-8416-de4d8bd9afd5"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 195.58,
+          "y": 198.12
+        },
+        {
+          "x": 220.98,
+          "y": 198.12
+        }
+      ],
+      "uuid": "8227536c-bb47-56fb-84dc-95683dd798dd"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 195.58,
+          "y": 187.96
+        },
+        {
+          "x": 195.58,
+          "y": 198.12
+        }
+      ],
+      "uuid": "74dbe9aa-ba9f-53b4-822b-ded7a3462607"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 195.58,
+        "y": 187.96
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "279d2a79-dcb3-58ab-b863-5dacd159d55f"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 195.58,
+        "y": 198.12
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "52420c5c-5abe-5e25-815a-bcf0a53a18c2"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 220.98,
+        "y": 187.96
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "ab6ba7f4-cfc2-5cda-8e1e-d3b068203797"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 220.98,
+        "y": 198.12
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "858f6f96-705c-5325-a1b8-64beed88f9ca"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 190.5,
+        "y": 187.96
+      },
+      "kind": "label",
+      "text": "CFG1",
+      "uuid": "fc07fba3-a569-5d09-b1c7-659e346fd465"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 227.33,
+          "y": 162.56
+        },
+        {
+          "x": 223.52,
+          "y": 162.56
+        }
+      ],
+      "uuid": "9e112309-5d70-5001-a2f9-a1093b1b06d9"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 223.52,
+        "y": 162.56
+      },
+      "kind": "label",
+      "text": "CAM_I2C_SDA",
+      "uuid": "f3f22149-a35d-524b-8aa4-db987a4b39e1"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 86.36,
+          "y": 165.1
+        },
+        {
+          "x": 86.36,
+          "y": 160.02
+        }
+      ],
+      "uuid": "9ed596b0-a0fa-5efb-865b-86303b4d968b"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 86.36,
+        "y": 160.02
+      },
+      "kind": "label",
+      "text": "CFG0",
+      "uuid": "612a2090-ac9c-5cd9-a601-47612af22c32"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 227.33,
+          "y": 165.1
+        },
+        {
+          "x": 208.28,
+          "y": 165.1
+        }
+      ],
+      "uuid": "84c9535b-2aa6-57da-ba59-adc2eb35158c"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 208.28,
+        "y": 165.1
+      },
+      "kind": "label",
+      "text": "CFG0",
+      "uuid": "45cf0e3f-26eb-56a9-84ed-918a04a69fc2"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 227.33,
+          "y": 167.64
+        },
+        {
+          "x": 223.52,
+          "y": 167.64
+        }
+      ],
+      "uuid": "46e4b69f-4b96-5bc9-b9fb-bf85f84131cc"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 223.52,
+        "y": 167.64
+      },
+      "kind": "label",
+      "text": "CAM_I2C_SCL",
+      "uuid": "0b955ad9-ce66-5f49-92a1-197634b1d97c"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 227.33,
+          "y": 170.18
+        },
+        {
+          "x": 208.28,
+          "y": 170.18
+        }
+      ],
+      "uuid": "1af80b0e-14d1-5d27-bfb0-bad8ffccdd94"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 208.28,
+        "y": 170.18
+      },
+      "kind": "label",
+      "text": "CAM_GPIO1",
+      "uuid": "44838d49-b5f8-551f-8063-df37a821fe37"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 147.32,
+          "y": 177.8
+        },
+        {
+          "x": 147.32,
+          "y": 172.72
+        }
+      ],
+      "uuid": "9a666306-a7f8-5230-b719-ebf8d5238ba4"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 147.32,
+        "y": 172.72
+      },
+      "kind": "label",
+      "text": "GMSL_XRES",
+      "uuid": "668401e7-bcfc-556c-9bbd-5a8df13ab2b4"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 227.33,
+          "y": 177.8
+        },
+        {
+          "x": 223.52,
+          "y": 177.8
+        }
+      ],
+      "uuid": "b93ab66c-d0c9-5e32-a9b6-1edb96c62884"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 223.52,
+        "y": 177.8
+      },
+      "kind": "label",
+      "text": "GMSL_XRES",
+      "uuid": "25d036bf-3f14-5bed-a0ac-319190c583eb"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 137.16,
+          "y": 180.34
+        },
+        {
+          "x": 137.16,
+          "y": 165.1
+        }
+      ],
+      "uuid": "b8fcf054-ca5d-54f2-b20c-68744dc07459"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 137.16,
+        "y": 165.1
+      },
+      "kind": "label",
+      "text": "GMSL_SIO",
+      "uuid": "f716ffb9-c402-5688-abc1-12036516b03d"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 227.33,
+          "y": 180.34
+        },
+        {
+          "x": 223.52,
+          "y": 180.34
+        }
+      ],
+      "uuid": "a9b0a3a2-4600-5e74-b9cf-f4badb706694"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 223.52,
+        "y": 180.34
+      },
+      "kind": "label",
+      "text": "GMSL_SIO",
+      "uuid": "cfed6fc7-5270-5846-a2f8-f45cf3478bf6"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 227.33,
+          "y": 195.57999999999998
+        },
+        {
+          "x": 223.52,
+          "y": 195.57999999999998
+        }
+      ],
+      "uuid": "718e4818-fc0f-5046-92cd-c49d15b25cff"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 223.52,
+        "y": 195.57999999999998
+      },
+      "kind": "label",
+      "text": "CAM_GPIO0",
+      "uuid": "7531b924-9ce2-5692-b2c8-fabe2aa94222"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 88.9,
+          "y": 109.22000000000001
+        },
+        {
+          "x": 83.82,
+          "y": 109.22000000000001
+        }
+      ],
+      "uuid": "a249313f-e729-5f4a-9738-8830acc95c94"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 83.82,
+        "y": 109.22000000000001
+      },
+      "kind": "label",
+      "text": "CM5_5V_IN",
+      "uuid": "2f62d04d-00a1-5f34-a6d0-a71cd4c6dc63"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 88.9,
+          "y": 104.14
+        },
+        {
+          "x": 83.82,
+          "y": 104.14
+        }
+      ],
+      "uuid": "8fcaa258-2688-5f40-8aba-d57c1b688d86"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 83.82,
+        "y": 104.14
+      },
+      "kind": "label",
+      "text": "CM5_5V_IN",
+      "uuid": "06a486f3-0edc-574e-ab59-a925cfb7b692"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 142.24,
+          "y": 102.87
+        },
+        {
+          "x": 147.32,
+          "y": 102.87
+        }
+      ],
+      "uuid": "19f256d6-8d79-50ad-9b9f-941e13ca9f0b"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 147.32,
+          "y": 97.79
+        },
+        {
+          "x": 147.32,
+          "y": 102.87
+        }
+      ],
+      "uuid": "bb654f80-048d-5a2e-a70c-5beef182a43d"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 142.24,
+          "y": 115.57
+        },
+        {
+          "x": 147.32,
+          "y": 115.57
+        }
+      ],
+      "uuid": "48c4226e-e557-5826-b1b9-1bdb892de148"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 147.32,
+          "y": 102.87
+        },
+        {
+          "x": 147.32,
+          "y": 115.57
+        }
+      ],
+      "uuid": "b07b749f-dd30-5a92-8a7d-b777e421394e"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 132.08,
+          "y": 109.22
+        },
+        {
+          "x": 137.16,
+          "y": 109.22
+        }
+      ],
+      "uuid": "00294f88-4e89-500e-ba09-119221c74cc9"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 137.16,
+          "y": 109.22
+        },
+        {
+          "x": 142.24,
+          "y": 109.22
+        }
+      ],
+      "uuid": "40075f79-1b8a-5980-aa8e-d8c2bffd01d5"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 142.24,
+          "y": 102.87
+        },
+        {
+          "x": 142.24,
+          "y": 109.22
+        }
+      ],
+      "uuid": "d0d23e07-4cef-56d3-8c51-82484b31f420"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 104.14,
+          "y": 109.22
+        },
+        {
+          "x": 109.22,
+          "y": 109.22
+        }
+      ],
+      "uuid": "0910ead6-05d2-5197-a6b2-2ed7949d0a17"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 104.14,
+          "y": 97.79
+        },
+        {
+          "x": 104.14,
+          "y": 109.22
+        }
+      ],
+      "uuid": "a419c54d-1c00-5309-b256-1ae864a6df42"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 104.14,
+          "y": 97.79
+        },
+        {
+          "x": 147.32,
+          "y": 97.79
+        }
+      ],
+      "uuid": "1127e9a4-d4b1-53a2-9220-48781659abb2"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 104.14,
+        "y": 97.79
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "f0c598a7-793b-5060-a9ae-bf4b9e0066b2"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 104.14,
+        "y": 109.22
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "8d46e036-e72f-5818-968f-237707e3a86b"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 137.16,
+        "y": 109.22
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "16d6e50c-0cf4-5b7f-91ed-37d0f781aafb"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 142.24,
+        "y": 102.87
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "ede1a4ce-dd86-5781-b610-255ea8416914"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 142.24,
+        "y": 109.22
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "02446726-0266-5426-aec5-b69500367a2e"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 147.32,
+        "y": 97.79
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "2bc3521c-a1c7-5831-bedd-4650bd538955"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 147.32,
+        "y": 102.87
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "9228ecda-6a4b-5bee-ae77-8a43f6346b01"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 147.32,
+        "y": 115.57
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "9cb479d8-948a-5551-b8ae-681b5207d64d"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 147.32,
+        "y": 97.79
+      },
+      "kind": "label",
+      "text": "AP63200_FB",
+      "uuid": "fc3fc3a2-eb64-5830-9ff3-bc5358d4b074"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 109.22,
+          "y": 104.14
+        },
+        {
+          "x": 114.3,
+          "y": 104.14
+        }
+      ],
+      "uuid": "c43d1b72-c767-52f4-b8bf-81c90a3095a9"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 114.3,
+        "y": 104.14
+      },
+      "kind": "label",
+      "text": "AP63200_SW",
+      "uuid": "87bd59f8-b016-54a9-a882-de052c61f77a"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 149.86,
+          "y": 102.87
+        },
+        {
+          "x": 154.94,
+          "y": 102.87
+        }
+      ],
+      "uuid": "6d3e3108-09eb-5851-85a8-d4973e7c28ce"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 154.94,
+        "y": 102.87
+      },
+      "kind": "label",
+      "text": "AP63200_SW",
+      "uuid": "f6409c64-b106-51a2-a9a8-c01129c9b137"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 175.26,
+          "y": 104.14
+        },
+        {
+          "x": 175.26,
+          "y": 99.06
+        }
+      ],
+      "uuid": "2e38640e-c5cb-5168-9cbb-34e530247520"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 175.26,
+        "y": 99.06
+      },
+      "kind": "label",
+      "text": "AP63200_SW",
+      "uuid": "8dd29fbf-d7a2-5ad8-bc70-bcd7d52c39f6"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 106.68,
+          "y": 110.49000000000001
+        },
+        {
+          "x": 106.68,
+          "y": 121.92
+        }
+      ],
+      "uuid": "a7724ee7-8c61-5b19-9997-ed0d047b361f"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 106.68,
+        "y": 121.92
+      },
+      "kind": "label",
+      "text": "CAM_12V_FUSED",
+      "uuid": "d53305cf-973a-5a75-b56b-f769e662ed19"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 33.02,
+          "y": 104.14
+        },
+        {
+          "x": 27.94,
+          "y": 104.14
+        }
+      ],
+      "uuid": "f3b117fc-c636-516c-8445-62f3e15d0b97"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 27.94,
+        "y": 104.14
+      },
+      "kind": "label",
+      "text": "CAM_COAX_CENTER",
+      "uuid": "f4706afe-96f0-5577-841f-3e513b58d674"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 312.42,
+          "y": 110.49000000000001
+        },
+        {
+          "x": 317.5,
+          "y": 110.49000000000001
+        }
+      ],
+      "uuid": "dc7f3602-9fad-590c-9628-fd8981a9895f"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 317.5,
+        "y": 110.49000000000001
+      },
+      "kind": "label",
+      "text": "CAM_COAX_CENTER",
+      "uuid": "1e487fec-db2d-538a-beeb-921bc7087deb"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 137.16,
+          "y": 187.96
+        },
+        {
+          "x": 137.16,
+          "y": 193.04
+        }
+      ],
+      "uuid": "356812e7-1456-5167-84c4-778221c63029"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 137.16,
+        "y": 193.04
+      },
+      "kind": "label",
+      "text": "CAM_COAX_CENTER",
+      "uuid": "5f80412e-0cb3-52b8-894e-809179ae8b08"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 312.42,
+          "y": 158.75
+        },
+        {
+          "x": 287.02,
+          "y": 158.75
+        }
+      ],
+      "uuid": "62d8de57-f42d-57f3-9dd0-ac99c857df9b"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 287.02,
+        "y": 158.75
+      },
+      "kind": "label",
+      "text": "CAM_COAX_CENTER",
+      "uuid": "113a61d6-3769-5e04-94f2-bcd201564a21"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 251.46,
+          "y": 233.68
+        },
+        {
+          "x": 256.54,
+          "y": 233.68
+        }
+      ],
+      "uuid": "8f537e23-27ad-5f0d-b739-cb08d6beeb0a"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 256.54,
+        "y": 233.68
+      },
+      "kind": "label",
+      "text": "GMSL_1V0",
+      "uuid": "0a32da59-ac1a-5405-9f30-982871a6d104"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 246.38,
+          "y": 146.05
+        },
+        {
+          "x": 246.38,
+          "y": 142.24
+        }
+      ],
+      "uuid": "4f787773-ead6-5e16-9586-42967d9b7a9b"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 246.38,
+        "y": 142.24
+      },
+      "kind": "label",
+      "text": "GMSL_1V0",
+      "uuid": "b38d1e9a-3db6-5c9f-b546-934daf0be730"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 251.46,
+          "y": 279.4
+        },
+        {
+          "x": 256.54,
+          "y": 279.4
+        }
+      ],
+      "uuid": "e9c22711-c4d2-5c8b-a41c-e81cd83c4cf0"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 256.54,
+        "y": 279.4
+      },
+      "kind": "label",
+      "text": "GMSL_1V2",
+      "uuid": "4ba82719-6f37-5bf4-8cca-411494bef31b"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 251.46,
+          "y": 146.05
+        },
+        {
+          "x": 251.46,
+          "y": 137.16
+        }
+      ],
+      "uuid": "9020078f-7fd7-5275-bc60-b8236853a2cf"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 251.46,
+        "y": 137.16
+      },
+      "kind": "label",
+      "text": "GMSL_1V2",
+      "uuid": "947e4003-715f-5dfc-85f1-d1b699c23255"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 132.08,
+          "y": 116.84
+        },
+        {
+          "x": 137.16,
+          "y": 116.84
+        }
+      ],
+      "uuid": "f021f677-7996-57f5-ba8c-760c17038681"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 137.16,
+        "y": 116.84
+      },
+      "kind": "label",
+      "text": "GMSL_1V8",
+      "uuid": "d58c771d-443b-5501-bd47-657718be7333"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 149.86,
+          "y": 110.49000000000001
+        },
+        {
+          "x": 149.86,
+          "y": 116.84
+        }
+      ],
+      "uuid": "57373684-cf84-5b80-9c6b-c4092d5dc2b2"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 149.86,
+        "y": 116.84
+      },
+      "kind": "label",
+      "text": "GMSL_1V8",
+      "uuid": "a4eaf83d-70c3-5a40-9771-f765b74ff818"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 142.24,
+          "y": 123.19
+        },
+        {
+          "x": 147.32,
+          "y": 123.19
+        }
+      ],
+      "uuid": "050bb1bd-d8dc-5b4f-aa33-3e183d8bad92"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 147.32,
+        "y": 123.19
+      },
+      "kind": "label",
+      "text": "GMSL_1V8",
+      "uuid": "f1bf7325-821a-5e35-9146-7d40b67074e4"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 236.22,
+          "y": 236.22
+        },
+        {
+          "x": 231.14,
+          "y": 236.22
+        }
+      ],
+      "uuid": "e2fbb3f5-c7b6-5db0-9f2e-192aa109be81"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 231.14,
+        "y": 236.22
+      },
+      "kind": "label",
+      "text": "GMSL_1V8",
+      "uuid": "b62fa529-bc4a-5c2e-a739-cc72e2e2c81d"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 236.22,
+          "y": 233.68
+        },
+        {
+          "x": 231.14,
+          "y": 233.68
+        }
+      ],
+      "uuid": "2a630e10-44e0-5e6a-bc34-00e845c333aa"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 231.14,
+        "y": 233.68
+      },
+      "kind": "label",
+      "text": "GMSL_1V8",
+      "uuid": "8d701426-5457-5236-ae42-30a08710300a"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 236.22,
+          "y": 281.94
+        },
+        {
+          "x": 231.14,
+          "y": 281.94
+        }
+      ],
+      "uuid": "337d3c53-ed29-562a-ae47-1a967fc91093"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 231.14,
+        "y": 281.94
+      },
+      "kind": "label",
+      "text": "GMSL_1V8",
+      "uuid": "ca906534-fa15-54db-bb18-3a8479c4c67e"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 236.22,
+          "y": 279.4
+        },
+        {
+          "x": 231.14,
+          "y": 279.4
+        }
+      ],
+      "uuid": "e56bbe26-c152-5d88-9c8e-45ce129636ed"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 231.14,
+        "y": 279.4
+      },
+      "kind": "label",
+      "text": "GMSL_1V8",
+      "uuid": "471a5e02-29f3-591e-aa77-7f771aefcf50"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 243.84,
+          "y": 146.05
+        },
+        {
+          "x": 243.84,
+          "y": 132.08
+        }
+      ],
+      "uuid": "2a520af9-0500-55d3-8466-0b10e0b62e65"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 243.84,
+        "y": 132.08
+      },
+      "kind": "label",
+      "text": "GMSL_1V8",
+      "uuid": "abe0b5c3-6b37-59b1-b1a1-3437fa141e98"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 177.8,
+          "y": 250.19
+        },
+        {
+          "x": 162.56,
+          "y": 250.19
+        }
+      ],
+      "uuid": "242191b7-7b16-5e44-8e45-e4fd59d87a62"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 162.56,
+        "y": 250.19
+      },
+      "kind": "label",
+      "text": "GMSL_CAPVDD",
+      "uuid": "9be61759-288d-5d9f-bef3-618621c26565"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 213.36,
+          "y": 250.19
+        },
+        {
+          "x": 198.12,
+          "y": 250.19
+        }
+      ],
+      "uuid": "4c00256e-ff8d-58a2-bb26-9190597d2e1a"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 198.12,
+        "y": 250.19
+      },
+      "kind": "label",
+      "text": "GMSL_CAPVDD",
+      "uuid": "446ff7b1-ccf8-5302-8bc7-4623ce680202"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 227.33,
+          "y": 185.42
+        },
+        {
+          "x": 223.52,
+          "y": 185.42
+        }
+      ],
+      "uuid": "a6f6a234-d2b4-53a7-8950-28b49ed3882e"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 223.52,
+        "y": 185.42
+      },
+      "kind": "label",
+      "text": "GMSL_CAPVDD",
+      "uuid": "b933bf80-7b64-54d5-9a21-435982268075"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 175.26,
+          "y": 182.88
+        },
+        {
+          "x": 180.34,
+          "y": 182.88
+        }
+      ],
+      "uuid": "a7deccba-43af-58ee-8502-455c737de45a"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 180.34,
+          "y": 182.88
+        },
+        {
+          "x": 185.42,
+          "y": 182.88
+        }
+      ],
+      "uuid": "918b5270-64f5-5a55-88b2-a6ddcc5d81e4"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 185.42,
+          "y": 182.88
+        },
+        {
+          "x": 227.33,
+          "y": 182.88
+        }
+      ],
+      "uuid": "4744d902-65f8-5369-b85f-384414058b44"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 180.34,
+          "y": 172.72
+        },
+        {
+          "x": 180.34,
+          "y": 182.88
+        }
+      ],
+      "uuid": "7debcd4e-bdcd-54f9-a5dc-e57e67dd301b"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 180.34,
+        "y": 182.88
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "a36afa5a-95c9-5355-93c7-ca462b53aba2"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 185.42,
+        "y": 182.88
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "cce4d794-2711-5824-b519-7145a8bd716a"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 180.34,
+        "y": 172.72
+      },
+      "kind": "label",
+      "text": "GMSL_SIOP_TERM",
+      "uuid": "2b727364-d4d7-54c2-a6f2-4b3ec4957951"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 85.09,
+          "y": 185.42
+        },
+        {
+          "x": 81.28,
+          "y": 185.42
+        }
+      ],
+      "uuid": "963afbbb-c945-59e3-b3ca-49911a43d69d"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 81.28,
+        "y": 185.42
+      },
+      "kind": "label",
+      "text": "GMSL_X1",
+      "uuid": "c34b6fa3-ac03-5ce5-9bbd-013ddfa1ea0b"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 124.46,
+          "y": 172.72
+        },
+        {
+          "x": 134.62,
+          "y": 172.72
+        }
+      ],
+      "uuid": "1b49a9d5-3f6e-56d5-a7c8-b7f711df3052"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 134.62,
+        "y": 172.72
+      },
+      "kind": "label",
+      "text": "GMSL_X1",
+      "uuid": "4f2988c2-43bd-5b88-99aa-b0356cd7ac53"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 227.33,
+          "y": 172.72
+        },
+        {
+          "x": 223.52,
+          "y": 172.72
+        }
+      ],
+      "uuid": "7ec5f609-d038-5be6-9087-bf4c8da62bb3"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 223.52,
+        "y": 172.72
+      },
+      "kind": "label",
+      "text": "GMSL_X1",
+      "uuid": "cfff6ad7-1406-59cc-a3ed-df04f693d022"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 92.71000000000001,
+          "y": 185.42
+        },
+        {
+          "x": 92.71000000000001,
+          "y": 195.58
+        }
+      ],
+      "uuid": "e83e7c0d-c0eb-5948-97ef-16e83ada432e"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 92.71000000000001,
+        "y": 195.58
+      },
+      "kind": "label",
+      "text": "GMSL_X2",
+      "uuid": "09c90a9f-de09-5b20-b1af-35bae8eb56d1"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 167.64,
+          "y": 175.26
+        },
+        {
+          "x": 167.64,
+          "y": 165.1
+        }
+      ],
+      "uuid": "71923456-f470-575d-a70b-91a5a78756bb"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 167.64,
+        "y": 165.1
+      },
+      "kind": "label",
+      "text": "GMSL_X2",
+      "uuid": "b1ff7ba6-b343-5c39-9e72-c2c874b45470"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 227.33,
+          "y": 175.26
+        },
+        {
+          "x": 208.28,
+          "y": 175.26
+        }
+      ],
+      "uuid": "a7f9c75c-b3c5-5f45-adc2-44defb4770e2"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 208.28,
+        "y": 175.26
+      },
+      "kind": "label",
+      "text": "GMSL_X2",
+      "uuid": "0399960e-cdad-58ff-9ba7-13da49dcd2d9"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 312.42,
+          "y": 153.67000000000002
+        },
+        {
+          "x": 317.5,
+          "y": 153.67000000000002
+        }
+      ],
+      "uuid": "04a27766-ab65-54b4-9643-10d46d77dc2e"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 317.5,
+        "y": 153.67000000000002
+      },
+      "kind": "label",
+      "text": "POC_STAGE1",
+      "uuid": "78e5e75e-04c9-5f01-9dd0-c3756e576fa6"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 312.42,
+          "y": 189.23
+        },
+        {
+          "x": 317.5,
+          "y": 189.23
+        }
+      ],
+      "uuid": "9309e866-33cb-5921-87db-8f5c1db2f143"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 317.5,
+        "y": 189.23
+      },
+      "kind": "label",
+      "text": "POC_STAGE1",
+      "uuid": "09bf36da-ba26-53ba-b9fa-a2bf76e36184"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 312.42,
+          "y": 196.85
+        },
+        {
+          "x": 317.5,
+          "y": 196.85
+        }
+      ],
+      "uuid": "f4efcb7f-bd6d-53fa-9c8d-f0d7916615a0"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 312.42,
+          "y": 232.41
+        },
+        {
+          "x": 317.5,
+          "y": 232.41
+        }
+      ],
+      "uuid": "cd432c86-760a-51c5-8d92-e90636210c39"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 312.42,
+          "y": 237.49
+        },
+        {
+          "x": 317.5,
+          "y": 237.49
+        }
+      ],
+      "uuid": "eb5347e3-19c6-50c4-971b-6ce1aa1340de"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 317.5,
+          "y": 243.84
+        },
+        {
+          "x": 332.74,
+          "y": 243.84
+        }
+      ],
+      "uuid": "d3b7bb1c-b9f1-5ac6-aef7-ce2929eb4e6c"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 332.74,
+          "y": 233.68
+        },
+        {
+          "x": 332.74,
+          "y": 237.49
+        }
+      ],
+      "uuid": "d0f254c5-808c-57b9-a238-066ce3f17768"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 332.74,
+          "y": 237.49
+        },
+        {
+          "x": 332.74,
+          "y": 243.84
+        }
+      ],
+      "uuid": "2a9b0767-f345-56a4-a411-407bb3019d38"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 317.5,
+          "y": 196.85
+        },
+        {
+          "x": 332.74,
+          "y": 196.85
+        }
+      ],
+      "uuid": "5dfa248c-7589-52ef-af27-a8eb1640a576"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 332.74,
+          "y": 196.85
+        },
+        {
+          "x": 332.74,
+          "y": 232.41
+        }
+      ],
+      "uuid": "91264534-5a61-5a43-bd10-8a20b5d7dd41"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 332.74,
+          "y": 232.41
+        },
+        {
+          "x": 332.74,
+          "y": 233.68
+        }
+      ],
+      "uuid": "8b058b55-6895-506c-81f2-8487b66d2a77"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 317.5,
+          "y": 232.41
+        },
+        {
+          "x": 332.74,
+          "y": 232.41
+        }
+      ],
+      "uuid": "4c6a1021-11e9-5471-9cba-7fad0da4b5e8"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 317.5,
+          "y": 237.49
+        },
+        {
+          "x": 332.74,
+          "y": 237.49
+        }
+      ],
+      "uuid": "0044514f-9c53-559b-baf4-def3aefd69f0"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 317.5,
+        "y": 196.85
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "10b38b09-fb03-5680-af1b-c40c082f6d4d"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 317.5,
+        "y": 232.41
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "7d98221f-94ed-5406-98cb-71c07444c8ce"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 317.5,
+        "y": 237.49
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "5eb5c395-03c5-5500-a230-a4df88dcf455"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 332.74,
+        "y": 196.85
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "0a442a7f-6e52-5aad-b83d-94472698eccb"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 332.74,
+        "y": 232.41
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "7dcb931c-b2f8-53a0-8674-c2a43f919318"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 332.74,
+        "y": 233.68
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "b3aef814-b2de-5f5d-b9a8-f261cea9fb9d"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 332.74,
+        "y": 237.49
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "d1398275-3e88-54fe-8e88-fd90a187dfbb"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 332.74,
+        "y": 243.84
+      },
+      "kind": "junction",
+      "text": null,
+      "uuid": "f8ad6280-49c4-57e4-93a7-43713784c893"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 332.74,
+        "y": 233.68
+      },
+      "kind": "label",
+      "text": "POC_STAGE2",
+      "uuid": "e3a723df-baac-506f-b3f6-a47ad32d7697"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 312.42,
+          "y": 240.03
+        },
+        {
+          "x": 317.5,
+          "y": 240.03
+        }
+      ],
+      "uuid": "060d8e9e-9f97-5609-b7b4-2ca3e26a2078"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 317.5,
+        "y": 240.03
+      },
+      "kind": "label",
+      "text": "POC_STAGE3",
+      "uuid": "f9393115-4f83-5e11-bffc-5b3c94211a26"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 312.42,
+          "y": 275.59
+        },
+        {
+          "x": 317.5,
+          "y": 275.59
+        }
+      ],
+      "uuid": "a0eaa528-8ac3-5108-add8-6eeceb921570"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 317.5,
+        "y": 275.59
+      },
+      "kind": "label",
+      "text": "POC_STAGE3",
+      "uuid": "0b3619ff-d7df-5702-a87c-c9e99e7cca4f"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 312.42,
+          "y": 59.69
+        },
+        {
+          "x": 317.5,
+          "y": 59.69
+        }
+      ],
+      "uuid": "124a2168-2057-55b0-8494-7be430159ee0"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 317.5,
+        "y": 59.69
+      },
+      "kind": "label",
+      "text": "POC_STAGE3",
+      "uuid": "5bafdef6-ab0b-5e30-a5ba-53d78ac8110c"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 312.42,
+          "y": 245.11
+        },
+        {
+          "x": 317.5,
+          "y": 245.11
+        }
+      ],
+      "uuid": "9af905a5-d5bd-5247-91f6-8765d58f440b"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 317.5,
+        "y": 245.11
+      },
+      "kind": "label",
+      "text": "POC_STAGE3",
+      "uuid": "7fe2af55-70c7-553d-829c-445fa561fa62"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 312.42,
+          "y": 102.87
+        },
+        {
+          "x": 317.5,
+          "y": 102.87
+        }
+      ],
+      "uuid": "ecc3ee0d-dc5f-5a37-97fa-b62e84b4bd3d"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 317.5,
+        "y": 102.87
+      },
+      "kind": "label",
+      "text": "POC_STAGE4",
+      "uuid": "bdb869be-6364-53f5-be57-9fc84eaaafbb"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 312.42,
+          "y": 283.21
+        },
+        {
+          "x": 317.5,
+          "y": 283.21
+        }
+      ],
+      "uuid": "24c99220-32d0-5c62-9f5a-b6f34ba7f71d"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 317.5,
+        "y": 283.21
+      },
+      "kind": "label",
+      "text": "POC_STAGE4",
+      "uuid": "f2b694ff-0fd7-5fcc-8a1f-96eeb3f55538"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 312.42,
+          "y": 67.31
+        },
+        {
+          "x": 317.5,
+          "y": 67.31
+        }
+      ],
+      "uuid": "e3a4b334-03ba-59ee-8c35-ceff87b8ade9"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 317.5,
+        "y": 67.31
+      },
+      "kind": "label",
+      "text": "POC_STAGE4",
+      "uuid": "29627c1a-44a0-5218-8a7d-4d67fd678949"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 312.42,
+          "y": 151.13
+        },
+        {
+          "x": 302.26,
+          "y": 151.13
+        }
+      ],
+      "uuid": "a707b9a2-d0e5-5f58-91a6-c7d2cb33704f"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 302.26,
+        "y": 151.13
+      },
+      "kind": "label",
+      "text": "POC_STAGE4",
+      "uuid": "b46d828f-77c5-52e6-b0ff-7de3ef8775a4"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 38.1,
+          "y": 109.22
+        },
+        {
+          "x": 38.1,
+          "y": 114.3
+        }
+      ],
+      "uuid": "ea66fe34-58d2-5c89-921a-ea0e3c9b1a52"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 38.1,
+        "y": 114.3
+      },
+      "kind": "label",
+      "text": "GND",
+      "uuid": "e4434844-fde5-5c5c-96dc-2e8ac953f8a3"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 99.06,
+          "y": 114.30000000000001
+        },
+        {
+          "x": 99.06,
+          "y": 119.38
+        }
+      ],
+      "uuid": "3576aa5c-8869-5e33-ad76-71cd8b3da652"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 99.06,
+        "y": 119.38
+      },
+      "kind": "label",
+      "text": "GND",
+      "uuid": "4c598a2f-18a1-57e1-a9a0-ac88cdadceee"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 243.84,
+          "y": 243.84
+        },
+        {
+          "x": 243.84,
+          "y": 248.92
+        }
+      ],
+      "uuid": "1505b770-fa2b-55ee-9ab4-c4d49b825449"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 243.84,
+        "y": 248.92
+      },
+      "kind": "label",
+      "text": "GND",
+      "uuid": "fe5ea9eb-5e66-5f30-bfbf-cf1a4e139343"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 243.84,
+          "y": 289.56
+        },
+        {
+          "x": 243.84,
+          "y": 294.64
+        }
+      ],
+      "uuid": "686e219a-521f-5034-a54d-b989e78428e5"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 243.84,
+        "y": 294.64
+      },
+      "kind": "label",
+      "text": "GND",
+      "uuid": "2cb58e18-1d8e-5b84-a32f-568d50b43b08"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 66.04,
+          "y": 116.84
+        },
+        {
+          "x": 66.04,
+          "y": 121.92
+        }
+      ],
+      "uuid": "df5c0203-6da6-50e5-b849-96708bb80938"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 66.04,
+        "y": 121.92
+      },
+      "kind": "label",
+      "text": "GND",
+      "uuid": "a28710f4-3b85-5dcc-93dc-7ade3e422992"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 86.36,
+          "y": 172.72
+        },
+        {
+          "x": 106.68,
+          "y": 172.72
+        }
+      ],
+      "uuid": "2ed68c09-9dfc-5f96-83c8-533c24fcb46f"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 106.68,
+        "y": 172.72
+      },
+      "kind": "label",
+      "text": "GND",
+      "uuid": "46a193ae-cbf6-5825-9874-5c2f4451f864"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 88.9,
+          "y": 190.5
+        },
+        {
+          "x": 78.74,
+          "y": 190.5
+        }
+      ],
+      "uuid": "002729ef-d60d-59eb-b5d3-161398cd1a0d"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 78.74,
+        "y": 190.5
+      },
+      "kind": "label",
+      "text": "GND",
+      "uuid": "e0d6afa5-40ab-52f6-9fad-6600638b76bf"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 88.9,
+          "y": 190.5
+        },
+        {
+          "x": 88.9,
+          "y": 200.66
+        }
+      ],
+      "uuid": "3303df33-3367-5198-a1fe-cde28136cba7"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 88.9,
+        "y": 200.66
+      },
+      "kind": "label",
+      "text": "GND",
+      "uuid": "1e3eb76f-46a1-5c11-933c-103d90c57309"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 124.46,
+          "y": 180.34
+        },
+        {
+          "x": 109.22,
+          "y": 180.34
+        }
+      ],
+      "uuid": "8aa59aac-31e1-5144-a665-ac9a94f07ea6"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 109.22,
+        "y": 180.34
+      },
+      "kind": "label",
+      "text": "GND",
+      "uuid": "50cf7a19-1630-5c74-988d-fe39c2855ac5"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 142.24,
+          "y": 110.49000000000001
+        },
+        {
+          "x": 137.16,
+          "y": 110.49000000000001
+        }
+      ],
+      "uuid": "9f7ad3e8-1d48-50e6-a704-dd1525c56e22"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 137.16,
+        "y": 110.49000000000001
+      },
+      "kind": "label",
+      "text": "GND",
+      "uuid": "0cdccb08-f58e-5a6d-a003-0dfa63fc89a6"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 147.32,
+          "y": 185.42000000000002
+        },
+        {
+          "x": 147.32,
+          "y": 190.5
+        }
+      ],
+      "uuid": "1f0b9fef-6999-5818-8bf5-110b71856326"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 147.32,
+        "y": 190.5
+      },
+      "kind": "label",
+      "text": "GND",
+      "uuid": "a96aa964-9be9-537c-942b-18468144a024"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 167.64,
+          "y": 182.88
+        },
+        {
+          "x": 167.64,
+          "y": 187.96
+        }
+      ],
+      "uuid": "c2d9c171-191a-5749-9738-fad4b11204e7"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 167.64,
+        "y": 187.96
+      },
+      "kind": "label",
+      "text": "GND",
+      "uuid": "a20911d5-19c9-5d88-89c9-622f508c56b8"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 175.26,
+          "y": 190.5
+        },
+        {
+          "x": 175.26,
+          "y": 195.58
+        }
+      ],
+      "uuid": "32c11644-9325-57e2-8741-5f39e649d8ff"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 175.26,
+        "y": 195.58
+      },
+      "kind": "label",
+      "text": "GND",
+      "uuid": "b7ea3827-b175-5473-aadd-f418cacaefed"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 177.8,
+          "y": 257.81
+        },
+        {
+          "x": 177.8,
+          "y": 264.16
+        }
+      ],
+      "uuid": "0adacbab-b91d-5bd6-8118-d43fa4dce6f4"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 177.8,
+        "y": 264.16
+      },
+      "kind": "label",
+      "text": "GND",
+      "uuid": "919004df-d755-526e-9a9b-812b02fe36cb"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 185.42,
+          "y": 190.5
+        },
+        {
+          "x": 185.42,
+          "y": 195.58
+        }
+      ],
+      "uuid": "bcea214c-6f07-5642-bb6e-593b35a27bf8"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 185.42,
+        "y": 195.58
+      },
+      "kind": "label",
+      "text": "GND",
+      "uuid": "979a759b-ac93-5563-b914-260938a6c1fc"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 213.36,
+          "y": 257.81
+        },
+        {
+          "x": 213.36,
+          "y": 264.16
+        }
+      ],
+      "uuid": "b24f811f-a004-5662-9c90-fd23d6d89368"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 213.36,
+        "y": 264.16
+      },
+      "kind": "label",
+      "text": "GND",
+      "uuid": "b6fb8452-a123-5ba2-a800-63ef8ce0b4a0"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 264.16,
+          "y": 110.49000000000001
+        },
+        {
+          "x": 264.16,
+          "y": 116.84
+        }
+      ],
+      "uuid": "705f0fe8-dee5-51aa-82a3-af97527fa6e4"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 264.16,
+        "y": 116.84
+      },
+      "kind": "label",
+      "text": "GND",
+      "uuid": "b8e76641-0624-56a4-b77a-cb76b2c4fee5"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 299.72,
+          "y": 110.49000000000001
+        },
+        {
+          "x": 299.72,
+          "y": 116.84
+        }
+      ],
+      "uuid": "6b6f049f-7d54-5112-a2db-b95aed777439"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 299.72,
+        "y": 116.84
+      },
+      "kind": "label",
+      "text": "GND",
+      "uuid": "0f5ceb71-c6b4-5abe-b393-390a79ee1104"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 243.84,
+          "y": 199.39
+        },
+        {
+          "x": 243.84,
+          "y": 203.2
+        }
+      ],
+      "uuid": "37a39a8e-218a-5124-b89b-fd6962e8940f"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 243.84,
+        "y": 203.2
+      },
+      "kind": "label",
+      "text": "GND",
+      "uuid": "77fe3826-29c3-5e03-8efd-0272724f77c2"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 60.96,
+          "y": 154.94
+        },
+        {
+          "x": 66.04,
+          "y": 154.94
+        }
+      ],
+      "uuid": "5763b55d-8ed0-5da3-b63e-47b813f7578f"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 66.04,
+        "y": 154.94
+      },
+      "kind": "label",
+      "text": "GPIO_VREF",
+      "uuid": "52f28dde-504a-5916-9c24-79c294924fe9"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 99.06,
+          "y": 162.56
+        },
+        {
+          "x": 99.06,
+          "y": 157.48
+        }
+      ],
+      "uuid": "de87bb67-1ada-5dba-b77a-22c6c916a644"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 99.06,
+        "y": 157.48
+      },
+      "kind": "label",
+      "text": "GPIO_VREF",
+      "uuid": "6bcd3946-5efa-532b-b227-9aee06568bd9"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 119.38,
+          "y": 160.02
+        },
+        {
+          "x": 124.46,
+          "y": 160.02
+        }
+      ],
+      "uuid": "43feae12-90e0-5548-b825-6fd2337842eb"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 124.46,
+        "y": 160.02
+      },
+      "kind": "label",
+      "text": "GPIO_VREF",
+      "uuid": "7e6b084c-bf84-5d76-8de6-74249fdad8e4"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 195.58,
+          "y": 180.34
+        },
+        {
+          "x": 195.58,
+          "y": 175.26
+        }
+      ],
+      "uuid": "720d22d5-5e5a-5a39-83db-1b7868061d79"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 195.58,
+        "y": 175.26
+      },
+      "kind": "label",
+      "text": "GPIO_VREF",
+      "uuid": "182885eb-ae97-5ccb-8b11-c7f35221463d"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 205.74,
+          "y": 187.96
+        },
+        {
+          "x": 200.66,
+          "y": 187.96
+        }
+      ],
+      "uuid": "f2779a06-95f6-564a-8d5d-3406397c12d6"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 200.66,
+        "y": 187.96
+      },
+      "kind": "label",
+      "text": "GPIO_VREF",
+      "uuid": "38e95f8f-082e-59b6-8add-e9c89a95af2a"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 299.72,
+          "y": 102.87
+        },
+        {
+          "x": 304.8,
+          "y": 102.87
+        }
+      ],
+      "uuid": "02c54261-a5b4-5d68-b6c5-aa8bb4b4b16c"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 304.8,
+        "y": 102.87
+      },
+      "kind": "label",
+      "text": "GPIO_VREF",
+      "uuid": "166ebce9-c38b-5008-b22d-0457b5c9aebd"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 248.92000000000002,
+          "y": 146.05
+        },
+        {
+          "x": 248.92000000000002,
+          "y": 127.0
+        }
+      ],
+      "uuid": "7ea4d9bc-fd81-5239-a8d9-d8bb61ebb586"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 248.92000000000002,
+        "y": 127.0
+      },
+      "kind": "label",
+      "text": "GPIO_VREF",
+      "uuid": "fc57931f-db15-58b7-9a2c-c1f215f57841"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 227.33,
+        "y": 154.94
+      },
+      "kind": "no_connect",
+      "text": null,
+      "uuid": "5911d507-2f56-5ea0-ae3b-4adf158c6a91"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 227.33,
+        "y": 157.48
+      },
+      "kind": "no_connect",
+      "text": null,
+      "uuid": "135b2505-2b46-58d3-b95a-5ffff56753a8"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 227.33,
+        "y": 160.02
+      },
+      "kind": "no_connect",
+      "text": null,
+      "uuid": "4fdc1271-4599-56fe-982b-91b5babae5ac"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 227.33,
+        "y": 190.5
+      },
+      "kind": "no_connect",
+      "text": null,
+      "uuid": "19984f2c-ab71-5328-9844-244da0fdeb0e"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 227.33,
+        "y": 193.04
+      },
+      "kind": "no_connect",
+      "text": null,
+      "uuid": "2a4849a9-942b-56dc-9374-7bef177e77cd"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 260.35,
+        "y": 182.88
+      },
+      "kind": "no_connect",
+      "text": null,
+      "uuid": "65fc0a79-2f4a-5395-b76e-13059b7c1b6b"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 260.35,
+          "y": 172.72
+        },
+        {
+          "x": 264.16,
+          "y": 172.72
+        }
+      ],
+      "uuid": "58dc3fd2-cd4e-5d2d-ad6b-539760266d08"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 264.16,
+        "y": 172.72
+      },
+      "kind": "hierarchical_label",
+      "text": "CAM_CSI_C_N",
+      "uuid": "f9081560-bb8c-51f8-ac67-f47ea675b1f5"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 260.35,
+          "y": 170.18
+        },
+        {
+          "x": 284.48,
+          "y": 170.18
+        }
+      ],
+      "uuid": "e6881c7f-0650-534e-97f4-461d945a64fd"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 284.48,
+        "y": 170.18
+      },
+      "kind": "hierarchical_label",
+      "text": "CAM_CSI_C_P",
+      "uuid": "021a88ef-02d6-5c1d-97dc-259a45924e81"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 260.35,
+          "y": 157.48
+        },
+        {
+          "x": 264.16,
+          "y": 157.48
+        }
+      ],
+      "uuid": "0e4a2fb7-d18e-5f59-b80e-d9f2a3e439dc"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 264.16,
+        "y": 157.48
+      },
+      "kind": "hierarchical_label",
+      "text": "CAM_CSI_D0_N",
+      "uuid": "696e7642-4889-5f12-b696-5d40c3105bba"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 260.35,
+          "y": 154.94
+        },
+        {
+          "x": 260.35,
+          "y": 149.86
+        }
+      ],
+      "uuid": "df0e773a-8c31-5cc5-a0db-b1c15825630e"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 260.35,
+        "y": 149.86
+      },
+      "kind": "hierarchical_label",
+      "text": "CAM_CSI_D0_P",
+      "uuid": "02d8172f-f683-5796-a8b5-24037da5ec39"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 260.35,
+          "y": 162.56
+        },
+        {
+          "x": 289.56,
+          "y": 162.56
+        }
+      ],
+      "uuid": "305c9c62-3d53-52ed-8d55-16322e72e536"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 289.56,
+        "y": 162.56
+      },
+      "kind": "hierarchical_label",
+      "text": "CAM_CSI_D1_N",
+      "uuid": "5c63b236-d94c-58c6-8ba9-10d0df18672a"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 260.35,
+          "y": 160.02
+        },
+        {
+          "x": 264.16,
+          "y": 160.02
+        }
+      ],
+      "uuid": "a86afa54-eb2e-52d5-810a-a1d496ab312d"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 264.16,
+        "y": 160.02
+      },
+      "kind": "hierarchical_label",
+      "text": "CAM_CSI_D1_P",
+      "uuid": "e9696d49-f091-5604-86ad-333d365874f2"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 260.35,
+          "y": 167.64
+        },
+        {
+          "x": 264.16,
+          "y": 167.64
+        }
+      ],
+      "uuid": "33b0f277-b4f5-5963-9b2c-067775d30339"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 264.16,
+        "y": 167.64
+      },
+      "kind": "hierarchical_label",
+      "text": "CAM_CSI_D2_N",
+      "uuid": "d7128bd1-6cbd-57f3-80e3-0d0bb703a0d7"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 260.35,
+          "y": 165.1
+        },
+        {
+          "x": 264.16,
+          "y": 165.1
+        }
+      ],
+      "uuid": "5a3889a0-26f1-5d26-98ae-e53e96880147"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 264.16,
+        "y": 165.1
+      },
+      "kind": "hierarchical_label",
+      "text": "CAM_CSI_D2_P",
+      "uuid": "674feb6d-fdf9-5297-9c8c-68e16bd11ed3"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 260.35,
+          "y": 177.8
+        },
+        {
+          "x": 264.16,
+          "y": 177.8
+        }
+      ],
+      "uuid": "46bdfaac-a0a3-543d-a1f2-8050219de44c"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 264.16,
+        "y": 177.8
+      },
+      "kind": "hierarchical_label",
+      "text": "CAM_CSI_D3_N",
+      "uuid": "420e3771-1c91-5e6f-8f5b-a4783a96402a"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 260.35,
+          "y": 175.26
+        },
+        {
+          "x": 264.16,
+          "y": 175.26
+        }
+      ],
+      "uuid": "597d28f0-8122-56c9-964a-dc30b1a5e4fc"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 264.16,
+        "y": 175.26
+      },
+      "kind": "hierarchical_label",
+      "text": "CAM_CSI_D3_P",
+      "uuid": "b1bda6d3-3b06-568f-852c-c3f96d82388c"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 205.74,
+          "y": 195.58
+        },
+        {
+          "x": 200.66,
+          "y": 195.58
+        }
+      ],
+      "uuid": "fd787ea4-ca62-5d60-9210-c001af94f9a7"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 200.66,
+        "y": 195.58
+      },
+      "kind": "hierarchical_label",
+      "text": "CAM_GPIO0",
+      "uuid": "6c8ea380-217f-5944-b7fb-61f46bc707df"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 99.06,
+          "y": 170.18
+        },
+        {
+          "x": 93.98,
+          "y": 170.18
+        }
+      ],
+      "uuid": "69d285dd-10b6-5216-8734-8d4785db86a4"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 93.98,
+        "y": 170.18
+      },
+      "kind": "hierarchical_label",
+      "text": "CAM_GPIO1",
+      "uuid": "4c773087-c7d6-5366-bcf0-dfcc7302bb47"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 119.38,
+          "y": 167.64000000000001
+        },
+        {
+          "x": 114.3,
+          "y": 167.64000000000001
+        }
+      ],
+      "uuid": "4d17fa4d-d15b-5aa6-bc2b-b3241ad2a901"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 114.3,
+        "y": 167.64000000000001
+      },
+      "kind": "hierarchical_label",
+      "text": "CAM_I2C_SCL",
+      "uuid": "58dc0827-54ec-5cf0-a830-9a8d2fbf12e5"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 60.96,
+          "y": 162.56
+        },
+        {
+          "x": 45.72,
+          "y": 162.56
+        }
+      ],
+      "uuid": "4579afd9-7a65-598b-93e8-7e0d270f9a3f"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 45.72,
+        "y": 162.56
+      },
+      "kind": "hierarchical_label",
+      "text": "CAM_I2C_SDA",
+      "uuid": "88d6e7f6-2db4-5e58-aa4d-2101273f08e3"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 66.04,
+          "y": 109.22
+        },
+        {
+          "x": 66.04,
+          "y": 99.06
+        }
+      ],
+      "uuid": "ae1067c3-c342-5ee3-aa9f-e6efac530f28"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 66.04,
+        "y": 99.06
+      },
+      "kind": "hierarchical_label",
+      "text": "CM5_5V_IN",
+      "uuid": "4dd08a98-b072-5456-8ccc-e34573e0a690"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 337.82,
+        "y": 166.37
+      },
+      "kind": "hierarchical_label",
+      "text": "GND",
+      "uuid": "cc026265-e241-50f1-8084-199c744fe9e5"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 264.16,
+          "y": 102.87
+        },
+        {
+          "x": 274.32,
+          "y": 102.87
+        }
+      ],
+      "uuid": "c8656deb-36d4-5456-aa4a-c47ebab79452"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 274.32,
+        "y": 102.87
+      },
+      "kind": "hierarchical_label",
+      "text": "GPIO_VREF",
+      "uuid": "51400671-849f-5962-b584-2dda5721f472"
+    },
+    {
+      "kind": "wire",
+      "pts": [
+        {
+          "x": 106.68,
+          "y": 102.87
+        },
+        {
+          "x": 111.76,
+          "y": 102.87
+        }
+      ],
+      "uuid": "5be3c3dd-21e7-54ac-a74a-17c1db9f8b92"
+    },
+    {
+      "at": {
+        "rot": 0.0,
+        "x": 111.76,
+        "y": 102.87
+      },
+      "kind": "hierarchical_label",
+      "text": "VBAT_PROT",
+      "uuid": "eda78406-25e7-5c02-9507-fa15e03bddb3"
+    }
+  ],
+  "sha256": "31ff7e4f1858e951b1b3bfeec67e31f65b6c7bfbde4bf17c5de5b9aaf10e597c",
+  "source": "/Users/mitch/projects/kicad-schema/snapshots/cm5-hudsp-gmsl2-camera-baseline/regenerated-functional-islands/gmsl2_camera.regenerated.kicad_sch"
+}

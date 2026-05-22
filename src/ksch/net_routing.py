@@ -398,6 +398,7 @@ def _point_with_clear_label(
     alternate_axis_candidates: list[PinPoint] = []
     opposite_axis_candidates: list[PinPoint] = []
     offsets = (0.0, 5.08, 10.16, 15.24, 20.32, 25.4, 30.48)
+    extended_offsets = (*offsets, 35.56, 40.64, 45.72, 53.34)
     if abs(delta_x) >= abs(delta_y):
         sign = 1 if delta_x >= 0 else -1
         same_axis_candidates.extend(
@@ -496,15 +497,35 @@ def _point_with_clear_label(
     alternate_axis = tuple(dict.fromkeys(alternate_axis_candidates))
     if abs(delta_x) >= abs(delta_y):
         secondary_axis = opposite_axis
+        sign = 1 if delta_x >= 0 else -1
+        extended_same_axis_candidates = [
+            PinPoint(
+                x=point.x,
+                y=point.y,
+                label_x=_snap_grid(point.label_x + sign * offset),
+                label_y=point.label_y,
+            )
+            for offset in extended_offsets
+        ]
         all_axis_candidates = [
-            *same_axis_candidates,
+            *extended_same_axis_candidates,
             *opposite_axis_candidates,
             *alternate_axis_candidates,
         ]
     else:
         secondary_axis = alternate_axis
+        sign = 1 if delta_y >= 0 else -1
+        extended_same_axis_candidates = [
+            PinPoint(
+                x=point.x,
+                y=point.y,
+                label_x=point.label_x,
+                label_y=_snap_grid(point.label_y + sign * offset),
+            )
+            for offset in extended_offsets
+        ]
         all_axis_candidates = [
-            *same_axis_candidates,
+            *extended_same_axis_candidates,
             *alternate_axis_candidates,
             *opposite_axis_candidates,
         ]
@@ -538,6 +559,8 @@ def _point_with_clear_label(
                 allowed_obstacles=frozenset({original_label_coordinate}),
             ):
                 return candidate
+    if not allow_text_overlap_fallback:
+        return PinPoint(x=point.x, y=point.y, label_x=point.x, label_y=point.y)
     return point
 
 
@@ -4177,13 +4200,14 @@ def _net_point_lines(
         connect_stubs: bool = False,
     ) -> list[PlacedItem]:
         if not hide_duplicate_labels or len(points) <= 1:
-            return lines
+            return hide_blocked_visible_labels(lines)
         existing_label_points = {
             _coordinate(item.at[0], item.at[1])
             for item in lines
             if isinstance(item, PlacedLabel)
         }
-        return [
+        return hide_blocked_visible_labels(
+            [
             *lines,
             *_small_anchor_supplemental_label_lines(
                 label_name,
@@ -4195,7 +4219,37 @@ def _net_point_lines(
                 connect_stubs=connect_stubs,
                 existing_label_points=existing_label_points,
             ),
-        ]
+            ]
+        )
+
+    def hide_blocked_visible_labels(lines: list[PlacedItem]) -> list[PlacedItem]:
+        if len(points) <= 1:
+            return lines
+        hidden_lines: list[PlacedItem] = []
+        for item in lines:
+            if not isinstance(item, PlacedLabel) or item.hidden:
+                hidden_lines.append(item)
+                continue
+            if _label_rect_clears_blockers(
+                item.name,
+                item.at[0],
+                item.at[1],
+                justify=item.justify,
+                blocked_rects=label_blocked_rects,
+            ):
+                hidden_lines.append(item)
+                continue
+            hidden_lines.append(
+                PlacedLabel(
+                    name=item.name,
+                    at=item.at,
+                    uuid=item.uuid,
+                    justify=item.justify,
+                    hidden=True,
+                    nets=item.nets,
+                )
+            )
+        return hidden_lines
 
     if (
         (allow_safe_local_rails or allow_medium_signal_rails or allow_contact_topology_nets)
@@ -4475,7 +4529,11 @@ def _net_point_lines(
 
     lines: list[PlacedItem] = []
     for index, (endpoint_text, point) in enumerate(points):
-        if len(points) > 1:
+        away_from_x = label_away_from_x(point)
+        label_is_clear = True
+        if len(points) == 1 and point.label_x < point.x:
+            pass
+        else:
             point = _point_with_clear_label(
                 label_name,
                 point,
@@ -4484,8 +4542,18 @@ def _net_point_lines(
                 stub_blocked_rects=blocked_rects,
                 obstacles=obstacles,
                 occupied_segments=occupied_segments,
-                away_from_x=label_away_from_x(point),
+                away_from_x=away_from_x,
                 allow_text_overlap_fallback=False,
+            )
+            label_is_clear = _label_clears_blockers(
+                label_name,
+                point,
+                page_width=page_width,
+                blocked_rects=label_blocked_rects,
+                stub_blocked_rects=blocked_rects,
+                obstacles=obstacles,
+                occupied_segments=occupied_segments,
+                away_from_x=away_from_x,
             )
         point_key = f"{key}:{endpoint_text}:{index}"
         lines.extend(
@@ -4506,7 +4574,8 @@ def _net_point_lines(
                     hide_duplicate_labels
                     and index > 0
                     and _endpoint_ref(endpoint_text) in dense_controller_refs
-                ),
+                )
+                or not label_is_clear,
                 away_from_x=label_away_from_x(point),
             )
         )
@@ -4671,7 +4740,6 @@ def route_sheet_nets(
                 occupied_segments=occupied_net_segments,
                 blocked_rects=route_blockers,
                 label_blocked_rects=label_blockers,
-                require_clear_label=False,
             )
             if route_lines is None:
                 continue
@@ -4743,7 +4811,6 @@ def route_sheet_nets(
                 terminal_coordinates=_terminal_coordinates(list(continuation_route.endpoints)),
                 blocked_rects=route_blockers,
                 label_blocked_rects=label_blockers,
-                require_clear_label=False,
             )
             if route_lines is None:
                 continue

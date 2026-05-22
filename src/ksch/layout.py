@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from math import hypot
+from typing import Literal
 
 
 @dataclass(frozen=True, order=True)
@@ -104,6 +105,47 @@ class ContactLink:
     target: str
     preferred_gap: float = 7.62
     strength: float = 0.2
+    axis: Literal["auto", "x", "y"] = "auto"
+    direction: Literal[-1, 1] | None = None
+
+
+def layout_energy(
+    nodes: dict[str, LayoutNode],
+    links: list[ContactLink],
+    *,
+    minimum_gap: float = 2.54,
+) -> float:
+    """Score a candidate layout; lower is better.
+
+    This is intentionally independent from KiCad concepts. Callers translate a
+    sheet into nodes and links, then use the same score before and after a solver
+    pass to decide whether the candidate is actually an improvement.
+    """
+
+    energy = 0.0
+    for link in links:
+        source = nodes.get(link.source)
+        target = nodes.get(link.target)
+        if source is None or target is None:
+            continue
+        if link.axis == "auto":
+            gap = source.rect().gap_to(target.rect())
+            delta = gap - link.preferred_gap
+        else:
+            delta = _directed_link_delta(source, target, link)
+        energy += max(link.strength, 0.01) * delta * delta
+
+    node_ids = sorted(nodes)
+    for first_index, first_id in enumerate(node_ids):
+        first = nodes[first_id]
+        for second_id in node_ids[first_index + 1 :]:
+            second = nodes[second_id]
+            gap = first.rect().gap_to(second.rect())
+            if gap >= minimum_gap:
+                continue
+            penalty = minimum_gap - gap
+            energy += 100.0 * penalty * penalty
+    return energy
 
 
 def _snap(value: float, grid: float) -> float:
@@ -134,16 +176,37 @@ def _axis_direction(source: LayoutNode, target: LayoutNode, axis: str) -> float:
 def _link_displacement(source: LayoutNode, target: LayoutNode, link: ContactLink) -> Point:
     dx = source.center.x - target.center.x
     dy = source.center.y - target.center.y
-    if abs(dx) >= abs(dy):
-        direction = _axis_direction(source, target, "x")
+    if link.axis == "x" or (link.axis == "auto" and abs(dx) >= abs(dy)):
+        direction = link.direction if link.direction is not None else _axis_direction(
+            source,
+            target,
+            "x",
+        )
         desired = target.width / 2 + source.width / 2 + link.preferred_gap
         desired_x = target.center.x + direction * desired
         return Point(x=(desired_x - source.center.x) * link.strength, y=0.0)
 
-    direction = _axis_direction(source, target, "y")
+    direction = link.direction if link.direction is not None else _axis_direction(
+        source,
+        target,
+        "y",
+    )
     desired = target.height / 2 + source.height / 2 + link.preferred_gap
     desired_y = target.center.y + direction * desired
     return Point(x=0.0, y=(desired_y - source.center.y) * link.strength)
+
+
+def _directed_link_delta(source: LayoutNode, target: LayoutNode, link: ContactLink) -> float:
+    direction = link.direction if link.direction is not None else _axis_direction(
+        source,
+        target,
+        link.axis,
+    )
+    if link.axis == "x":
+        desired = target.width / 2 + source.width / 2 + link.preferred_gap
+        return source.center.x - (target.center.x + direction * desired)
+    desired = target.height / 2 + source.height / 2 + link.preferred_gap
+    return source.center.y - (target.center.y + direction * desired)
 
 
 def _overlap_push(first: LayoutNode, second: LayoutNode, minimum_gap: float) -> Point | None:

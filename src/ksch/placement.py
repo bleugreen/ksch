@@ -48,6 +48,7 @@ from ksch.layout import (
     ContactLink,
     LayoutNode,
     Point,
+    layout_energy,
     solve_contact_layout,
 )
 from ksch.layout import (
@@ -294,6 +295,231 @@ def _local_circuit_anchor_stage(ref: str) -> int | None:
     if prefix in {"L", "FB"}:
         return 4
     return None
+
+
+def _is_controller_anchor_ref(ref: str) -> bool:
+    return ref.startswith("Module") or _symbol_prefix(ref) in {"U", "IC"}
+
+
+def _is_fixed_layout_ref(ref: str) -> bool:
+    prefix = _symbol_prefix(ref)
+    return ref.startswith("Module") or prefix in {"J", "P", "CN", "U", "IC", "Q"}
+
+
+def _power_island_anchor_refs(project: ResolvedProject, sheet_path: str) -> set[str]:
+    resolved_sheet = project.sheets.get(sheet_path)
+    if resolved_sheet is None:
+        return set()
+
+    sheet = project.source.sheets[sheet_path]
+    anchors: set[str] = set()
+    for net_name, endpoints in resolved_sheet.nets.items():
+        suffix = _local_signal_suffix(net_name)
+        if suffix not in {"BOOT", "SW", "FB", "COMP", "COMP_RC"}:
+            continue
+        for endpoint in endpoints:
+            if (
+                endpoint.kind is EndpointKind.SYMBOL_PIN
+                and endpoint.ref in sheet.symbols
+                and endpoint.ref is not None
+                and _is_controller_anchor_ref(endpoint.ref)
+            ):
+                anchors.add(endpoint.ref)
+    return anchors
+
+
+def _power_island_path_refs(project: ResolvedProject, sheet_path: str) -> set[str]:
+    resolved_sheet = project.sheets.get(sheet_path)
+    if resolved_sheet is None:
+        return set()
+
+    sheet = project.source.sheets[sheet_path]
+    power_anchors = _power_island_anchor_refs(project, sheet_path)
+    if not power_anchors:
+        return set()
+
+    path_refs = set(power_anchors)
+    for net_name, endpoints in resolved_sheet.nets.items():
+        net_refs = {
+            endpoint.ref
+            for endpoint in endpoints
+            if endpoint.kind is EndpointKind.SYMBOL_PIN
+            and endpoint.ref is not None
+            and endpoint.ref in sheet.symbols
+        }
+        if not (net_refs & power_anchors):
+            continue
+        if _is_groundish_net(net_name):
+            continue
+        path_refs.update(
+            ref
+            for ref in net_refs
+            if _symbol_prefix(ref) in {"L", "FB", "F"} or ref in power_anchors
+        )
+    return path_refs
+
+
+def _interface_path_refs(project: ResolvedProject, sheet_path: str) -> set[str]:
+    graph, connector_boundary_refs, controller_boundary_refs = _interface_path_graph_info(
+        project,
+        sheet_path,
+    )
+    path_refs: set[str] = set()
+    seen: set[str] = set()
+    for start in sorted(graph):
+        if start in seen:
+            continue
+        component: set[str] = set()
+        frontier = [start]
+        while frontier:
+            ref = frontier.pop()
+            if ref in component:
+                continue
+            component.add(ref)
+            frontier.extend(sorted(graph[ref] - component))
+        seen.update(component)
+
+        has_connector = bool(component & connector_boundary_refs)
+        has_controller = bool(component & controller_boundary_refs)
+        if not (has_connector and has_controller):
+            continue
+        path_refs.update(component)
+    return path_refs
+
+
+def _interface_path_flow_distances(
+    project: ResolvedProject,
+    sheet_path: str,
+) -> dict[str, int]:
+    graph, connector_boundary_refs, _controller_boundary_refs = _interface_path_graph_info(
+        project,
+        sheet_path,
+    )
+    path_refs = _interface_path_refs(project, sheet_path)
+    starts = sorted(path_refs & connector_boundary_refs, key=_symbol_ref_key)
+    if not starts:
+        return {}
+
+    distances: dict[str, int] = {}
+    frontier = [(ref, 0) for ref in starts]
+    while frontier:
+        ref, distance = frontier.pop(0)
+        if ref in distances and distances[ref] <= distance:
+            continue
+        distances[ref] = distance
+        for neighbor in sorted(graph.get(ref, set()) & path_refs, key=_symbol_ref_key):
+            frontier.append((neighbor, distance + 1))
+    return distances
+
+
+def _interface_path_graph_info(
+    project: ResolvedProject,
+    sheet_path: str,
+) -> tuple[dict[str, set[str]], set[str], set[str]]:
+    resolved_sheet = project.sheets.get(sheet_path)
+    if resolved_sheet is None:
+        return ({}, set(), set())
+
+    sheet = project.source.sheets[sheet_path]
+    movable_refs = {ref for ref in sheet.symbols if not _is_fixed_layout_ref(ref)}
+    graph: dict[str, set[str]] = {ref: set() for ref in movable_refs}
+    connector_boundary_refs: set[str] = set()
+    controller_boundary_refs: set[str] = set()
+    for net_name, endpoints in resolved_sheet.nets.items():
+        if _is_groundish_net(net_name):
+            continue
+        net_refs = sorted(
+            {
+                endpoint.ref
+                for endpoint in endpoints
+                if endpoint.kind is EndpointKind.SYMBOL_PIN
+                and endpoint.ref is not None
+                and endpoint.ref in sheet.symbols
+            }
+        )
+        net_movable_refs = [ref for ref in net_refs if ref in movable_refs]
+        prefixes = {_symbol_prefix(ref) for ref in net_refs}
+        has_connector = bool(prefixes & {"J", "P", "CN"})
+        has_controller = any(_is_controller_anchor_ref(ref) for ref in net_refs)
+        if has_connector:
+            connector_boundary_refs.update(net_movable_refs)
+        if net_name in sheet.interface and not has_controller:
+            connector_boundary_refs.update(net_movable_refs)
+        if has_controller:
+            controller_boundary_refs.update(net_movable_refs)
+        if _is_powerish_net(net_name):
+            continue
+        for first_index, first in enumerate(net_movable_refs):
+            for second in net_movable_refs[first_index + 1 :]:
+                graph[first].add(second)
+                graph[second].add(first)
+    return (graph, connector_boundary_refs, controller_boundary_refs)
+
+
+def _interface_path_compaction_refs(project: ResolvedProject, sheet_path: str) -> set[str]:
+    resolved_sheet = project.sheets.get(sheet_path)
+    if resolved_sheet is None:
+        return set()
+
+    sheet = project.source.sheets[sheet_path]
+    path_refs = _interface_path_refs(project, sheet_path)
+    if not path_refs:
+        return set()
+
+    compact_refs = set(path_refs)
+    for net_name, endpoints in resolved_sheet.nets.items():
+        if _is_groundish_net(net_name) or _is_powerish_net(net_name):
+            continue
+        net_refs = {
+            endpoint.ref
+            for endpoint in endpoints
+            if endpoint.kind is EndpointKind.SYMBOL_PIN
+            and endpoint.ref is not None
+            and endpoint.ref in sheet.symbols
+        }
+        if net_refs & path_refs:
+            compact_refs.update(net_refs)
+    return compact_refs
+
+
+def _functional_anchor_lane_overrides(
+    project: ResolvedProject,
+    sheet_path: str,
+) -> dict[str, tuple[float, int]]:
+    min_x, max_x, _min_y, _max_y = _symbol_layout_bounds(project, sheet_path)
+    usable_width = max_x - min_x
+    power_anchor_x = _snap_grid(min_x + usable_width * 0.18)
+    power_path_x = _snap_grid(power_anchor_x + 50.8)
+    interface_stage_x = {
+        1: _snap_grid(min_x + usable_width * 0.18),
+        2: _snap_grid(min_x + usable_width * 0.32),
+        3: _snap_grid(min_x + usable_width * 0.42),
+    }
+    power_anchors = _power_island_anchor_refs(project, sheet_path)
+    power_path_refs = _power_island_path_refs(project, sheet_path) - power_anchors
+    overrides: dict[str, tuple[float, int]] = {}
+    for ref in _interface_path_refs(project, sheet_path):
+        if not _is_anchor_ref(ref):
+            continue
+        prefix = _symbol_prefix(ref)
+        stage = 1 if prefix == "F" else 2 if prefix in {"L", "FB"} else 3
+        overrides[ref] = (interface_stage_x[stage], stage)
+    overrides.update({ref: (power_anchor_x, 2) for ref in power_anchors})
+    overrides.update({ref: (power_path_x, 3) for ref in power_path_refs})
+    return overrides
+
+
+def _uses_functional_island_layout(project: ResolvedProject, sheet_path: str) -> bool:
+    sheet = project.source.sheets[sheet_path]
+    if len(sheet.symbols) <= 32:
+        return True
+    if len(sheet.symbols) > 72:
+        return False
+    anchor_refs = {ref for ref in sheet.symbols if _is_anchor_ref(ref)}
+    return (
+        bool(_power_island_anchor_refs(project, sheet_path))
+        or bool(_interface_path_refs(project, sheet_path))
+    ) and len(anchor_refs) <= 20
 
 
 def _ref_net_names(resolved_sheet: Any, sheet_symbols: set[str]) -> dict[str, set[str]]:
@@ -1088,7 +1314,7 @@ def _resolve_symbol_body_overlaps(
             sheet_path,
             key,
             position,
-            movable=not _is_anchor_ref(ref),
+            movable=not _is_fixed_layout_ref(ref),
         )
         nodes[node.id] = node
         local_centers[node.id] = local_center
@@ -1198,6 +1424,64 @@ def _anchor_layout_node_id(
     return _layout_node_id(anchor, units[0])
 
 
+def _position_routing_risk_score(
+    project: ResolvedProject,
+    sheet_path: str,
+    positions: dict[tuple[str, int], Point],
+) -> float:
+    resolved_sheet = project.sheets.get(sheet_path)
+    if resolved_sheet is None:
+        return 0.0
+
+    sheet = project.source.sheets[sheet_path]
+    route_segments: list[tuple[str, WireSegment]] = []
+    for net_name, endpoints in sorted(resolved_sheet.nets.items()):
+        points: list[PinPoint] = []
+        for endpoint in endpoints:
+            if (
+                endpoint.kind is not EndpointKind.SYMBOL_PIN
+                or endpoint.ref is None
+                or endpoint.pin_number is None
+            ):
+                continue
+            symbol_decl = sheet.symbols.get(endpoint.ref)
+            if symbol_decl is None:
+                continue
+            symbol_info = project.symbol_library.get(symbol_decl.lib)
+            if symbol_info is None:
+                continue
+            pin = _pin_by_number(symbol_info, endpoint.pin_number)
+            if pin is None:
+                continue
+            position = positions.get((endpoint.ref, pin.unit)) or positions.get((endpoint.ref, 1))
+            if position is None:
+                continue
+            points.append(_symbol_pin_point(position.x, position.y, pin, symbol_info=symbol_info))
+        if len(points) < 2 or len(points) > 8:
+            continue
+        ordered_points = sorted(points, key=lambda point: (point.x, point.y))
+        hub = ordered_points[0]
+        for point in ordered_points[1:]:
+            mid = (_snap_grid(point.x), _snap_grid(hub.y))
+            route_segments.append((net_name, (hub.x, hub.y, mid[0], mid[1])))
+            route_segments.append((net_name, (mid[0], mid[1], point.x, point.y)))
+
+    score = 0.0
+    for _net_name, segment in route_segments:
+        score += (
+            abs(segment[0] - segment[2]) + abs(segment[1] - segment[3])
+        ) * 0.001
+    for first_index, (first_net, first_segment) in enumerate(route_segments):
+        if first_segment[0:2] == first_segment[2:4]:
+            continue
+        for second_net, second_segment in route_segments[first_index + 1 :]:
+            if first_net == second_net or second_segment[0:2] == second_segment[2:4]:
+                continue
+            if _segments_touch(first_segment, second_segment):
+                score += 1000.0
+    return score
+
+
 def _relax_symbol_positions(
     project: ResolvedProject,
     sheet_path: str,
@@ -1206,9 +1490,15 @@ def _relax_symbol_positions(
     assigned_to_anchor: dict[str, str],
     assigned_anchor_pin: dict[str, SymbolPin],
 ) -> dict[tuple[str, int], Point]:
-    if not positions or not assigned_to_anchor:
+    if not positions:
         return positions
-    if project.source.sheets[sheet_path].interface:
+    sheet = project.source.sheets[sheet_path]
+    interface_sheet = bool(sheet.interface)
+    path_seed_refs = _interface_path_refs(project, sheet_path)
+    interface_movable_refs = (
+        _interface_path_compaction_refs(project, sheet_path) if interface_sheet else set()
+    )
+    if interface_sheet and not interface_movable_refs:
         return positions
 
     min_x, max_x, min_y, max_y = _symbol_layout_bounds(project, sheet_path)
@@ -1218,12 +1508,15 @@ def _relax_symbol_positions(
     rail_bank_refs = {ref for _top_net, _bottom_net, refs in rail_bank_groups for ref in refs}
     for key, position in positions.items():
         ref, _unit = key
+        movable = not _is_fixed_layout_ref(ref) and (
+            not interface_sheet or ref in interface_movable_refs
+        )
         node, local_center = _symbol_layout_node(
             project,
             sheet_path,
             key,
             position,
-            movable=not _is_anchor_ref(ref),
+            movable=movable,
         )
         nodes[node.id] = node
         local_centers[node.id] = local_center
@@ -1241,6 +1534,8 @@ def _relax_symbol_positions(
 
     links: list[ContactLink] = []
     for ref, anchor in sorted(assigned_to_anchor.items()):
+        if interface_sheet and ref not in interface_movable_refs:
+            continue
         target_id = _anchor_layout_node_id(positions, anchor, assigned_anchor_pin.get(ref))
         if target_id is None:
             continue
@@ -1256,6 +1551,130 @@ def _relax_symbol_positions(
                         strength=0.05 if is_rail_bank_member else 0.16,
                     )
                 )
+
+    resolved_sheet = project.sheets.get(sheet_path)
+    local_net_graph: dict[str, set[str]] = {}
+    interface_flow_distances = (
+        _interface_path_flow_distances(project, sheet_path) if interface_sheet else {}
+    )
+    if resolved_sheet is not None:
+        for net_name, endpoints in sorted(resolved_sheet.nets.items()):
+            if not interface_sheet:
+                continue
+            if _is_groundish_net(net_name) or _is_powerish_net(net_name):
+                continue
+            net_refs = sorted(
+                {
+                    endpoint.ref
+                    for endpoint in endpoints
+                    if endpoint.kind is EndpointKind.SYMBOL_PIN
+                    and endpoint.ref is not None
+                    and (endpoint.ref, 1) in positions
+                },
+                key=lambda ref: (
+                    positions[(ref, 1)].x,
+                    positions[(ref, 1)].y,
+                    _symbol_ref_key(ref),
+                ),
+            )
+            if len(net_refs) < 2 or len(net_refs) > 6:
+                continue
+            if path_seed_refs and not (set(net_refs) & path_seed_refs):
+                continue
+            if not path_seed_refs and interface_sheet:
+                continue
+            for first_index, first in enumerate(net_refs):
+                local_net_graph.setdefault(first, set())
+                for second in net_refs[first_index + 1 :]:
+                    local_net_graph.setdefault(second, set())
+                    local_net_graph[first].add(second)
+                    local_net_graph[second].add(first)
+            link_pairs = (
+                [
+                    (first, second)
+                    for first_index, first in enumerate(net_refs)
+                    for second in net_refs[first_index + 1 :]
+                ]
+                if len(net_refs) <= 4
+                else list(zip(net_refs, net_refs[1:], strict=False))
+            )
+            for first, second in link_pairs:
+                first_id = _layout_node_id(first, 1)
+                second_id = _layout_node_id(second, 1)
+                if first_id not in nodes or second_id not in nodes:
+                    continue
+                first_distance = interface_flow_distances.get(first)
+                second_distance = interface_flow_distances.get(second)
+                if (
+                    first_distance is not None
+                    and second_distance is not None
+                    and first_distance != second_distance
+                ):
+                    target, source = (
+                        (first, second)
+                        if first_distance < second_distance
+                        else (second, first)
+                    )
+                    links.append(
+                        ContactLink(
+                            source=_layout_node_id(source, 1),
+                            target=_layout_node_id(target, 1),
+                            preferred_gap=10.16,
+                            strength=0.52,
+                            axis="x",
+                            direction=1,
+                        )
+                    )
+                    continue
+                has_fixed_ref = _is_fixed_layout_ref(first) or _is_fixed_layout_ref(second)
+                links.append(
+                    ContactLink(
+                        source=second_id,
+                        target=first_id,
+                        preferred_gap=12.7 if has_fixed_ref else 2.54,
+                        strength=0.08 if has_fixed_ref else 0.28,
+                    )
+                )
+
+    seen_component_refs: set[str] = set()
+    for start_ref in sorted(local_net_graph, key=_symbol_ref_key):
+        if start_ref in seen_component_refs:
+            continue
+        component_refs: set[str] = set()
+        frontier = [start_ref]
+        while frontier:
+            ref = frontier.pop()
+            if ref in component_refs:
+                continue
+            component_refs.add(ref)
+            frontier.extend(sorted(local_net_graph.get(ref, set()) - component_refs))
+        seen_component_refs.update(component_refs)
+        movable_refs = [
+            ref
+            for ref in sorted(component_refs, key=_symbol_ref_key)
+            if not _is_fixed_layout_ref(ref) and (ref, 1) in positions
+        ]
+        if len(movable_refs) < 3 or len(movable_refs) > 12:
+            continue
+        center_x = sum(positions[(ref, 1)].x for ref in movable_refs) / len(movable_refs)
+        center_y = sum(positions[(ref, 1)].y for ref in movable_refs) / len(movable_refs)
+        island_id = f"island:{sheet_path}:{len(nodes)}"
+        nodes[island_id] = LayoutNode(
+            id=island_id,
+            center=Point(x=_snap_grid(center_x), y=_snap_grid(center_y)),
+            width=0.01,
+            height=0.01,
+            movable=False,
+        )
+        for ref in movable_refs:
+            links.append(
+                ContactLink(
+                    source=_layout_node_id(ref, 1),
+                    target=island_id,
+                    preferred_gap=2.54,
+                    strength=0.18,
+                )
+            )
 
     for _top_net, _bottom_net, group_refs in rail_bank_groups:
         members = [ref for ref in group_refs if (ref, 1) in positions]
@@ -1295,6 +1714,13 @@ def _relax_symbol_positions(
         minimum_gap=5.08,
         max_step=7.62,
     )
+    if layout_energy(solved, links, minimum_gap=5.08) >= layout_energy(
+        nodes,
+        links,
+        minimum_gap=5.08,
+    ):
+        return positions
+
     relaxed: dict[tuple[str, int], Point] = {}
     for node_id, node in solved.items():
         if node_id not in local_centers:
@@ -1304,6 +1730,12 @@ def _relax_symbol_positions(
             x=_snap_grid(node.center.x - local_center_x),
             y=_snap_grid(node.center.y + local_center_y),
         )
+    if _position_routing_risk_score(project, sheet_path, relaxed) > _position_routing_risk_score(
+        project,
+        sheet_path,
+        positions,
+    ):
+        return positions
     return relaxed
 
 
@@ -1689,10 +2121,13 @@ def _layout_sheet_symbols(
         project,
         sheet_path,
     )
-    enable_peripheral_clustering = len(sheet.symbols) <= 32
+    functional_anchor_lanes = _functional_anchor_lane_overrides(project, sheet_path)
+    enable_peripheral_clustering = _uses_functional_island_layout(project, sheet_path)
     default_top = 96.52 if sheet.symbols else 50.8
 
     def lane_for(ref: str) -> tuple[float, int]:
+        if ref in functional_anchor_lanes:
+            return functional_anchor_lanes[ref]
         return _symbol_lane(ref, min_x, max_x)
 
     def resolve_body_overlaps_for_small_interface(
@@ -2441,8 +2876,14 @@ def _layout_sheet_symbols(
     )
 
     rail_bank_groups = _passive_rail_bank_ref_groups(project, sheet_path)
+    power_path_refs = _power_island_path_refs(project, sheet_path)
 
-    def positioned_net_points(net_name: str, exclude_refs: set[str]) -> list[PinPoint]:
+    def positioned_net_points(
+        net_name: str,
+        exclude_refs: set[str],
+        *,
+        only_refs: set[str] | None = None,
+    ) -> list[PinPoint]:
         if resolved_sheet is None:
             return []
         net_points: list[PinPoint] = []
@@ -2452,6 +2893,7 @@ def _layout_sheet_symbols(
                 or endpoint.ref is None
                 or endpoint.pin_number is None
                 or endpoint.ref in exclude_refs
+                or (only_refs is not None and endpoint.ref not in only_refs)
             ):
                 continue
             symbol_decl = sheet.symbols.get(endpoint.ref)
@@ -2497,9 +2939,15 @@ def _layout_sheet_symbols(
         excluded_refs = set(rail_refs)
         top_points = positioned_net_points(top_net, excluded_refs)
         bottom_points = positioned_net_points(bottom_net, excluded_refs)
+        preferred_top_points = positioned_net_points(
+            top_net,
+            excluded_refs,
+            only_refs=power_path_refs,
+        )
         source_points = [*top_points, *bottom_points]
-        source_x = max((point.x for point in top_points), default=max_x - 127.0)
-        source_y_points = top_points or source_points
+        source_x_points = preferred_top_points or top_points
+        source_x = max((point.x for point in source_x_points), default=max_x - 127.0)
+        source_y_points = preferred_top_points or top_points or source_points
         source_y = max((point.y for point in source_y_points), default=default_top)
         occupied_coordinates, occupied_segments = medium_pin_geometry_except(set(refs_to_place))
 
@@ -2509,11 +2957,12 @@ def _layout_sheet_symbols(
             allowed_start_max = max_x - row_width
             if allowed_start_min > allowed_start_max:
                 continue
-            preferred_start = _clamp(
-                max(source_x + 15.24, min_x),
-                allowed_start_min,
-                allowed_start_max,
+            raw_preferred_start = (
+                source_x - row_width / 2
+                if preferred_top_points
+                else max(source_x + 15.24, min_x)
             )
+            preferred_start = _clamp(raw_preferred_start, allowed_start_min, allowed_start_max)
             x_candidates = tuple(
                 dict.fromkeys(
                     _snap_grid(_clamp(candidate, allowed_start_min, allowed_start_max))

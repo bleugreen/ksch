@@ -3,6 +3,7 @@ from ksch.layout import (
     LayoutNode,
     Point,
     Rect,
+    layout_energy,
     layout_sheet_symbols,
     solve_contact_layout,
 )
@@ -108,3 +109,42 @@ def test_contact_solver_does_not_clamp_fixed_nodes_to_bounds() -> None:
 
     assert solved["J1"].center == Point(40.0, 260.0)
     assert solved["C1"].rect().bottom <= 180.0
+
+
+def test_contact_solver_honors_directed_x_flow_links() -> None:
+    nodes = {
+        "J1": LayoutNode(
+            id="J1",
+            center=Point(120.0, 80.0),
+            width=20.0,
+            height=20.0,
+            movable=False,
+        ),
+        "L1": LayoutNode(
+            id="L1",
+            center=Point(70.0, 80.0),
+            width=8.0,
+            height=8.0,
+        ),
+    }
+    links = [
+        ContactLink(
+            "L1",
+            "J1",
+            preferred_gap=8.0,
+            strength=0.5,
+            axis="x",
+            direction=1,
+        )
+    ]
+
+    solved = solve_contact_layout(
+        nodes,
+        links,
+        bounds=Rect(0.0, 0.0, 220.0, 160.0),
+        iterations=80,
+        grid=0.01,
+    )
+
+    assert solved["L1"].rect().left >= solved["J1"].rect().right
+    assert layout_energy(solved, links) < layout_energy(nodes, links)
