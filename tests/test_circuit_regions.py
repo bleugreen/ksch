@@ -3,12 +3,14 @@ from pathlib import Path
 from ksch.circuit_regions import build_sheet_circuit_regions
 from ksch.expand import load_project_ir
 from ksch.kicad.symbols import index_symbol_library
+from ksch.migrate import migrate_file_to_connects
 from ksch.resolver import LibraryContext, ResolvedProject, resolve_project
 
 
 def _resolved_project(tmp_path: Path, schema_text: str) -> ResolvedProject:
     schema = tmp_path / "project.ksch.yaml"
     schema.write_text(schema_text, encoding="utf-8")
+    migrate_file_to_connects(schema)
     project = load_project_ir(schema)
     symbols = index_symbol_library("Test", Path("tests/fixtures/kicad/symbols/Test.kicad_sym"))
     return resolve_project(project, LibraryContext(symbols=symbols.symbols, footprints={}))

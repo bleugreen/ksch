@@ -42,9 +42,8 @@ def test_compile_uses_schema_project_symbol_libraries(tmp_path: Path) -> None:
                 "symbols:",
                 "  J1:",
                 "    lib: Test:USB_C",
-                "nets:",
-                "  +5V:",
-                "    - J1.VBUS/all",
+                "    connects:",
+                "      VBUS/all: +5V",
                 "",
             ]
         ),
@@ -143,9 +142,8 @@ def test_gen_uses_config_symbol_library_relative_to_config_path(tmp_path: Path) 
                 "symbols:",
                 "  J1:",
                 "    lib: Test:USB_C",
-                "nets:",
-                "  +5V:",
-                "    - J1.VBUS/all",
+                "    connects:",
+                "      VBUS/all: +5V",
                 "",
             ]
         ),

@@ -18,3 +18,4 @@ def test_root_net_can_target_child_port() -> None:
     project = load_project_ir(FIXTURE)
     root = project.sheets["/"]
     assert root.nets["+5V"] == ["J1.VBUS/all", "usb.VBUS"]
+    assert root.no_connects == ["J1.D-/all"]

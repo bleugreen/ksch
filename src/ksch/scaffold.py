@@ -19,31 +19,30 @@ symbols:
   J1:
     lib: Starter:Conn4
     value: USB_IN
+    connects:
+      VBUS: VBUS
+      GND: GND
+      D+: nc
+      D-: nc
   U1:
     lib: Starter:LDO_3Pin
     value: 3V3_REG
+    connects:
+      VIN: VBUS
+      VOUT: +3V3
+      GND: GND
   C1:
     lib: Starter:C
     value: 10uF
+    connects:
+      '1': VBUS
+      '2': GND
   C2:
     lib: Starter:C
     value: 100nF
-nets:
-  VBUS:
-    - J1.VBUS
-    - U1.VIN
-    - C1.1
-  +3V3:
-    - U1.VOUT
-    - C2.1
-  GND:
-    - J1.GND
-    - U1.GND
-    - C1.2
-    - C2.2
-no_connects:
-  - J1.D+
-  - J1.D-
+    connects:
+      '1': +3V3
+      '2': GND
 """
 
 
