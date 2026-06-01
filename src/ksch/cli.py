@@ -1,3 +1,4 @@
+import json
 import shutil
 import tempfile
 from collections.abc import Callable
@@ -11,25 +12,28 @@ from rich.console import Console
 
 from ksch import __version__
 from ksch.authoring import (
-    index_symbol_libraries,
     load_symbol_library_paths,
     parse_symbol_library_spec,
+    parse_symbol_library_specs,
     symbol_info_lines,
 )
-from ksch.compiler import write_project
+from ksch.compiler import build_placed_project, write_project
 from ksch.config import ProjectConfig, load_project_config
 from ksch.edit import add_symbol, connect_endpoints
+from ksch.emit import write_project as write_placed_project
 from ksch.errors import KschError
 from ksch.expand import load_project_ir
 from ksch.explain import explain_project_target_lines, explain_symbol_lines
 from ksch.importer import ImportedProject, import_project
-from ksch.kicad.symbols import SymbolInfo, index_symbol_library
+from ksch.kicad.symbols import SymbolInfo, index_symbol_library_symbols
+from ksch.placed import PlacedProject
 from ksch.project_context import load_project_context
 from ksch.resolver import LibraryContext, ResolvedProject, resolve_project
 from ksch.scaffold import create_project_from_kicad, create_starter_project, discover_kicad_roots
 from ksch.schema.formatter import format_schema_text
 from ksch.schema.json_schema import schema_json_text
 from ksch.schema.loader import load_yaml_file
+from ksch.validation import placed_layout_report
 from ksch.verify import (
     compare_dirs,
     compare_netlist_signatures,
@@ -77,12 +81,22 @@ def _resolved_project_context(
     validate_declared_symbols: bool = False,
 ) -> tuple[ResolvedProject, dict[str, Path]]:
     project = load_project_ir(path)
-    indexes = index_symbol_libraries(symbol_library)
-    for nickname, library_path in project.symbol_libraries.items():
-        if nickname not in indexes:
-            indexes[nickname] = index_symbol_library(nickname, library_path)
+    supplied_library_paths = parse_symbol_library_specs(symbol_library)
+    required_symbol_names: dict[str, set[str]] = {}
+    for sheet in project.sheets.values():
+        for symbol in sheet.symbols.values():
+            nickname, separator, symbol_name = symbol.lib.partition(":")
+            if not separator:
+                continue
+            required_symbol_names.setdefault(nickname, set()).add(symbol_name)
+    symbol_libraries = dict(project.symbol_libraries)
+    symbol_libraries.update(supplied_library_paths)
+    indexes = {
+        nickname: index_symbol_library_symbols(nickname, symbol_libraries[nickname], names)
+        for nickname, names in sorted(required_symbol_names.items())
+        if nickname in symbol_libraries
+    }
     symbols = {}
-    symbol_libraries = {}
     for nickname, index in indexes.items():
         symbols.update(index.symbols)
         symbol_libraries[nickname] = index.path
@@ -99,13 +113,37 @@ def _load_and_validate_project(path: Path, symbol_library: list[str]) -> None:
     _resolved_project_context(path, symbol_library, validate_declared_symbols=True)
 
 
-def _compile_project(path: Path, out: Path, symbol_library: list[str]) -> None:
+def _layout_report_data(
+    placed_project: PlacedProject,
+    *,
+    layout_errors: list[str],
+) -> dict[str, object]:
+    return placed_layout_report(
+        placed_project,
+        layout_errors=tuple(layout_errors),
+    ).to_dict()
+
+
+def _write_layout_report(out: Path, report_data: dict[str, object]) -> Path:
+    report_path = out / "layout-report.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(report_data, indent=2) + "\n", encoding="utf-8")
+    return report_path
+
+
+def _compile_project(path: Path, out: Path, symbol_library: list[str]) -> dict[str, object]:
     resolved, symbol_libraries = _resolved_project_context(path, symbol_library)
-    write_project(
+    layout_errors: list[str] = []
+    placed_project = write_project(
         resolved,
         out,
         symbol_libraries=symbol_libraries,
         footprint_libraries=resolved.source.footprint_libraries,
+        layout_errors=layout_errors,
+    )
+    return _layout_report_data(
+        placed_project,
+        layout_errors=layout_errors,
     )
 
 
@@ -146,7 +184,11 @@ def _skill_text() -> str:
 
 def _print_import_result(imported: ImportedProject) -> None:
     console.print(f"wrote {imported.root_schema}")
-    child_sheets = sorted(path for path in imported.generated_files if path != imported.root_schema)
+    child_sheets = sorted(
+        path
+        for path in imported.generated_files
+        if path != imported.root_schema and path.suffix == ".yaml"
+    )
     if not child_sheets:
         return
     suffix = "" if len(child_sheets) == 1 else "s"
@@ -303,11 +345,54 @@ def compile_command(
 ) -> None:
     """Compile a schema project into KiCad project files."""
     try:
-        _compile_project(path, out, symbol_library or [])
+        report_data = _compile_project(path, out, symbol_library or [])
+        report_path = _write_layout_report(out, report_data)
     except (KschError, ValidationError, ValueError, OSError) as exc:
         _exit_error(_format_error(exc))
 
     console.print(f"wrote {out}")
+    console.print(f"wrote {report_path}")
+    console.print(json.dumps(report_data["counts"], indent=2))
+
+
+@app.command("layout-report")
+def layout_report_command(
+    path: Annotated[Path, typer.Argument(help="Root .ksch.yaml project file.")],
+    out: Annotated[Path, typer.Option("--out", help="Best-effort KiCad project output directory.")],
+    report: Annotated[
+        Path | None,
+        typer.Option("--report", help="JSON report path. Defaults to OUT/layout-report.json."),
+    ] = None,
+    symbol_library: Annotated[
+        list[str] | None,
+        typer.Option("--symbol-library", help="Symbol library as NICKNAME=PATH."),
+    ] = None,
+) -> None:
+    """Write a best-effort layout artifact and canonical geometry metrics without failing on illegality."""
+    try:
+        resolved, symbol_libraries = _resolved_project_context(path, symbol_library or [])
+        layout_errors: list[str] = []
+        placed_project = build_placed_project(
+            resolved,
+            strict_geometry=False,
+            layout_errors=layout_errors,
+        )
+        write_placed_project(
+            placed_project,
+            out,
+            symbol_libraries=symbol_libraries,
+            footprint_libraries=resolved.source.footprint_libraries,
+        )
+        report_data = _layout_report_data(placed_project, layout_errors=layout_errors)
+        report_path = report or out / "layout-report.json"
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(json.dumps(report_data, indent=2) + "\n", encoding="utf-8")
+    except (KschError, ValidationError, ValueError, OSError) as exc:
+        _exit_error(_format_error(exc))
+
+    console.print(f"wrote {out}")
+    console.print(f"wrote {report_path}")
+    console.print(json.dumps(report_data["counts"], indent=2))
 
 
 @app.command("gen")
@@ -460,13 +545,22 @@ def verify_command(
             schema_path,
             _configured_symbol_libraries(project_config, symbol_library),
         )
-        write_project(
+        layout_errors: list[str] = []
+        placed_project = write_project(
             resolved,
             generated_dir,
             symbol_libraries=symbol_libraries,
             footprint_libraries=resolved.source.footprint_libraries,
+            layout_errors=layout_errors,
         )
+        report_data = _layout_report_data(
+            placed_project,
+            layout_errors=layout_errors,
+        )
+        report_path = _write_layout_report(generated_dir, report_data)
         console.print(f"compiled {schema_path} -> {generated_dir}")
+        console.print(f"layout report: {report_path}")
+        console.print(json.dumps(report_data["counts"], indent=2))
 
         findings: list[str] = []
         generated_root = generated_dir / f"{resolved.name}.kicad_sch"

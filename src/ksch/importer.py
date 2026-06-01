@@ -7,10 +7,11 @@ from pathlib import Path
 from typing import Any
 
 from ruamel.yaml import YAML
+from sexpdata import Symbol  # type: ignore[import-untyped]
 
 from ksch.geometry import symbol_pin_coordinate
 from ksch.kicad.libraries import parse_library_table
-from ksch.kicad.sexpr import atom, load_sexpr_file
+from ksch.kicad.sexpr import atom, dump_sexpr, load_sexpr_file
 from ksch.kicad.symbols import SymbolInfo, symbol_info_from_definition
 from ksch.model.source import PinDirection
 from ksch.schema.formatter import format_schema_text
@@ -18,6 +19,10 @@ from ksch.verify import run_kicad_cli
 
 type CoordinateKey = tuple[int, int]
 type WireSegmentKey = tuple[CoordinateKey, CoordinateKey]
+
+
+def _a(value: str) -> Symbol:
+    return Symbol(value)
 
 
 @dataclass(frozen=True)
@@ -90,6 +95,7 @@ def import_project(root_schematic: Path, out_dir: Path) -> ImportedProject:
     netlist = _export_netlist(root)
     components, symbol_pins, nets = _parse_netlist(netlist)
     sheets = _read_sheet_tree(root)
+    embedded_symbol_libraries = _write_embedded_symbol_libraries(sheets, out_dir)
     symbol_units = _read_symbol_units(sheets)
     power_flags = _read_power_flags(sheets)
     sheet_by_file = {
@@ -106,11 +112,12 @@ def import_project(root_schematic: Path, out_dir: Path) -> ImportedProject:
         components=components,
         symbol_pins=symbol_pins,
         symbol_units=symbol_units,
+        embedded_symbol_libraries=embedded_symbol_libraries,
         nets=nets,
         power_flags=power_flags,
         no_connects=no_connects,
     )
-    generated: list[Path] = []
+    generated: list[Path] = list(embedded_symbol_libraries.values())
     for sheet_path, data in schema_by_sheet.items():
         target = _schema_path(out_dir, sheet_path)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -260,6 +267,56 @@ def _read_sheet_tree(root: Path) -> dict[str, SheetInfo]:
     return sheets
 
 
+def _write_embedded_symbol_libraries(
+    sheets: dict[str, SheetInfo],
+    out_dir: Path,
+) -> dict[str, Path]:
+    definitions_by_library: dict[str, dict[str, list[Any]]] = defaultdict(dict)
+    for sheet in sheets.values():
+        expr = load_sexpr_file(sheet.source)
+        lib_symbols = _first_child(expr, "lib_symbols")
+        if lib_symbols is None:
+            continue
+        for symbol_expr in _children(lib_symbols, "symbol"):
+            if len(symbol_expr) < 2:
+                continue
+            lib_id = atom(symbol_expr[1])
+            nickname, separator, symbol_name = lib_id.partition(":")
+            if not separator or not nickname or not symbol_name:
+                continue
+            definition = _copy_symbol_definition_for_library(symbol_expr, symbol_name)
+            definitions_by_library[nickname].setdefault(symbol_name, definition)
+
+    paths: dict[str, Path] = {}
+    if not definitions_by_library:
+        return paths
+    library_dir = out_dir / "symbols"
+    library_dir.mkdir(parents=True, exist_ok=True)
+    for nickname, definitions in sorted(definitions_by_library.items()):
+        path = library_dir / f"{_schema_identifier(nickname)}.kicad_sym"
+        library_expr = [
+            _a("kicad_symbol_lib"),
+            [_a("version"), 20240101],
+            [_a("generator"), "kicad-schema"],
+            *[definition for _name, definition in sorted(definitions.items())],
+        ]
+        path.write_text(dump_sexpr(library_expr) + "\n", encoding="utf-8")
+        paths[nickname] = path
+    return paths
+
+
+def _copy_symbol_definition_for_library(symbol_expr: list[Any], symbol_name: str) -> list[Any]:
+    copied = _deep_copy_sexpr(symbol_expr)
+    copied[1] = symbol_name
+    return copied
+
+
+def _deep_copy_sexpr(value: Any) -> Any:
+    if isinstance(value, list):
+        return [_deep_copy_sexpr(item) for item in value]
+    return value
+
+
 def _read_symbol_units(sheets: dict[str, SheetInfo]) -> dict[str, list[int]]:
     units: dict[str, set[int]] = defaultdict(set)
     for sheet in sheets.values():
@@ -335,7 +392,7 @@ def _read_no_connects(
                     ImportedNode(ref=ref, pin_number=pin.number, pin_name=pin.name)
                 )
         if nodes:
-            no_connects[sheet_path] = _endpoints_for_nodes(nodes, components, symbol_pins)
+            no_connects[sheet_path] = _number_endpoints_for_nodes(nodes)
     return no_connects
 
 
@@ -423,10 +480,18 @@ def _power_flag_net_names(expr: list[Any]) -> list[str]:
 
 
 def _at_point(expr: list[Any]) -> CoordinateKey | None:
+    at = _at_value(expr)
+    if at is None:
+        return None
+    return _coordinate_key(at[0], at[1])
+
+
+def _at_value(expr: list[Any]) -> tuple[float, float, float] | None:
     at_expr = _first_child(expr, "at")
     if at_expr is None or len(at_expr) < 3:
         return None
-    return _coordinate_key(float(atom(at_expr[1])), float(atom(at_expr[2])))
+    rotation = float(atom(at_expr[3])) if len(at_expr) > 3 else 0.0
+    return (float(atom(at_expr[1])), float(atom(at_expr[2])), rotation)
 
 
 def _xy_point(expr: list[Any]) -> CoordinateKey | None:
@@ -464,6 +529,7 @@ def _build_schema_documents(
     components: dict[str, ImportedComponent],
     symbol_pins: dict[str, dict[str, ImportedPin]],
     symbol_units: dict[str, list[int]],
+    embedded_symbol_libraries: dict[str, Path] | None = None,
     nets: list[ImportedNet],
     power_flags: dict[str, list[str]] | None = None,
     no_connects: dict[str, list[str]] | None = None,
@@ -483,7 +549,7 @@ def _build_schema_documents(
             node = net.nodes[0]
             sheet_path = component_sheet.get(node.ref, "/")
             sheet_no_connects[sheet_path].extend(
-                _endpoints_for_nodes([node], components, symbol_pins)
+                _number_endpoints_for_nodes([node])
             )
             continue
 
@@ -505,6 +571,11 @@ def _build_schema_documents(
             sheet_nets["/"][net.name] = sorted(root_endpoints)
 
     symbol_library_paths = _project_libraries(project_dir, out_dir, "sym-lib-table")
+    for nickname, path in sorted((embedded_symbol_libraries or {}).items()):
+        try:
+            symbol_library_paths[nickname] = path.relative_to(out_dir).as_posix()
+        except ValueError:
+            symbol_library_paths[nickname] = str(path)
     footprint_library_paths = _project_libraries(project_dir, out_dir, "fp-lib-table")
     for sheet_path, sheet in sheets.items():
         symbols = {
@@ -560,8 +631,18 @@ def _build_schema_documents(
         )
         if sheet_power_flags:
             data["power_flags"] = sheet_power_flags
-        if sheet_no_connects.get(sheet_path):
-            data["no_connects"] = sorted(set(sheet_no_connects[sheet_path]))
+        connected_endpoints = {
+            endpoint
+            for endpoints in sheet_nets.get(sheet_path, {}).values()
+            for endpoint in endpoints
+        }
+        no_connect_endpoints = sorted(
+            endpoint
+            for endpoint in set(sheet_no_connects.get(sheet_path, []))
+            if endpoint not in connected_endpoints
+        )
+        if no_connect_endpoints:
+            data["no_connects"] = no_connect_endpoints
         docs[sheet_path] = data
     return docs
 
@@ -582,7 +663,10 @@ def _canonical_power_flag_names(candidates: list[str], sheet_net_names: set[str]
     return sorted(set(resolved))
 
 
-def _symbol_decl(component: ImportedComponent, units: list[int] | None) -> dict[str, Any]:
+def _symbol_decl(
+    component: ImportedComponent,
+    units: list[int] | None,
+) -> dict[str, Any]:
     data: dict[str, Any] = {"lib": component.lib_id}
     if component.value:
         data["value"] = component.value
@@ -629,6 +713,10 @@ def _endpoints_for_nodes(
         else:
             endpoints.extend(f"{ref}.{pin_name}@{number}" for number in sorted(numbers))
     return endpoints
+
+
+def _number_endpoints_for_nodes(nodes: list[ImportedNode]) -> list[str]:
+    return sorted({f"{node.ref}.{node.pin_number}" for node in nodes})
 
 
 def _project_libraries(project_dir: Path, out_dir: Path, table_name: str) -> dict[str, str]:

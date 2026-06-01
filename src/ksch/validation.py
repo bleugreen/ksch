@@ -1,24 +1,18 @@
-from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import Any
 
-from ksch.layout import Point
-from ksch.layout_problem import (
-    LayoutContact,
+from ksch.layout import GEOMETRY_EPSILON, Point, Rect, usable_page_rect_for_paper
+from ksch.placed import (
+    PlacedProject,
+    PlacedSheet,
+)
+from ksch.schematic_geometry import (
     LayoutElement,
+    LayoutContact,
+    LayoutOverlap,
     LayoutProblem,
     LayoutSegment,
-    text_rect,
-)
-from ksch.placed import (
-    PlacedHierarchicalLabel,
-    PlacedItem,
-    PlacedLabel,
-    PlacedProject,
-    PlacedProperty,
-    PlacedSheet,
-    PlacedSheetBlock,
-    PlacedSymbol,
-    PlacedWire,
+    placed_sheet_geometry,
 )
 
 
@@ -28,12 +22,153 @@ class PlacedLayoutContact:
     contact: LayoutContact
 
 
+@dataclass(frozen=True)
+class PlacedRouteBlocker:
+    sheet_path: str
+    segment: LayoutSegment
+    blocker: LayoutElement
+
+
+@dataclass(frozen=True)
+class PlacedOutOfBounds:
+    sheet_path: str
+    item: LayoutElement | LayoutSegment
+    page_rect: Rect
+
+
+@dataclass(frozen=True)
+class PlacedLayoutReport:
+    layout_errors: tuple[str, ...]
+    out_of_bounds: tuple[PlacedOutOfBounds, ...]
+    visible_overlaps: tuple[tuple[str, LayoutOverlap], ...]
+    route_blockers: tuple[PlacedRouteBlocker, ...]
+    cross_net_contacts: tuple[PlacedLayoutContact, ...]
+
+    @property
+    def is_legal(self) -> bool:
+        return not (
+            self.layout_errors
+            or self.out_of_bounds
+            or self.visible_overlaps
+            or self.route_blockers
+            or self.cross_net_contacts
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "legal": self.is_legal,
+            "counts": {
+                "layout_errors": len(self.layout_errors),
+                "out_of_bounds": len(self.out_of_bounds),
+                "visible_overlaps": len(self.visible_overlaps),
+                "route_blockers": len(self.route_blockers),
+                "cross_net_contacts": len(self.cross_net_contacts),
+            },
+            "layout_errors": list(self.layout_errors),
+            "out_of_bounds": [
+                {
+                    "sheet_path": violation.sheet_path,
+                    "item": _layout_item_dict(violation.item),
+                    "page_rect": _rect_dict(violation.page_rect),
+                }
+                for violation in self.out_of_bounds
+            ],
+            "visible_overlaps": [
+                {
+                    "sheet_path": sheet_path,
+                    "first": _element_dict(overlap.first),
+                    "second": _element_dict(overlap.second),
+                }
+                for sheet_path, overlap in self.visible_overlaps
+            ],
+            "route_blockers": [
+                {
+                    "sheet_path": blocker.sheet_path,
+                    "segment": _segment_dict(blocker.segment),
+                    "blocker": _element_dict(blocker.blocker),
+                }
+                for blocker in self.route_blockers
+            ],
+            "cross_net_contacts": [
+                {
+                    "sheet_path": contact.sheet_path,
+                    "first": _segment_dict(contact.contact.first),
+                    "second": _segment_dict(contact.contact.second),
+                    "point": _point_dict(contact.contact.point),
+                }
+                for contact in self.cross_net_contacts
+            ],
+        }
+
+
 class PlacedLayoutError(ValueError):
     pass
 
 
+def placed_layout_report(
+    project: PlacedProject,
+    *,
+    layout_errors: tuple[str, ...] = (),
+) -> PlacedLayoutReport:
+    visible_overlaps: list[tuple[str, LayoutOverlap]] = []
+    out_of_bounds: list[PlacedOutOfBounds] = []
+    route_blockers_: list[PlacedRouteBlocker] = []
+    cross_net_contacts_: list[PlacedLayoutContact] = []
+    for sheet in project.sheets:
+        geometry = placed_sheet_geometry(sheet)
+        out_of_bounds.extend(_out_of_bounds(sheet, geometry))
+        problem = geometry.as_problem()
+        for overlap in problem.overlaps():
+            visible_overlaps.append((sheet.path, overlap))
+        for segment, blocker in geometry.route_blockers():
+            route_blockers_.append(
+                PlacedRouteBlocker(
+                    sheet_path=sheet.path,
+                    segment=segment,
+                    blocker=blocker,
+                )
+            )
+        for contact in problem.cross_net_contacts():
+            cross_net_contacts_.append(
+                PlacedLayoutContact(sheet_path=sheet.path, contact=contact)
+            )
+    return PlacedLayoutReport(
+        layout_errors=layout_errors,
+        out_of_bounds=tuple(out_of_bounds),
+        visible_overlaps=tuple(visible_overlaps),
+        route_blockers=tuple(route_blockers_),
+        cross_net_contacts=tuple(cross_net_contacts_),
+    )
+
+
 def validate_placed_project(project: PlacedProject) -> None:
-    contacts = cross_net_contacts(project)
+    report = placed_layout_report(project)
+    bounds = report.out_of_bounds
+    if bounds:
+        first_bounds = bounds[0]
+        raise PlacedLayoutError(
+            "geometry outside page bounds in "
+            f"{first_bounds.sheet_path}: {first_bounds.item.id} "
+            f"({first_bounds.item.kind}) is outside {first_bounds.page_rect}"
+        )
+    overlaps = report.visible_overlaps
+    if overlaps:
+        sheet_path, overlap = overlaps[0]
+        raise PlacedLayoutError(
+            "visible geometry overlap in "
+            f"{sheet_path}: {overlap.first.id} ({overlap.first.kind}) overlaps "
+            f"{overlap.second.id} ({overlap.second.kind})"
+        )
+    blockers = report.route_blockers
+    if blockers:
+        first_blocker = blockers[0]
+        raise PlacedLayoutError(
+            "route blocker in "
+            f"{first_blocker.sheet_path}: {first_blocker.segment.id} "
+            f"({first_blocker.segment.kind}) crosses {first_blocker.blocker.id} "
+            f"({first_blocker.blocker.kind})"
+        )
+    contacts = report.cross_net_contacts
     if not contacts:
         return
     first = contacts[0]
@@ -49,140 +184,80 @@ def validate_placed_project(project: PlacedProject) -> None:
 def cross_net_contacts(project: PlacedProject) -> tuple[PlacedLayoutContact, ...]:
     contacts: list[PlacedLayoutContact] = []
     for sheet in project.sheets:
-        for contact in placed_layout_problem(sheet).cross_net_contacts():
+        for contact in placed_geometry_problem(sheet).cross_net_contacts():
             contacts.append(PlacedLayoutContact(sheet_path=sheet.path, contact=contact))
     return tuple(contacts)
 
 
-def placed_layout_problem(sheet: PlacedSheet) -> LayoutProblem:
-    return placed_items_layout_problem(sheet.items)
+def visible_geometry_overlaps(project: PlacedProject) -> tuple[tuple[str, LayoutOverlap], ...]:
+    overlaps: list[tuple[str, LayoutOverlap]] = []
+    for sheet in project.sheets:
+        for overlap in placed_geometry_problem(sheet).overlaps():
+            overlaps.append((sheet.path, overlap))
+    return tuple(overlaps)
 
 
-def placed_items_layout_problem(items: Iterable[PlacedItem]) -> LayoutProblem:
-    elements: list[LayoutElement] = []
-    segments: list[LayoutSegment] = []
-    for item in items:
-        if isinstance(item, PlacedWire):
-            segments.append(_wire_segment(item))
-        elif isinstance(item, PlacedLabel):
-            if not item.hidden:
-                elements.append(_label_element(item))
-        elif isinstance(item, PlacedHierarchicalLabel):
-            elements.append(
-                _text_element(
-                    id=item.uuid,
-                    owner=item.uuid,
-                    kind="hierarchical_label",
-                    text=item.name,
-                    at=item.at,
-                    justify=item.justify,
+def route_blockers(project: PlacedProject) -> tuple[PlacedRouteBlocker, ...]:
+    blockers: list[PlacedRouteBlocker] = []
+    for sheet in project.sheets:
+        for segment, blocker in placed_sheet_geometry(sheet).route_blockers():
+            blockers.append(
+                PlacedRouteBlocker(
+                    sheet_path=sheet.path,
+                    segment=segment,
+                    blocker=blocker,
                 )
             )
-        elif isinstance(item, PlacedSymbol):
-            elements.extend(_symbol_property_elements(item))
-        elif isinstance(item, PlacedSheetBlock):
-            elements.extend(_sheet_block_property_elements(item))
-    return LayoutProblem(elements=tuple(elements), segments=tuple(segments))
+    return tuple(blockers)
 
 
-def _wire_segment(wire: PlacedWire) -> LayoutSegment:
-    return LayoutSegment(
-        id=wire.uuid,
-        owner=_owner_from_nets(wire.nets, fallback=wire.uuid),
-        kind="wire",
-        start=Point(wire.start[0], wire.start[1]),
-        end=Point(wire.end[0], wire.end[1]),
-        nets=wire.nets,
-        start_terminals=wire.start_terminals,
-        end_terminals=wire.end_terminals,
+def placed_geometry_problem(sheet: PlacedSheet) -> LayoutProblem:
+    return placed_sheet_geometry(sheet).as_problem()
+
+
+def _out_of_bounds(sheet: PlacedSheet, geometry: object) -> tuple[PlacedOutOfBounds, ...]:
+    page_rect = usable_page_rect_for_paper(sheet.paper)
+    if page_rect is None:
+        return ()
+    violations: list[PlacedOutOfBounds] = []
+    for element in geometry.boxes:
+        if not _rect_within(element.rect, page_rect):
+            violations.append(
+                PlacedOutOfBounds(
+                    sheet_path=sheet.path,
+                    item=element,
+                    page_rect=page_rect,
+                )
+            )
+    for segment in geometry.segments:
+        if not (
+            _point_within(segment.start, page_rect)
+            and _point_within(segment.end, page_rect)
+        ):
+            violations.append(
+                PlacedOutOfBounds(
+                    sheet_path=sheet.path,
+                    item=segment,
+                    page_rect=page_rect,
+                )
+            )
+    return tuple(violations)
+
+
+def _rect_within(rect: Rect, bounds: Rect) -> bool:
+    return (
+        rect.left >= bounds.left - GEOMETRY_EPSILON
+        and rect.top >= bounds.top - GEOMETRY_EPSILON
+        and rect.right <= bounds.right + GEOMETRY_EPSILON
+        and rect.bottom <= bounds.bottom + GEOMETRY_EPSILON
     )
 
 
-def _label_element(label: PlacedLabel) -> LayoutElement:
-    return _text_element(
-        id=label.uuid,
-        owner=_owner_from_nets(label.nets, fallback=label.uuid),
-        kind="label",
-        text=label.name,
-        at=label.at,
-        justify=label.justify,
-        nets=label.nets,
+def _point_within(point: Point, bounds: Rect) -> bool:
+    return (
+        bounds.left - GEOMETRY_EPSILON <= point.x <= bounds.right + GEOMETRY_EPSILON
+        and bounds.top - GEOMETRY_EPSILON <= point.y <= bounds.bottom + GEOMETRY_EPSILON
     )
-
-
-def _symbol_property_elements(symbol: PlacedSymbol) -> list[LayoutElement]:
-    return [
-        _property_element(
-            property_,
-            id=f"{symbol.uuid}:{property_.name}",
-            owner=symbol.reference,
-        )
-        for property_ in symbol.properties
-        if not property_.hidden
-    ]
-
-
-def _sheet_block_property_elements(sheet: PlacedSheetBlock) -> list[LayoutElement]:
-    return [
-        _text_element(
-            id=f"{sheet.uuid}:Sheetname",
-            owner=sheet.uuid,
-            kind="sheet_property",
-            text=sheet.sheet_name,
-            at=sheet.sheet_name_at,
-            justify="left",
-        ),
-        _text_element(
-            id=f"{sheet.uuid}:Sheetfile",
-            owner=sheet.uuid,
-            kind="sheet_property",
-            text=sheet.sheet_file,
-            at=sheet.sheet_file_at,
-            justify="left",
-        ),
-    ]
-
-
-def _property_element(
-    property_: PlacedProperty,
-    *,
-    id: str,
-    owner: str,
-) -> LayoutElement:
-    return _text_element(
-        id=id,
-        owner=owner,
-        kind="field",
-        text=property_.value,
-        at=property_.at,
-        justify=property_.justify,
-    )
-
-
-def _text_element(
-    *,
-    id: str,
-    owner: str,
-    kind: str,
-    text: str,
-    at: tuple[float, float],
-    justify: str,
-    nets: frozenset[str] = frozenset(),
-) -> LayoutElement:
-    return LayoutElement(
-        id=id,
-        owner=owner,
-        kind=kind,
-        rect=text_rect(Point(at[0], at[1]), text, justify=justify),
-        nets=nets,
-        movable=False,
-    )
-
-
-def _owner_from_nets(nets: frozenset[str], *, fallback: str) -> str:
-    if len(nets) == 1:
-        return next(iter(nets))
-    return fallback
 
 
 def _terminal_detail(contact: LayoutContact) -> str:
@@ -205,3 +280,47 @@ def _terminals_at(point: Point, segment: LayoutSegment) -> frozenset[str]:
 
 def _same_point(first: Point, second: Point) -> bool:
     return abs(first.x - second.x) < 0.001 and abs(first.y - second.y) < 0.001
+
+
+def _element_dict(element: LayoutElement) -> dict[str, Any]:
+    return {
+        "id": element.id,
+        "owner": element.owner,
+        "kind": element.kind,
+        "rect": _rect_dict(element.rect),
+        "nets": sorted(element.nets),
+        "movable": element.movable,
+        "terminals": sorted(element.terminals),
+    }
+
+
+def _segment_dict(segment: LayoutSegment) -> dict[str, Any]:
+    return {
+        "id": segment.id,
+        "owner": segment.owner,
+        "kind": segment.kind,
+        "start": _point_dict(segment.start),
+        "end": _point_dict(segment.end),
+        "nets": sorted(segment.nets),
+        "start_terminals": sorted(segment.start_terminals),
+        "end_terminals": sorted(segment.end_terminals),
+    }
+
+
+def _layout_item_dict(item: LayoutElement | LayoutSegment) -> dict[str, Any]:
+    if isinstance(item, LayoutElement):
+        return _element_dict(item)
+    return _segment_dict(item)
+
+
+def _point_dict(point: Point) -> dict[str, float]:
+    return {"x": point.x, "y": point.y}
+
+
+def _rect_dict(rect: object) -> dict[str, float]:
+    return {
+        "left": getattr(rect, "left"),
+        "top": getattr(rect, "top"),
+        "right": getattr(rect, "right"),
+        "bottom": getattr(rect, "bottom"),
+    }

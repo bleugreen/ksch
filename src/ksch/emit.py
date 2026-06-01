@@ -1,10 +1,19 @@
 import json
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
 from sexpdata import Symbol  # type: ignore[import-untyped]
 
-from ksch.kicad.sexpr import dump_sexpr
+from ksch.kicad.sexpr import atom, dump_sexpr, load_sexpr_file
+from ksch.power_flags import (
+    POWER_DRIVER_LIB_ID,
+    POWER_FLAG_LIB_ID,
+    POWER_PORT_LIB_ID,
+    power_driver_symbol_definition,
+    power_flag_symbol_definition,
+    power_port_symbol_definition,
+)
 from ksch.placed import (
     PlacedHierarchicalLabel,
     PlacedItem,
@@ -18,6 +27,7 @@ from ksch.placed import (
     PlacedSheetPin,
     PlacedSymbol,
     PlacedSymbolPin,
+    PlacedText,
     PlacedWire,
 )
 
@@ -51,6 +61,15 @@ def _write_library_table(
 ) -> None:
     if not libraries:
         return
+
+    def uri_for(path: Path) -> str:
+        resolved = path.resolve()
+        try:
+            relative = resolved.relative_to(output_dir.resolve())
+        except ValueError:
+            return str(resolved)
+        return f"${{KIPRJMOD}}/{relative.as_posix()}"
+
     expr = [
         _a(table_kind),
         [_a("version"), 7],
@@ -59,7 +78,7 @@ def _write_library_table(
                 _a("lib"),
                 [_a("name"), nickname],
                 [_a("type"), "KiCad"],
-                [_a("uri"), str(path.resolve())],
+                [_a("uri"), uri_for(path)],
                 [_a("options"), ""],
                 [_a("descr"), ""],
             ]
@@ -67,6 +86,59 @@ def _write_library_table(
         ],
     ]
     (output_dir / filename).write_text(_format_sexpr(expr) + "\n", encoding="utf-8")
+
+
+def _project_uses_internal_power_symbols(project: PlacedProject) -> bool:
+    return any(
+        isinstance(item, PlacedSymbol) and item.lib_id in {POWER_DRIVER_LIB_ID, POWER_FLAG_LIB_ID, POWER_PORT_LIB_ID}
+        for sheet in project.sheets
+        for item in sheet.items
+    )
+
+
+def _library_symbol_definition(definition: list[Any]) -> list[Any]:
+    copied = deepcopy(definition)
+    if len(copied) > 1 and isinstance(copied[1], str) and ":" in copied[1]:
+        copied[1] = copied[1].split(":", 1)[1]
+    return copied
+
+
+def _symbol_definition_name(definition: list[Any]) -> str | None:
+    if len(definition) > 1 and isinstance(definition[1], str):
+        return definition[1]
+    return None
+
+
+def _write_internal_power_library(output_dir: Path, base_library: Path | None = None) -> Path:
+    path = output_dir / "power.kicad_sym"
+    if base_library is not None and base_library.exists():
+        expr = deepcopy(load_sexpr_file(base_library))
+    else:
+        expr = [
+            _a("kicad_symbol_lib"),
+            [_a("version"), 20240101],
+            [_a("generator"), "kicad-schema"],
+        ]
+    existing = {
+        item[1]
+        for item in expr
+        if isinstance(item, list)
+        and item
+        and atom(item[0]) == "symbol"
+        and len(item) > 1
+        and isinstance(item[1], str)
+    }
+    for definition in (
+        _library_symbol_definition(power_flag_symbol_definition()),
+        _library_symbol_definition(power_port_symbol_definition()),
+        _library_symbol_definition(power_driver_symbol_definition()),
+    ):
+        name = _symbol_definition_name(definition)
+        if name is not None and name in existing:
+            continue
+        expr.append(definition)
+    path.write_text(_format_sexpr(expr) + "\n", encoding="utf-8")
+    return path
 
 
 def _format_sexpr(value: Any, *, indent: int = 0) -> str:
@@ -105,7 +177,7 @@ def _property_expr(property_: PlacedProperty) -> list[Any]:
         _a("property"),
         property_.name,
         property_.value,
-        [_a("at"), property_.at[0], property_.at[1], 0],
+        [_a("at"), property_.at[0], property_.at[1], property_.rotation],
         _effects(justify=property_.justify, hidden=property_.hidden),
     ]
 
@@ -225,7 +297,7 @@ def _label_expr(label: PlacedLabel) -> list[Any]:
     return [
         _a("label"),
         label.name,
-        [_a("at"), label.at[0], label.at[1], 0],
+        [_a("at"), label.at[0], label.at[1], label.rotation],
         _effects(justify=label.justify, hidden=label.hidden),
         [_a("uuid"), label.uuid],
     ]
@@ -244,9 +316,19 @@ def _hierarchical_label_expr(label: PlacedHierarchicalLabel) -> list[Any]:
         _a("hierarchical_label"),
         label.name,
         [_a("shape"), _a(label.shape)],
-        [_a("at"), label.at[0], label.at[1], 0],
+        [_a("at"), label.at[0], label.at[1], label.rotation],
         _effects(justify=label.justify),
         [_a("uuid"), label.uuid],
+    ]
+
+
+def _text_expr(text: PlacedText) -> list[Any]:
+    return [
+        _a("text"),
+        text.text,
+        [_a("at"), text.at[0], text.at[1], text.rotation],
+        _effects(justify=text.justify),
+        [_a("uuid"), text.uuid],
     ]
 
 
@@ -265,6 +347,8 @@ def _item_expr(item: PlacedItem) -> list[Any]:
         return _no_connect_expr(item)
     if isinstance(item, PlacedHierarchicalLabel):
         return _hierarchical_label_expr(item)
+    if isinstance(item, PlacedText):
+        return _text_expr(item)
     raise TypeError(f"unknown placed item: {item!r}")
 
 
@@ -297,8 +381,11 @@ def write_project(
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     _write_project_file(project, output_dir)
+    symbol_libraries = dict(symbol_libraries or {})
+    if _project_uses_internal_power_symbols(project):
+        symbol_libraries["power"] = _write_internal_power_library(output_dir, symbol_libraries.get("power"))
     _write_library_table(
-        symbol_libraries or {},
+        symbol_libraries,
         output_dir,
         table_kind="sym_lib_table",
         filename="sym-lib-table",

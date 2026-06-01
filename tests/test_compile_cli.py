@@ -107,8 +107,10 @@ def test_compile_emits_power_flags(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     schematic = (tmp_path / "out" / "demo.kicad_sch").read_text(encoding="utf-8")
     assert '(symbol "power:PWR_FLAG"' in schematic
+    assert '(symbol "power:KSCH_POWER_PORT"' in schematic
     assert '(lib_id "power:PWR_FLAG")' in schematic
-    assert '(label "+5V"' in schematic
+    assert '(lib_id "power:KSCH_POWER_PORT")' in schematic
+    assert '(property "Value" "+5V"' in schematic
     assert "(hide yes)" in schematic
 
 

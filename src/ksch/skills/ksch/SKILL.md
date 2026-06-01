@@ -121,5 +121,5 @@ they are not the primary authoring workflow.
 - Ambiguous endpoint: use `@pin_number` or `/all`.
 - Drift after manual KiCad edits: import again if KiCad is the desired source,
   otherwise edit schema and rerun `ksch gen`.
-- Generated schematic readability issues belong in placement/routing/compiler
+- Generated schematic readability issues belong in placement/canonical geometry
   stages, not serialization-only emission code.
