@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "elkjs": "^0.10.0"
+  }
+}
