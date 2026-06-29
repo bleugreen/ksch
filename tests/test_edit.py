@@ -34,11 +34,9 @@ def _write_edit_project(tmp_path: Path) -> Path:
                 "symbols:",
                 "  J1:",
                 "    lib: Test:USB_C",
-                "nets:",
-                "  USB_D_P:",
-                "    - J1.D+@A6",
-                "  VBUS:",
-                "    - J1.VBUS/all",
+                "    connects:",
+                "      D+@A6: USB_D_P",
+                "      VBUS/all: VBUS",
                 "",
             ]
         ),
@@ -72,7 +70,7 @@ def test_connect_endpoints_adds_to_existing_net_and_formats(tmp_path: Path) -> N
     assert result.changed is True
     assert result.schema_path == schema
     text = schema.read_text(encoding="utf-8")
-    assert "  USB_D_P:\n    - J1.D+/all\n" in text
+    assert "      D+/all: USB_D_P\n" in text
     assert ProjectGraph.from_schema(schema).net_for_endpoint("/", "J1.D+@B6") == "USB_D_P"
 
 
@@ -138,7 +136,7 @@ def test_disconnect_endpoints_removes_from_net_and_formats(tmp_path: Path) -> No
     assert result.deleted_net is True
     text = schema.read_text(encoding="utf-8")
     assert "USB_D_P" not in text
-    assert "  VBUS:\n    - J1.VBUS/all\n" in text
+    assert "      VBUS/all: VBUS\n" in text
 
 
 def test_disconnect_endpoints_splits_all_expression(tmp_path: Path) -> None:
@@ -155,7 +153,7 @@ def test_disconnect_endpoints_splits_all_expression(tmp_path: Path) -> None:
     assert result.removed_endpoints == ("J1.VBUS@A4",)
     assert result.deleted_net is False
     text = schema.read_text(encoding="utf-8")
-    assert "  VBUS:\n    - J1.VBUS@B4\n" in text
+    assert "      VBUS@B4: VBUS\n" in text
     assert "J1.VBUS/all" not in text
 
 
@@ -201,7 +199,7 @@ def test_add_no_connects_adds_valid_unconnected_endpoint(tmp_path: Path) -> None
     assert result.changed is True
     assert result.added_endpoints == ("J1.D-@A7",)
     text = schema.read_text(encoding="utf-8")
-    assert "no_connects:\n  - J1.D-@A7\n" in text
+    assert "      D-@A7: nc\n" in text
 
 
 def test_add_no_connects_is_idempotent(tmp_path: Path) -> None:
@@ -237,7 +235,7 @@ def test_add_no_connects_collapses_duplicate_pin_group(tmp_path: Path) -> None:
     assert result.changed is True
     assert result.added_endpoints == ("J1.D-@B7",)
     text = schema.read_text(encoding="utf-8")
-    assert "no_connects:\n  - J1.D-/all\n" in text
+    assert "      D-/all: nc\n" in text
     assert "J1.D-@A7" not in text
     assert "J1.D-@B7" not in text
 
@@ -262,7 +260,7 @@ def test_clear_no_connects_removes_endpoint_and_formats(tmp_path: Path) -> None:
 
     assert result.changed is True
     assert result.removed_endpoints == ("J1.D-@A7",)
-    assert "no_connects" not in schema.read_text(encoding="utf-8")
+    assert "D-@A7: nc" not in schema.read_text(encoding="utf-8")
 
 
 def test_clear_no_connects_splits_all_expression(tmp_path: Path) -> None:
@@ -274,7 +272,7 @@ def test_clear_no_connects_splits_all_expression(tmp_path: Path) -> None:
     assert result.changed is True
     assert result.removed_endpoints == ("J1.D-@A7",)
     text = schema.read_text(encoding="utf-8")
-    assert "no_connects:\n  - J1.D-@B7\n" in text
+    assert "      D-@B7: nc\n" in text
     assert "J1.D-/all" not in text
 
 

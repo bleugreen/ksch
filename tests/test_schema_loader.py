@@ -36,5 +36,5 @@ def test_wraps_yaml_parse_errors() -> None:
 
 
 def test_formatter_orders_top_level_keys() -> None:
-    text = "nets: {}\nksch: 1\nproject:\n  name: demo\n"
-    assert format_schema_text(text) == "ksch: 1\nproject:\n  name: demo\nnets: {}\n"
+    text = "symbols: {}\nksch: 1\nproject:\n  name: demo\n"
+    assert format_schema_text(text) == "ksch: 1\nproject:\n  name: demo\nsymbols: {}\n"

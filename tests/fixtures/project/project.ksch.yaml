@@ -4,16 +4,14 @@ project:
 sheets:
   usb:
     source: sheets/usb.ksch.yaml
+    connects:
+      VBUS: +5V
+      USB_UP_DP: USB_UP_DP
 symbols:
   J1:
     lib: Test:USB_C
     value: USB_IN
-nets:
-  +5V:
-    - J1.VBUS/all
-    - usb.VBUS
-  USB_UP_DP:
-    - J1.D+/all
-    - usb.USB_UP_DP
-no_connects:
-  - J1.D-/all
+    connects:
+      VBUS/all: +5V
+      D+/all: USB_UP_DP
+      D-/all: nc

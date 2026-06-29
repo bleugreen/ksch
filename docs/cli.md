@@ -86,7 +86,7 @@ Validates the root project document, referenced sheet documents, symbol library
 ids, endpoint references, duplicate pin-name disambiguation, and sheet ports.
 Project-local libraries declared under `libraries.symbols.project` are loaded
 automatically. Semantic validation errors include schema paths such as
-`nets.USB_D_P[0]` or `symbols.U1.lib`.
+`symbols.J1.connects.D+@A6` or `symbols.U1.lib`.
 
 ## JSON Schema
 
@@ -187,6 +187,23 @@ extra symbol libraries, and generated KiCad `sym-lib-table` entries. Use
 
 `ksch explain` accepts a library symbol id, a project ref, or a project endpoint
 and prints the concrete symbol/pin information used by validation.
+
+## Net Audit
+
+```bash
+ksch net +3V3
+```
+
+Prints the resolved endpoints on one net as compact YAML.
+
+## Migration
+
+```bash
+ksch migrate-connects project.ksch.yaml
+```
+
+Rewrites legacy top-level `nets` and `no_connects` into symbol-local and
+sheet-instance-local `connects`.
 
 ## Low-Level Structured Edits
 

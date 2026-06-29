@@ -65,8 +65,8 @@ def test_cli_validate_resolves_no_connect_endpoints(tmp_path: Path) -> None:
                 "symbols:",
                 "  J1:",
                 "    lib: Test:USB_C",
-                "no_connects:",
-                "  - J1.NOPE",
+                "    connects:",
+                "      NOPE: nc",
                 "",
             ]
         ),
@@ -98,9 +98,8 @@ def test_cli_validate_reports_semantic_schema_path(tmp_path: Path) -> None:
                 "symbols:",
                 "  J1:",
                 "    lib: Test:USB_C",
-                "nets:",
-                "  USB_D_P:",
-                "    - J1.NOPE",
+                "    connects:",
+                "      NOPE: USB_D_P",
                 "",
             ]
         ),
@@ -118,7 +117,7 @@ def test_cli_validate_reports_semantic_schema_path(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 1
-    assert "nets.USB_D_P[0]" in result.stderr
+    assert "symbols.J1.connects.NOPE" in result.stderr
     assert "J1.NOPE does not match any pin on Test:USB_C" in result.stderr
 
 
@@ -280,9 +279,8 @@ def test_cli_edit_connect_updates_configured_schema(
                 "symbols:",
                 "  J1:",
                 "    lib: Test:USB_C",
-                "nets:",
-                "  USB_D_P:",
-                "    - J1.D+@A6",
+                "    connects:",
+                "      D+@A6: USB_D_P",
                 "",
             ]
         ),
@@ -298,7 +296,7 @@ def test_cli_edit_connect_updates_configured_schema(
 
     assert result.exit_code == 0, result.output
     assert "connected 1 endpoint" in result.stdout
-    assert "    - J1.D+/all\n" in schema.read_text(encoding="utf-8")
+    assert "      D+/all: USB_D_P\n" in schema.read_text(encoding="utf-8")
 
 
 def test_cli_edit_help_does_not_surface_inverse_list_mutations() -> None:
@@ -308,6 +306,83 @@ def test_cli_edit_help_does_not_surface_inverse_list_mutations() -> None:
     assert "disconnect" not in result.stdout
     assert "no-connect" not in result.stdout
     assert "clear-no-connect" not in result.stdout
+
+
+def test_cli_net_prints_yaml_endpoint_list(tmp_path: Path) -> None:
+    schema = tmp_path / "project.ksch.yaml"
+    schema.write_text(
+        "\n".join(
+            [
+                "ksch: 1",
+                "project:",
+                "  name: demo",
+                "symbols:",
+                "  J1:",
+                "    lib: Test:USB_C",
+                "    connects:",
+                "      VBUS/all: +5V",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "net",
+            "+5V",
+            "--schema",
+            str(schema),
+            "--symbol-library",
+            "Test=tests/fixtures/kicad/symbols/Test.kicad_sym",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert result.stdout == "+5V:\n  - J1.VBUS@A4\n  - J1.VBUS@B4\n"
+
+
+def test_cli_migrate_connects_rewrites_project_tree(tmp_path: Path) -> None:
+    root = tmp_path / "project.ksch.yaml"
+    child = tmp_path / "child.ksch.yaml"
+    root.write_text(
+        "\n".join(
+            [
+                "ksch: 1",
+                "project:",
+                "  name: demo",
+                "sheets:",
+                "  child:",
+                "    source: child.ksch.yaml",
+                "symbols:",
+                "  J1:",
+                "    lib: Test:USB_C",
+                "nets:",
+                "  +5V:",
+                "    - J1.VBUS/all",
+                "    - child.VBUS",
+                "no_connects:",
+                "  - J1.D-/all",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    child.write_text(
+        "ksch: 1\nsheet:\n  id: child\ninterface:\n  VBUS: power_in\n",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["migrate-connects", str(root)])
+
+    assert result.exit_code == 0, result.output
+    text = root.read_text(encoding="utf-8")
+    assert "nets:" not in text
+    assert "no_connects:" not in text
+    assert "VBUS/all: +5V" in text
+    assert "D-/all: nc" in text
+    assert "connects:\n      VBUS: +5V" in text
 
 
 def test_cli_edit_add_symbol_updates_configured_schema(

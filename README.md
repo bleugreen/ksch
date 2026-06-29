@@ -141,24 +141,22 @@ symbols:
   J1:
     lib: Connector:USB_C_Receptacle_USB2.0_16P
     value: USB_IN
+    connects:
+      D+@A6: USB_D_P
+      D+@B6: USB_D_P
+      GND/all: GND
   U1:
     lib: Interface_USB:USB2514B
     value: USB2514B
     footprint: Package_QFN:QFN-36-1EP_6x6mm_P0.5mm
-
-nets:
-  USB_D_P:
-    - J1.D+@A6
-    - J1.D+@B6
-    - U1.USBDP_UP
-  GND:
-    - J1.GND/all
-    - U1.GND/all
+    connects:
+      USBDP_UP: USB_D_P
+      GND/all: GND
 ```
 
-Endpoint syntax uses symbol references plus pin names. Use `@pin_number` when a
-symbol has duplicate pin names and only one physical pin is connected. Use
-`/all` when all pins with that name are connected.
+Symbol-local connection keys use pin names. Use `@pin_number` when a symbol has
+duplicate pin names and only one physical pin is connected. Use `/all` when all
+pins with that name are connected.
 
 Project-local KiCad libraries can be declared in the schema:
 

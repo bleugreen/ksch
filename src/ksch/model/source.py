@@ -50,6 +50,7 @@ class SheetInstance(BaseModel):
     model_config = ConfigDict(extra="forbid")
     source: Path
     title: str | None = None
+    connects: dict[str, str] = Field(default_factory=dict)
 
 
 class SymbolDecl(BaseModel):
@@ -59,6 +60,7 @@ class SymbolDecl(BaseModel):
     footprint: str | None = None
     fields: dict[str, str] = Field(default_factory=dict)
     units: list[int] | None = None
+    connects: dict[str, str] = Field(default_factory=dict)
 
 
 class BlockDecl(BaseModel):
@@ -82,9 +84,7 @@ class SourceDocument(BaseModel):
     interface: dict[str, PinDirection] = Field(default_factory=dict)
     sheets: dict[str, SheetInstance] = Field(default_factory=dict)
     symbols: dict[str, SymbolDecl] = Field(default_factory=dict)
-    nets: dict[str, list[str]] = Field(default_factory=dict)
     power_flags: list[str] = Field(default_factory=list)
-    no_connects: list[str] = Field(default_factory=list)
     assertions: list[dict[str, Any]] = Field(default_factory=list)
     blocks: dict[str, BlockDecl] = Field(default_factory=dict)
     use: list[UseDecl] = Field(default_factory=list)

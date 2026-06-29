@@ -14,10 +14,8 @@ Project documents define the root schematic and sheet tree:
 - `project`: project metadata with `name`, optional `title`, and optional
   `kicad_version`.
 - `libraries`: optional symbol and footprint library settings.
-- `sheets`: child sheet instances by local child name.
-- `symbols`: root-sheet symbols by reference.
-- `nets`: root-sheet net names mapped to endpoint lists.
-- `no_connects`: intentionally open endpoints.
+- `sheets`: child sheet instances by local child name, with optional port `connects`.
+- `symbols`: root-sheet symbols by reference, with optional pin `connects`.
 - `assertions`: schema-level checks reserved for verification.
 - `blocks` and `use`: reusable schematic fragments reserved for expansion.
 
@@ -42,29 +40,47 @@ Sheet documents define one reusable or instantiated schematic sheet:
 - `ksch`: schema version, currently `1`.
 - `sheet`: sheet metadata with `id` and optional `title`.
 - `interface`: sheet-owned ports exposed to parent sheets.
-- `sheets`: nested child sheet instances.
-- `symbols`: sheet-local symbols by reference.
-- `nets`: sheet-local net names mapped to endpoint lists.
-- `no_connects`: intentionally open endpoints.
+- `sheets`: nested child sheet instances, with optional port `connects`.
+- `symbols`: sheet-local symbols by reference, with optional pin `connects`.
 - `assertions`: sheet-local checks reserved for verification.
 - `blocks` and `use`: reusable schematic fragments reserved for expansion.
 
-## Endpoints
+## Connections
 
-Endpoints are pin-name first:
+Symbols declare pin connections locally:
 
-- `REF.PIN_NAME`
-- `REF.PIN_NAME@PIN_NUMBER`
-- `REF.PIN_NAME/all`
-- `REF.PIN_NUMBER`
-- `child_sheet.PORT`
+```yaml
+symbols:
+  U1:
+    lib: Device:R
+    connects:
+      '1': +3V3
+      '2': GND
+```
 
-Pin-name endpoints are preferred. `@PIN_NUMBER` disambiguates duplicate pin
-names, and `/all` intentionally expands all matching duplicate pins. Bare pin
-numbers are escape hatches for symbols whose pin names are not useful.
+Connection keys are pin-name first:
 
-Endpoints listed under `no_connects` must resolve to real symbol pins and must
-not also be connected to any net in the same sheet.
+- `PIN_NAME`
+- `PIN_NAME@PIN_NUMBER`
+- `PIN_NAME/all`
+- `PIN_NUMBER`
+
+Pin-name keys are preferred. `@PIN_NUMBER` disambiguates duplicate pin names,
+and `/all` intentionally expands all matching duplicate pins. Bare pin numbers
+are escape hatches for symbols whose pin names are not useful.
+
+Values are net names. The reserved value `nc` marks an intentional no-connect
+and cannot be used as a net name.
+
+Child sheet instances declare port connections locally:
+
+```yaml
+sheets:
+  usb:
+    source: sheets/usb.ksch.yaml
+    connects:
+      VBUS: +5V
+```
 
 ## Interfaces
 

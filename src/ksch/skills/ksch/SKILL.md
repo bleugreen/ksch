@@ -62,19 +62,21 @@ Core top-level keys:
 - `interface` for sheet ports.
 - `sheets` for hierarchy.
 - `symbols` for placed electrical parts.
-- `nets` for electrical connectivity.
+- `connects` under symbols and sheet instances for electrical connectivity.
 - `power_flags` for intentional powered nets.
-- `no_connects` for intentional NC pins.
+- `nc` as a reserved `connects` value for intentional NC pins.
 
-Pin endpoints use symbol references plus pin names:
+Symbol connection keys use pin names:
 
 ```yaml
-nets:
-  USB_D_P:
-    - J1.D+@A6
-    - J1.D+@B6
-  GND:
-    - U1.GND/all
+symbols:
+  J1:
+    lib: Connector:USB_C_Receptacle_USB2.0_16P
+    connects:
+      D+@A6: USB_D_P
+      D+@B6: USB_D_P
+      D-/all: nc
+      GND/all: GND
 ```
 
 Use `@pin_number` when duplicate pin names need one physical pin. Use `/all`
@@ -98,7 +100,7 @@ one-off extra libraries.
 If a symbol is project-local, prefer declaring it in the schema or project
 config rather than passing `--symbol-library` every time.
 
-If validation reports a schema path such as `nets.USB_D_P[1]`, use
+If validation reports a schema path such as `symbols.J1.connects.D+@A6`, use
 `ksch explain` on the referenced symbol or endpoint to inspect the actual KiCad
 pins.
 
