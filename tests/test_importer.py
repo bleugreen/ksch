@@ -179,7 +179,8 @@ def test_import_drops_no_connects_that_are_connected_by_netlist(tmp_path: Path) 
     )
 
     assert "no_connects" not in docs["/"]
-    assert docs["/"]["nets"] == {"CM5_5V_IN": ["U1.GPIO27"]}
+    assert docs["/"]["symbols"]["U1"]["connects"] == {"GPIO27": "CM5_5V_IN"}
+    assert "nets" not in docs["/"]
 
 
 def test_import_preserves_project_footprint_libraries(tmp_path: Path) -> None:
