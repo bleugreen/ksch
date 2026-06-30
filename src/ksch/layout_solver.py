@@ -48,7 +48,7 @@ from ksch.schematic_geometry import (
     symbol_property_points,
     text_rect,
 )
-from ksch.segment_geometry import segments_touch
+from ksch.segment_geometry import point_on_segment, segments_touch
 
 
 PAPER = "A3"
@@ -311,6 +311,7 @@ class _AssemblySolver:
         items, ports = self._pack_assemblies(assemblies)
         del ports
         items = self._legalized_sheet_items(items)
+        items = self._separate_cross_net_endpoints(items)
         items = self._ensure_power_driver_symbols(items)
         return SheetLayoutState(
             path=self.sheet_path,
@@ -331,6 +332,170 @@ class _AssemblySolver:
                 return next_items
             legalized = next_items
         return legalized
+
+    def _separate_cross_net_endpoints(self, items: list[PlacedItem]) -> list[PlacedItem]:
+        """Resolve coincident endpoints/wires of different nets.
+
+        The placement passes can route a power-net rail/marker through grid
+        nodes that are already used by another net's pin stub (the labels for
+        the foreign stub are emitted later, so the rail search does not see
+        them). When that happens two distinct nets share a coordinate and KiCad
+        merges them into one net. This pass detects such cross-net coincidences
+        and prunes the offending power-net branch (redundant power-port markers
+        and their terminal-less connecting wires), which connects by net name
+        regardless, so the other net's connectivity is left untouched.
+        """
+        items = list(items)
+        for _iteration in range(8):
+            bad = self._cross_net_bad_points(items)
+            if not bad:
+                return items
+            progressed = False
+            # Prefer pruning power nets: they re-connect by name and carry
+            # redundant markers, so removing a colliding branch is lossless.
+            for net_name in sorted(bad, key=lambda name: (not _is_power_net(name), name)):
+                if not _is_power_net(net_name):
+                    continue
+                pruned = self._prune_net_branch(items, net_name, bad[net_name])
+                if pruned is not None and len(pruned) < len(items):
+                    items = pruned
+                    progressed = True
+                    break
+            if not progressed:
+                # No safe lossless prune available; stop rather than risk
+                # disconnecting a net.
+                return items
+        return items
+
+    def _cross_net_bad_points(self, items: list[PlacedItem]) -> dict[str, set[tuple[float, float]]]:
+        geometry = placed_items_geometry(tuple(items), symbol_library=self.project.symbol_library)
+        problem = geometry.as_problem()
+        bad: dict[str, set[tuple[float, float]]] = {}
+
+        def mark(net_name: str, point: tuple[float, float]) -> None:
+            bad.setdefault(net_name, set()).add((_snap(point[0]), _snap(point[1])))
+
+        for contact in problem.cross_net_contacts():
+            point = (contact.point.x, contact.point.y)
+            for net_name in contact.first.nets:
+                mark(net_name, point)
+            for net_name in contact.second.nets:
+                mark(net_name, point)
+        # Power-port/driver symbols carry no segment, so a port pin sitting on a
+        # foreign net's wire/label is not reported as a contact above. Detect it
+        # explicitly so the colliding port is pruned.
+        for item in items:
+            if not isinstance(item, PlacedSymbol):
+                continue
+            if item.lib_id not in {POWER_PORT_LIB_ID, POWER_DRIVER_LIB_ID}:
+                continue
+            net_name = _symbol_property_value(item, "Value")
+            if net_name is None:
+                continue
+            for segment in problem.segments:
+                if not segment.nets or net_name in segment.nets:
+                    continue
+                if point_on_segment(item.at, segment.wire_segment()):
+                    mark(net_name, item.at)
+                    break
+        return bad
+
+    def _prune_net_branch(
+        self,
+        items: list[PlacedItem],
+        net_name: str,
+        bad_points: set[tuple[float, float]],
+    ) -> list[PlacedItem] | None:
+        net_wires = [
+            item
+            for item in items
+            if isinstance(item, PlacedWire) and net_name in item.nets
+        ]
+        # A point is anchored when a pin-bearing (terminal) wire of this net
+        # touches it; the BFS must not prune past such nodes.
+        anchored: set[tuple[float, float]] = set()
+        for wire in net_wires:
+            if wire.start_terminals or wire.end_terminals:
+                anchored.add((_snap(wire.start[0]), _snap(wire.start[1])))
+                anchored.add((_snap(wire.end[0]), _snap(wire.end[1])))
+
+        def key(point: tuple[float, float]) -> tuple[float, float]:
+            return (_snap(point[0]), _snap(point[1]))
+
+        remove_wire_ids: set[str] = set()
+        visited: set[tuple[float, float]] = set()
+        frontier: list[tuple[float, float]] = [key(point) for point in bad_points]
+        visited.update(frontier)
+        while frontier:
+            point = frontier.pop()
+            for wire in net_wires:
+                if wire.uuid in remove_wire_ids:
+                    continue
+                if wire.start_terminals or wire.end_terminals:
+                    continue  # never prune a pin-bearing wire
+                ends = (key(wire.start), key(wire.end))
+                if point not in ends:
+                    continue
+                remove_wire_ids.add(wire.uuid)
+                other = ends[1] if ends[0] == point else ends[0]
+                if other not in anchored and other not in visited:
+                    visited.add(other)
+                    frontier.append(other)
+
+        remove_symbol_uuids: set[str] = set()
+        remove_text_at: set[tuple[float, float]] = set()
+        remaining_power_ports = 0
+        for item in items:
+            if not isinstance(item, PlacedSymbol):
+                continue
+            if item.lib_id == POWER_PORT_LIB_ID:
+                port_net = _symbol_property_value(item, "Value")
+                if port_net == net_name:
+                    if key(item.at) in visited:
+                        remove_symbol_uuids.add(item.uuid)
+                        for property_ in item.properties:
+                            if property_.name == "Value":
+                                remove_text_at.add(key(property_.at))
+                    else:
+                        remaining_power_ports += 1
+            elif item.lib_id == POWER_DRIVER_LIB_ID and key(item.at) in visited:
+                remove_symbol_uuids.add(item.uuid)
+
+        if not remove_wire_ids and not remove_symbol_uuids:
+            return None
+        # Refuse to strip the net's last on-sheet assertion if it still has pins.
+        if remaining_power_ports == 0 and self._net_has_terminals(items, net_name):
+            return None
+
+        pruned: list[PlacedItem] = []
+        for item in items:
+            if isinstance(item, PlacedWire) and item.uuid in remove_wire_ids:
+                continue
+            if isinstance(item, PlacedSymbol) and item.uuid in remove_symbol_uuids:
+                continue
+            if (
+                isinstance(item, PlacedLabel)
+                and net_name in item.nets
+                and key(item.at) in visited
+            ):
+                continue
+            if (
+                isinstance(item, PlacedJunction)
+                and net_name in item.nets
+                and key(item.at) in visited
+            ):
+                continue
+            if isinstance(item, PlacedText) and key(item.at) in remove_text_at:
+                continue
+            pruned.append(item)
+        return pruned
+
+    def _net_has_terminals(self, items: list[PlacedItem], net_name: str) -> bool:
+        for item in items:
+            if isinstance(item, PlacedWire) and net_name in item.nets:
+                if item.start_terminals or item.end_terminals:
+                    return True
+        return False
 
     def _ensure_power_driver_symbols(self, items: list[PlacedItem]) -> list[PlacedItem]:
         normalized: list[PlacedItem] = []
