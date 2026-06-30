@@ -3982,12 +3982,16 @@ def _placed_symbol(
                 continue
             seen.add(pin.number)
             pins.append(PlacedSymbolPin(pin.number, stable_uuid(f"{sheet_path}:{ref}:{unit}:{pin.number}")))
-    unit_suffix = "" if unit == 1 else f":unit:{unit}"
+    # NOTE: symbol UUID key uses "/" before the refdes (not ":") to stay byte-compatible
+    # with the pre-rewrite layout engine. KiCad links PCB footprints to schematic symbols
+    # by this UUID; changing the separator reassigns every UUID and makes "Update PCB from
+    # Schematic" scatter the whole board. Keep "/" so existing routed boards stay matched.
+    unit_suffix = "" if unit == 1 else f"/unit/{unit}"
     return PlacedSymbol(
         lib_id=decl.lib,
         at=(at.x, at.y),
         unit=unit,
-        uuid=stable_uuid(f"{sheet_path}:{ref}{unit_suffix}"),
+        uuid=stable_uuid(f"{sheet_path}/{ref}{unit_suffix}"),
         project_name=project.name,
         sheet_instance_path=sheet_instance_path(sheet_path),
         reference=ref,
