@@ -66,7 +66,10 @@ class _DisjointSet:
             self._parents[right_root] = left_root
 
 
-def compare_netlist_to_schema(project: ResolvedProject, exported: dict[str, NetlistNet]) -> list[str]:
+def compare_netlist_to_schema(
+    project: ResolvedProject,
+    exported: dict[str, NetlistNet],
+) -> list[str]:
     return [mismatch.format() for mismatch in net_mate_mismatches(project, exported)]
 
 

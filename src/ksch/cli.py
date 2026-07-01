@@ -382,7 +382,7 @@ def layout_report_command(
         typer.Option("--symbol-library", help="Symbol library as NICKNAME=PATH."),
     ] = None,
 ) -> None:
-    """Write a best-effort layout artifact and canonical geometry metrics without failing on illegality."""
+    """Write best-effort layout artifacts and canonical geometry metrics."""
     try:
         resolved, symbol_libraries = _resolved_project_context(path, symbol_library or [])
         layout_errors: list[str] = []
