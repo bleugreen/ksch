@@ -90,8 +90,9 @@ def _write_library_table(
 
 
 def _project_uses_internal_power_symbols(project: PlacedProject) -> bool:
+    internal_power_lib_ids = {POWER_DRIVER_LIB_ID, POWER_FLAG_LIB_ID, POWER_PORT_LIB_ID}
     return any(
-        isinstance(item, PlacedSymbol) and item.lib_id in {POWER_DRIVER_LIB_ID, POWER_FLAG_LIB_ID, POWER_PORT_LIB_ID}
+        isinstance(item, PlacedSymbol) and item.lib_id in internal_power_lib_ids
         for sheet in project.sheets
         for item in sheet.items
     )
@@ -410,7 +411,10 @@ def write_project(
     _write_project_file(project, output_dir)
     symbol_libraries = dict(symbol_libraries or {})
     if _project_uses_internal_power_symbols(project):
-        symbol_libraries["power"] = _write_internal_power_library(output_dir, symbol_libraries.get("power"))
+        symbol_libraries["power"] = _write_internal_power_library(
+            output_dir,
+            symbol_libraries.get("power"),
+        )
     _write_library_table(
         symbol_libraries,
         output_dir,

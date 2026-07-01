@@ -48,8 +48,18 @@ def test_layout_problem_reports_same_owner_visible_overlaps() -> None:
 def test_layout_problem_ignores_same_owner_symbol_body_self_overlap() -> None:
     problem = LayoutProblem(
         elements=(
-            LayoutElement(id="U1:body:0", owner="U1", kind="symbol_body", rect=Rect(0, 0, 20, 20)),
-            LayoutElement(id="U1:body:1", owner="U1", kind="symbol_body", rect=Rect(10, 10, 30, 30)),
+            LayoutElement(
+                id="U1:body:0",
+                owner="U1",
+                kind="symbol_body",
+                rect=Rect(0, 0, 20, 20),
+            ),
+            LayoutElement(
+                id="U1:body:1",
+                owner="U1",
+                kind="symbol_body",
+                rect=Rect(10, 10, 30, 30),
+            ),
         )
     )
 
@@ -347,8 +357,11 @@ def test_avoiding_router_uses_canonical_blockers() -> None:
         [],
     )
 
-    assert wires
-    assert any(abs(wire.start[1]) > 0.001 or abs(wire.end[1]) > 0.001 for wire in wires)
+    assert all(isinstance(wire, PlacedWire) for wire in wires)
+    wire_items = tuple(wire for wire in wires if isinstance(wire, PlacedWire))
+
+    assert wire_items
+    assert any(abs(wire.start[1]) > 0.001 or abs(wire.end[1]) > 0.001 for wire in wire_items)
     assert not any(
         segment_blocked_by_element(
             LayoutSegment(
@@ -363,7 +376,7 @@ def test_avoiding_router_uses_canonical_blockers() -> None:
             ),
             blocker,
         )
-        for wire in wires
+        for wire in wire_items
     )
 
 

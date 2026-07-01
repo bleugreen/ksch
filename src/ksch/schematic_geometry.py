@@ -31,6 +31,7 @@ from ksch.placed import (
     PlacedText,
     PlacedWire,
 )
+from ksch.resolver import ResolvedProject
 from ksch.segment_geometry import point_on_segment, segment_intersects_rect, segments_touch
 
 SCHEMATIC_GRID = 2.54
@@ -425,7 +426,7 @@ def _uses_side_properties(
 
 
 def resolved_symbol_readability_rects(
-    project: object,
+    project: ResolvedProject,
     sheet_path: str,
     ref: str,
     unit: int,
