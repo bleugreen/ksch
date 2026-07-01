@@ -3,6 +3,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from sexpdata import loads  # type: ignore[import-untyped]
+
 from ksch.kicad.sexpr import atom, load_sexpr_file
 
 
@@ -13,6 +15,7 @@ class SymbolPin:
     electrical_type: str
     unit: int = 1
     at: tuple[float, float, float] | None = None
+    length: float = 2.54
 
 
 @dataclass(frozen=True)
@@ -95,10 +98,11 @@ def _flatten_definition(
     return flattened
 
 
-def _find_pin_fields(pin_expr: list[Any]) -> tuple[str, str, tuple[float, float, float] | None]:
+def _find_pin_fields(pin_expr: list[Any]) -> tuple[str, str, tuple[float, float, float] | None, float]:
     name = ""
     number = ""
     at = None
+    length = 2.54
     for item in pin_expr:
         if isinstance(item, list) and item:
             token = atom(item[0])
@@ -112,7 +116,9 @@ def _find_pin_fields(pin_expr: list[Any]) -> tuple[str, str, tuple[float, float,
                     float(atom(item[2])),
                     float(atom(item[3])) if len(item) > 3 else 0.0,
                 )
-    return name, number, at
+            elif token == "length" and len(item) > 1:
+                length = float(atom(item[1]))
+    return name, number, at, length
 
 
 def _symbol_unit(name: str) -> int:
@@ -133,7 +139,7 @@ def _collect_pins(expr: list[Any], current_unit: int = 1) -> list[SymbolPin]:
         if isinstance(item, list) and item:
             token = atom(item[0])
             if token == "pin":
-                name, number, at = _find_pin_fields(item)
+                name, number, at, length = _find_pin_fields(item)
                 pins.append(
                     SymbolPin(
                         name=name,
@@ -141,6 +147,7 @@ def _collect_pins(expr: list[Any], current_unit: int = 1) -> list[SymbolPin]:
                         electrical_type=atom(item[1]),
                         unit=current_unit,
                         at=at,
+                        length=length,
                     )
                 )
             elif token == "symbol":
@@ -221,3 +228,114 @@ def index_symbol_library(nickname: str, path: Path) -> SymbolLibraryIndex:
         symbol = _merge_inherited_symbol(nickname, name, symbol_exprs, resolved, set())
         symbols[symbol.lib_id] = symbol
     return SymbolLibraryIndex(nickname=nickname, path=path, symbols=symbols)
+
+
+def index_symbol_library_symbols(
+    nickname: str,
+    path: Path,
+    names: set[str],
+) -> SymbolLibraryIndex:
+    symbol_exprs = _selected_symbol_exprs(path, names)
+    symbols: dict[str, SymbolInfo] = {}
+    resolved: dict[str, SymbolInfo] = {}
+    for name in sorted(names):
+        if name not in symbol_exprs:
+            continue
+        symbol = _merge_inherited_symbol(nickname, name, symbol_exprs, resolved, set())
+        symbols[symbol.lib_id] = symbol
+    return SymbolLibraryIndex(nickname=nickname, path=path, symbols=symbols)
+
+
+def _selected_symbol_exprs(path: Path, names: set[str]) -> dict[str, list[Any]]:
+    snippets = _top_level_symbol_snippets(path)
+    symbol_exprs: dict[str, list[Any]] = {}
+    pending = list(names)
+    while pending:
+        name = pending.pop()
+        if name in symbol_exprs:
+            continue
+        snippet = snippets.get(name)
+        if snippet is None:
+            continue
+        expr = loads(snippet)
+        if not isinstance(expr, list):
+            continue
+        symbol_exprs[name] = expr
+        base_name = _extends_value(expr)
+        if base_name and base_name not in symbol_exprs:
+            pending.append(base_name)
+    return symbol_exprs
+
+
+def _top_level_symbol_snippets(path: Path) -> dict[str, str]:
+    text = path.read_text(encoding="utf-8")
+    snippets: dict[str, str] = {}
+    depth = 0
+    start: int | None = None
+    in_string = False
+    escape = False
+    for index, char in enumerate(text):
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+            continue
+        if char == "(":
+            if depth == 1 and _starts_symbol_expr(text, index):
+                start = index
+            depth += 1
+            continue
+        if char != ")":
+            continue
+        depth -= 1
+        if start is not None and depth == 1:
+            snippet = text[start : index + 1]
+            name = _symbol_name_from_snippet(snippet)
+            if name and not _is_nested_unit_symbol_name(name):
+                snippets[name] = snippet
+            start = None
+    return snippets
+
+
+def _starts_symbol_expr(text: str, index: int) -> bool:
+    token = "(symbol"
+    if not text.startswith(token, index):
+        return False
+    next_index = index + len(token)
+    return next_index < len(text) and text[next_index].isspace()
+
+
+def _symbol_name_from_snippet(snippet: str) -> str | None:
+    index = len("(symbol")
+    while index < len(snippet) and snippet[index].isspace():
+        index += 1
+    if index >= len(snippet):
+        return None
+    if snippet[index] != '"':
+        end = index
+        while end < len(snippet) and not snippet[end].isspace() and snippet[end] not in "()":
+            end += 1
+        return snippet[index:end]
+
+    index += 1
+    chars: list[str] = []
+    escape = False
+    while index < len(snippet):
+        char = snippet[index]
+        if escape:
+            chars.append(char)
+            escape = False
+        elif char == "\\":
+            escape = True
+        elif char == '"':
+            return "".join(chars)
+        else:
+            chars.append(char)
+        index += 1
+    return None

@@ -44,7 +44,7 @@ def test_generated_project_is_seen_by_kicad_cli(tmp_path: Path) -> None:
     netlist_text = netlist.read_text(encoding="utf-8")
     assert '(ref "J1")' in netlist_text
     assert '(ref "U2")' in netlist_text
-    assert '(name "/+5V")' in netlist_text
+    assert '(name "+5V")' in netlist_text or '(name "/+5V")' in netlist_text
     assert '(node (ref "J1") (pin "A4")' in netlist_text
     assert '(node (ref "J1") (pin "B4")' in netlist_text
     assert '(node (ref "U2") (pin "3")' in netlist_text

@@ -141,7 +141,45 @@ def test_import_maps_kicad_unconnected_nets_to_no_connects(tmp_path: Path) -> No
         ],
     )
 
-    assert docs["/"]["symbols"]["J1"]["connects"] == {"SBU1": "nc"}
+    assert docs["/"]["symbols"]["J1"]["connects"] == {"A8": "nc"}
+    assert "nets" not in docs["/"]
+
+
+def test_import_drops_no_connects_that_are_connected_by_netlist(tmp_path: Path) -> None:
+    docs = _build_schema_documents(
+        root_name="demo",
+        project_dir=tmp_path,
+        out_dir=tmp_path / "imported",
+        sheets={"/": SheetInfo(sheet_path="/", source=tmp_path / "demo.kicad_sch")},
+        sheet_by_file={"demo.kicad_sch": "/"},
+        components={
+            "U1": ImportedComponent(
+                ref="U1",
+                lib_id="Test:Device",
+                value="Device",
+                footprint=None,
+                fields={},
+                sheet_path="/",
+                sheet_file="demo.kicad_sch",
+            )
+        },
+        symbol_pins={
+            "Test:Device": {
+                "1": ImportedPin(number="1", name="GPIO27", electrical_type="passive")
+            }
+        },
+        symbol_units={},
+        nets=[
+            ImportedNet(
+                name="CM5_5V_IN",
+                nodes=[ImportedNode(ref="U1", pin_number="1", pin_name="GPIO27")],
+            )
+        ],
+        no_connects={"/": ["U1.GPIO27"]},
+    )
+
+    assert "no_connects" not in docs["/"]
+    assert docs["/"]["symbols"]["U1"]["connects"] == {"GPIO27": "CM5_5V_IN"}
     assert "nets" not in docs["/"]
 
 

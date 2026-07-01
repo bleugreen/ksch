@@ -12,6 +12,7 @@ class PlacedProperty:
     at: PlacedPoint
     justify: Literal["left", "right"] = "left"
     hidden: bool = False
+    rotation: int = 0
 
 
 @dataclass(frozen=True)
@@ -85,6 +86,7 @@ class PlacedLabel:
     at: PlacedPoint
     uuid: str
     justify: Literal["left", "right"] = "left"
+    rotation: int = 0
     hidden: bool = False
     nets: frozenset[str] = frozenset()
 
@@ -93,6 +95,7 @@ class PlacedLabel:
 class PlacedNoConnect:
     at: PlacedPoint
     uuid: str
+    terminal: str | None = None
 
 
 @dataclass(frozen=True)
@@ -102,6 +105,16 @@ class PlacedHierarchicalLabel:
     at: PlacedPoint
     uuid: str
     justify: Literal["left", "right"] = "left"
+    rotation: int = 0
+
+
+@dataclass(frozen=True)
+class PlacedText:
+    text: str
+    at: PlacedPoint
+    uuid: str
+    justify: Literal["left", "right"] = "left"
+    rotation: int = 0
 
 
 type PlacedItem = (
@@ -112,6 +125,7 @@ type PlacedItem = (
     | PlacedLabel
     | PlacedNoConnect
     | PlacedHierarchicalLabel
+    | PlacedText
 )
 
 
