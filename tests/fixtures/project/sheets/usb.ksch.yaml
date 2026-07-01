@@ -14,3 +14,7 @@ symbols:
       USBDP_UP: USB_UP_DP
       USBDM_UP: nc
       GND/all: nc
+blocks:
+  USB Hub:
+    members:
+      - U2
