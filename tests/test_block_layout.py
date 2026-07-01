@@ -136,4 +136,4 @@ def test_undeclared_sheet_path_emits_no_block_frames_and_keeps_netlist_parity() 
     assert frames == []
     assert report["layout_errors"] == 0
     assert report["out_of_bounds"] == 0
-    assert mates[("J1", "VBUS")] == frozenset({("U1", "VIN"), ("C1", "1")})
+    assert mates[("J1", "1")] == frozenset({("U1", "1"), ("C1", "1")})

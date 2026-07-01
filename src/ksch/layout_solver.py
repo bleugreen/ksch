@@ -374,7 +374,7 @@ class _AssemblySolver:
                 declared_ref_blocks[ref] = block_name
         for component_id, component in self.components.items():
             if component.kind == "symbol" and component.ref in declared_ref_blocks:
-                block_of[component_id] = declared_ref_blocks[cast(str, component.ref)]
+                block_of[component_id] = declared_ref_blocks[component.ref]
 
         owners = self._expanded_support_owners(self._passive_owners())
         changed = True
