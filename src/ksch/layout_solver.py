@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass, replace
 from math import floor
@@ -313,13 +314,36 @@ class _AssemblySolver:
         self._project_label_text_counts_cache: dict[str, int] | None = None
         self._implicit_driver_nets: set[str] = set()
         self._placed_component_cache: dict[tuple[str, int, bool], PlacedComponent] = {}
+        self._full_net_records: dict[str, list[NetEndpoint]] = {}
+        self._item_frame_rects: dict[str, Rect] = {}
 
     def solve(self) -> SheetLayoutState:
         self._build_components()
         self._build_net_records()
-        owners = self._passive_owners()
-        assemblies = self._build_assemblies(owners)
-        items, ports = self._pack_assemblies(assemblies)
+        self._full_net_records = {
+            net_name: list(records) for net_name, records in self.net_records.items()
+        }
+        self._prime_label_text_caches()
+
+        block_of = self._component_blocks()
+        pack_units: list[Assembly] = []
+        for block_name in self._ordered_block_names(block_of):
+            members = {component_id for component_id, owner in block_of.items() if owner == block_name}
+            if not members:
+                continue
+            with self._scoped_view(members):
+                owners = self._passive_owners()
+                assemblies = self._build_assemblies(owners)
+            pack_units.append(self._frame_block_assembly(block_name, assemblies))
+
+        leftovers = {component_id for component_id, owner in block_of.items() if owner is None}
+        if leftovers:
+            with self._scoped_view(leftovers):
+                owners = self._passive_owners()
+                pack_units.extend(self._build_assemblies(owners))
+
+        self._item_frame_rects = {}
+        items, ports = self._pack_assemblies(pack_units)
         del ports
         items = self._legalized_sheet_items(items)
         items = self._separate_cross_net_endpoints(items)
