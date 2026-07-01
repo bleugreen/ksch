@@ -175,9 +175,7 @@ def test_import_drops_no_connects_that_are_connected_by_netlist(tmp_path: Path) 
             )
         },
         symbol_pins={
-            "Test:Device": {
-                "1": ImportedPin(number="1", name="GPIO27", electrical_type="passive")
-            }
+            "Test:Device": {"1": ImportedPin(number="1", name="GPIO27", electrical_type="passive")}
         },
         symbol_units={},
         nets=[

@@ -182,9 +182,7 @@ def resolve_project(
                     )
                 except (KschError, ValueError) as exc:
                     source_path = _net_endpoint_path(sheet, net_name, index)
-                    raise KschError(
-                        f"{sheet.source_path}: {source_path}: {exc}"
-                    ) from exc
+                    raise KschError(f"{sheet.source_path}: {source_path}: {exc}") from exc
             for resolved_endpoint in resolved_endpoints:
                 endpoint_key = resolved_endpoint_key(resolved_endpoint)
                 existing_net = endpoint_nets.get(endpoint_key)
@@ -215,9 +213,7 @@ def resolve_project(
                     if index < len(sheet.no_connect_paths)
                     else f"no_connects[{index}]"
                 )
-                raise KschError(
-                    f"{sheet.source_path}: {source_path}: {exc}"
-                ) from exc
+                raise KschError(f"{sheet.source_path}: {source_path}: {exc}") from exc
         resolved.sheets[sheet_path] = resolved_sheet
     return resolved
 

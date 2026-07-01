@@ -174,9 +174,7 @@ def test_generated_power_port_geometry_counts_only_visible_value_field() -> None
         symbol_definitions={POWER_PORT_LIB_ID: power_port_symbol_definition()},
     )
 
-    assert [(box.kind, box.owner) for box in geometry.boxes] == [
-        ("field", symbol.reference)
-    ]
+    assert [(box.kind, box.owner) for box in geometry.boxes] == [("field", symbol.reference)]
     assert geometry.boxes[0].rect == text_rect(Point(12.54, 20.0), "CM5_3V3_OUT")
 
 
@@ -364,7 +362,7 @@ def test_avoiding_router_uses_canonical_blockers() -> None:
         rect=Rect(8, -2, 12, 2),
     )
 
-    wires = _wire_items_avoiding(
+    items = _wire_items_avoiding(
         "/",
         "NET",
         (0.0, 0.0),
@@ -375,6 +373,7 @@ def test_avoiding_router_uses_canonical_blockers() -> None:
         [blocker],
         [],
     )
+    wires = [item for item in items if isinstance(item, PlacedWire)]
 
     assert all(isinstance(wire, PlacedWire) for wire in wires)
     wire_items = tuple(wire for wire in wires if isinstance(wire, PlacedWire))

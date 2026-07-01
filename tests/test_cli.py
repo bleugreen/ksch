@@ -436,9 +436,7 @@ def test_cli_edit_add_symbol_updates_configured_schema(
 
     assert result.exit_code == 0, result.output
     assert "added symbol J1" in result.stdout
-    assert "  J1:\n    lib: Test:USB_C\n    value: USB_IN\n" in schema.read_text(
-        encoding="utf-8"
-    )
+    assert "  J1:\n    lib: Test:USB_C\n    value: USB_IN\n" in schema.read_text(encoding="utf-8")
 
 
 def test_cli_skill_show_prints_bundled_skill() -> None:

@@ -14,10 +14,14 @@ def _ranges_overlap(
     second_start: float,
     second_end: float,
 ) -> bool:
-    return max(min(first_start, first_end), min(second_start, second_end)) <= min(
-        max(first_start, first_end),
-        max(second_start, second_end),
-    ) + EPSILON
+    return (
+        max(min(first_start, first_end), min(second_start, second_end))
+        <= min(
+            max(first_start, first_end),
+            max(second_start, second_end),
+        )
+        + EPSILON
+    )
 
 
 def _segment_bounds_overlap_rect(segment: WireSegment, rect: Rect) -> bool:

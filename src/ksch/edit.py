@@ -146,9 +146,7 @@ def connect_endpoints(
         if existing_net == net_name:
             continue
         if existing_net is not None:
-            raise KschError(
-                f"{endpoint} is already connected to {existing_net} in {sheet_path}"
-            )
+            raise KschError(f"{endpoint} is already connected to {existing_net} in {sheet_path}")
         added.append(endpoint)
 
     if not added:

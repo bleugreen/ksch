@@ -1,12 +1,11 @@
-from pathlib import Path
 import ast
+from pathlib import Path
 
 from ksch.compiler import build_placed_project
 from ksch.expand import load_project_ir
 from ksch.kicad.symbols import index_symbol_library
 from ksch.placed import PlacedProject, PlacedSymbol
 from ksch.resolver import LibraryContext, resolve_project
-
 
 DELETED_GEOMETRY_MODULES = (
     "src/ksch/placement.py",
@@ -48,8 +47,7 @@ def test_canonical_geometry_owns_layout_problem_types() -> None:
 
 def test_deleted_placement_solver_names_stay_deleted() -> None:
     production_source = "\n".join(
-        path.read_text(encoding="utf-8")
-        for path in Path("src/ksch").glob("*.py")
+        path.read_text(encoding="utf-8") for path in Path("src/ksch").glob("*.py")
     )
 
     for forbidden in (
@@ -67,8 +65,7 @@ def test_deleted_placement_solver_names_stay_deleted() -> None:
 
 def test_no_late_whole_sheet_label_rescue_names() -> None:
     production_source = "\n".join(
-        path.read_text(encoding="utf-8")
-        for path in Path("src/ksch").glob("*.py")
+        path.read_text(encoding="utf-8") for path in Path("src/ksch").glob("*.py")
     )
 
     for forbidden in (

@@ -112,9 +112,7 @@ def _assign_connect(
 ) -> None:
     existing = connects.get(selector)
     if existing is not None and existing != net_name:
-        raise KschError(
-            f"{endpoint_text} maps to both {existing} and {net_name}"
-        )
+        raise KschError(f"{endpoint_text} maps to both {existing} and {net_name}")
     connects[selector] = net_name
 
 

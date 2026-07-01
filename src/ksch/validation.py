@@ -7,11 +7,12 @@ from ksch.placed import (
     PlacedSheet,
 )
 from ksch.schematic_geometry import (
-    LayoutElement,
     LayoutContact,
+    LayoutElement,
     LayoutOverlap,
     LayoutProblem,
     LayoutSegment,
+    SchematicGeometry,
     placed_sheet_geometry,
 )
 
@@ -129,9 +130,7 @@ def placed_layout_report(
                 )
             )
         for contact in problem.cross_net_contacts():
-            cross_net_contacts_.append(
-                PlacedLayoutContact(sheet_path=sheet.path, contact=contact)
-            )
+            cross_net_contacts_.append(PlacedLayoutContact(sheet_path=sheet.path, contact=contact))
     return PlacedLayoutReport(
         layout_errors=layout_errors,
         out_of_bounds=tuple(out_of_bounds),
@@ -215,7 +214,9 @@ def placed_geometry_problem(sheet: PlacedSheet) -> LayoutProblem:
     return placed_sheet_geometry(sheet).as_problem()
 
 
-def _out_of_bounds(sheet: PlacedSheet, geometry: object) -> tuple[PlacedOutOfBounds, ...]:
+def _out_of_bounds(
+    sheet: PlacedSheet, geometry: SchematicGeometry
+) -> tuple[PlacedOutOfBounds, ...]:
     page_rect = usable_page_rect_for_paper(sheet.paper)
     if page_rect is None:
         return ()
@@ -230,10 +231,7 @@ def _out_of_bounds(sheet: PlacedSheet, geometry: object) -> tuple[PlacedOutOfBou
                 )
             )
     for segment in geometry.segments:
-        if not (
-            _point_within(segment.start, page_rect)
-            and _point_within(segment.end, page_rect)
-        ):
+        if not (_point_within(segment.start, page_rect) and _point_within(segment.end, page_rect)):
             violations.append(
                 PlacedOutOfBounds(
                     sheet_path=sheet.path,
@@ -317,10 +315,10 @@ def _point_dict(point: Point) -> dict[str, float]:
     return {"x": point.x, "y": point.y}
 
 
-def _rect_dict(rect: object) -> dict[str, float]:
+def _rect_dict(rect: Rect) -> dict[str, float]:
     return {
-        "left": getattr(rect, "left"),
-        "top": getattr(rect, "top"),
-        "right": getattr(rect, "right"),
-        "bottom": getattr(rect, "bottom"),
+        "left": rect.left,
+        "top": rect.top,
+        "right": rect.right,
+        "bottom": rect.bottom,
     }

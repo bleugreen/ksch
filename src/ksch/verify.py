@@ -187,9 +187,7 @@ def export_kicad_netlist(schematic: Path, target: Path) -> None:
     )
     if result.returncode != 0:
         message = (
-            result.stderr.strip()
-            or result.stdout.strip()
-            or "kicad-cli netlist export failed"
+            result.stderr.strip() or result.stdout.strip() or "kicad-cli netlist export failed"
         )
         raise RuntimeError(message)
 
@@ -324,11 +322,7 @@ def _first_child(expr: list[Any], name: str) -> list[Any] | None:
 
 
 def _children(expr: list[Any], name: str) -> list[list[Any]]:
-    return [
-        item
-        for item in expr[1:]
-        if isinstance(item, list) and item and atom(item[0]) == name
-    ]
+    return [item for item in expr[1:] if isinstance(item, list) and item and atom(item[0]) == name]
 
 
 def run_kicad_cli(args: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:

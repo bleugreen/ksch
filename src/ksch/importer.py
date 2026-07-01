@@ -4,7 +4,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from io import StringIO
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from ruamel.yaml import YAML
 from sexpdata import Symbol  # type: ignore[import-untyped]
@@ -99,9 +99,7 @@ def import_project(root_schematic: Path, out_dir: Path) -> ImportedProject:
     embedded_symbol_libraries = _write_embedded_symbol_libraries(sheets, out_dir)
     symbol_units = _read_symbol_units(sheets)
     power_flags = _read_power_flags(sheets)
-    sheet_by_file = {
-        info.source.resolve().name: info.sheet_path for info in sheets.values()
-    }
+    sheet_by_file = {info.source.resolve().name: info.sheet_path for info in sheets.values()}
     no_connects = _read_no_connects(sheets, components, symbol_pins)
     root_name = root.stem
     schema_by_sheet = _build_schema_documents(
@@ -307,7 +305,7 @@ def _write_embedded_symbol_libraries(
 
 
 def _copy_symbol_definition_for_library(symbol_expr: list[Any], symbol_name: str) -> list[Any]:
-    copied = _deep_copy_sexpr(symbol_expr)
+    copied = cast(list[Any], _deep_copy_sexpr(symbol_expr))
     copied[1] = symbol_name
     return copied
 
@@ -353,7 +351,9 @@ def _read_no_connects(
     for sheet_path, sheet in sheets.items():
         expr = load_sexpr_file(sheet.source)
         no_connect_points = {
-            point for item in _children(expr, "no_connect") for point in [_at_point(item)]
+            point
+            for item in _children(expr, "no_connect")
+            for point in [_at_point(item)]
             if point is not None
         }
         if not no_connect_points:
@@ -389,9 +389,7 @@ def _read_no_connects(
                 )
                 if _coordinate_key(point[0], point[1]) not in no_connect_points:
                     continue
-                nodes.append(
-                    ImportedNode(ref=ref, pin_number=pin.number, pin_name=pin.name)
-                )
+                nodes.append(ImportedNode(ref=ref, pin_number=pin.number, pin_name=pin.name))
         if nodes:
             no_connects[sheet_path] = _number_endpoints_for_nodes(nodes)
     return no_connects
@@ -549,9 +547,7 @@ def _build_schema_documents(
         if _is_kicad_unconnected_net(net) and len(net.nodes) == 1:
             node = net.nodes[0]
             sheet_path = component_sheet.get(node.ref, "/")
-            sheet_no_connects[sheet_path].extend(
-                _number_endpoints_for_nodes([node])
-            )
+            sheet_no_connects[sheet_path].extend(_number_endpoints_for_nodes([node]))
             continue
 
         nodes_by_sheet: dict[str, list[ImportedNode]] = defaultdict(list)
@@ -829,8 +825,4 @@ def _first_child(expr: list[Any], name: str) -> list[Any] | None:
 
 
 def _children(expr: list[Any], name: str) -> list[list[Any]]:
-    return [
-        item
-        for item in expr[1:]
-        if isinstance(item, list) and item and atom(item[0]) == name
-    ]
+    return [item for item in expr[1:] if isinstance(item, list) and item and atom(item[0]) == name]
