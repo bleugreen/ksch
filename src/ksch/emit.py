@@ -6,14 +6,6 @@ from typing import Any
 from sexpdata import Symbol  # type: ignore[import-untyped]
 
 from ksch.kicad.sexpr import atom, dump_sexpr, load_sexpr_file
-from ksch.power_flags import (
-    POWER_DRIVER_LIB_ID,
-    POWER_FLAG_LIB_ID,
-    POWER_PORT_LIB_ID,
-    power_driver_symbol_definition,
-    power_flag_symbol_definition,
-    power_port_symbol_definition,
-)
 from ksch.placed import (
     PlacedGraphicRectangle,
     PlacedHierarchicalLabel,
@@ -30,6 +22,14 @@ from ksch.placed import (
     PlacedSymbolPin,
     PlacedText,
     PlacedWire,
+)
+from ksch.power_flags import (
+    POWER_DRIVER_LIB_ID,
+    POWER_FLAG_LIB_ID,
+    POWER_PORT_LIB_ID,
+    power_driver_symbol_definition,
+    power_flag_symbol_definition,
+    power_port_symbol_definition,
 )
 
 

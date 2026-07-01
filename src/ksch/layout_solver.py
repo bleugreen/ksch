@@ -1,16 +1,22 @@
 from __future__ import annotations
 
+import re
 from copy import deepcopy
 from dataclasses import dataclass, replace
 from math import floor
 from pathlib import Path
-import re
 from typing import Any, Literal
 
 from ksch.geometry import symbol_pin_coordinate
 from ksch.ids import stable_uuid
 from ksch.kicad.symbols import SymbolInfo, SymbolPin
-from ksch.layout import Point, Rect, title_block_rect_for_paper, usable_page_rect_for_paper, snap_grid
+from ksch.layout import (
+    Point,
+    Rect,
+    snap_grid,
+    title_block_rect_for_paper,
+    usable_page_rect_for_paper,
+)
 from ksch.model.endpoint import EndpointKind, parse_endpoint
 from ksch.model.source import PinDirection, SymbolDecl
 from ksch.placed import (
@@ -50,7 +56,6 @@ from ksch.schematic_geometry import (
     text_rect,
 )
 from ksch.segment_geometry import point_on_segment, segments_touch
-
 
 PAPER = "A3"
 GRID = 2.54
@@ -236,16 +241,16 @@ class _OscillatorModule:
 
 @dataclass(frozen=True)
 class _PackScoreContext:
-    visible_index: "_RectIndex"
-    route_index: "_RectIndex"
-    envelope_index: "_RectIndex"
+    visible_index: _RectIndex
+    route_index: _RectIndex
+    envelope_index: _RectIndex
     placed_bounds: Rect | None
 
 
 @dataclass(frozen=True)
 class _PathContext:
-    avoid_index: "_LayoutElementIndex"
-    existing_index: "_SegmentIndex"
+    avoid_index: _LayoutElementIndex
+    existing_index: _SegmentIndex
 
 
 @dataclass(frozen=True)

@@ -1,7 +1,13 @@
 from ksch.layout import Point, Rect
 from ksch.layout_solver import _wire_items_avoiding
+from ksch.placed import (
+    PlacedGraphicRectangle,
+    PlacedLabel,
+    PlacedProperty,
+    PlacedSymbol,
+    PlacedText,
+)
 from ksch.power_flags import POWER_PORT_LIB_ID, power_port_symbol, power_port_symbol_definition
-from ksch.placed import PlacedGraphicRectangle, PlacedLabel, PlacedProperty, PlacedText, PlacedSymbol
 from ksch.schematic_geometry import (
     LayoutElement,
     LayoutProblem,
