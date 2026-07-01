@@ -3522,7 +3522,8 @@ class _AssemblySolver:
             local = [record for record in records if record.component_id in component_ids]
             if not local:
                 continue
-            external = [record for record in records if record.component_id not in component_ids]
+            all_records = self._full_net_records.get(net_name, records)
+            external = [record for record in all_records if record.component_id not in component_ids]
             unconnected = [
                 record for record in local if record.endpoint_key not in connected_endpoints
             ]
@@ -4587,7 +4588,15 @@ class _AssemblySolver:
         ports: dict[str, tuple[float, float]] = {}
         for assembly in assemblies:
             dx, dy = placements[assembly.id]
-            items.extend(_translate_item(item, dx, dy) for item in assembly.items)
+            frame = _assembly_frame_rect(assembly)
+            translated_frame = _translate_rect(frame, dx, dy) if frame is not None else None
+            for item in assembly.items:
+                translated = _translate_item(item, dx, dy)
+                items.append(translated)
+                if translated_frame is not None:
+                    uuid = getattr(translated, "uuid", None)
+                    if isinstance(uuid, str):
+                        self._item_frame_rects[uuid] = translated_frame
             for key, point in assembly.ports.items():
                 ports[key] = _translate_point(point, dx, dy)
         return items, ports
