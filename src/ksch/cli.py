@@ -560,7 +560,7 @@ def verify_command(
     root = Path(temp_context.name) if temp_context is not None else artifacts
     assert root is not None
     try:
-        generated_dir = root / "generated" if artifacts is not None else root
+        generated_dir = root / "generated"
         generated_dir.mkdir(parents=True, exist_ok=True)
         project_config = _load_config_for_defaults(
             config,
