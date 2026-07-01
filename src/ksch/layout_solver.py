@@ -602,6 +602,11 @@ class _AssemblySolver:
                     existing_items=remaining,
                     symbol_library=self.project.symbol_library,
                 )
+                frame = self._item_frame_rects.get(label.uuid)
+                if frame is not None and not _items_fit_rect(
+                    tuple(label_items), self.project.symbol_library, frame
+                ):
+                    continue
                 candidate = [*remaining, *label_items]
                 candidate_bad = self._cross_net_bad_points(candidate)
                 if len(candidate_bad.get(net_name, set())) < len(bad_points):
@@ -977,6 +982,11 @@ class _AssemblySolver:
                     existing_items=[*remaining, *added],
                     symbol_library=self.project.symbol_library,
                 )
+                frame = self._item_frame_rects.get(segment.id)
+                if frame is not None and not _items_fit_rect(
+                    tuple(label_items), self.project.symbol_library, frame
+                ):
+                    continue
                 added.extend(label_items)
                 occupied.extend(_wire_avoid_rects(label_items))
         return [*remaining, *added]
