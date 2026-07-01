@@ -466,7 +466,7 @@ def resolved_symbol_readability_rects(
 
 
 def resolved_symbol_readability_elements(
-    project: object,
+    project: ResolvedProject,
     sheet_path: str,
     ref: str,
     unit: int,
