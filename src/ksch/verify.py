@@ -1,6 +1,7 @@
 import subprocess
 from dataclasses import dataclass
 from filecmp import dircmp
+from collections.abc import Collection
 from pathlib import Path
 from typing import Any
 
@@ -103,7 +104,7 @@ def schema_net_mates(project: ResolvedProject) -> tuple[dict[Pin, frozenset[Pin]
 
 def netlist_net_mates(
     nets: dict[str, NetlistNet],
-    pins: set[Pin] | dict[Pin, object],
+    pins: Collection[Pin],
 ) -> tuple[dict[Pin, frozenset[Pin]], dict[Pin, str]]:
     pin_set = set(pins)
     groups: list[set[Pin]] = []

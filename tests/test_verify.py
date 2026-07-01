@@ -2,7 +2,6 @@ from pathlib import Path
 
 from ksch.model.endpoint import EndpointKind
 from ksch.model.ir import ProjectIR, SheetIR
-from ksch.model.source import PinDirection
 from ksch.resolver import ResolvedEndpoint, ResolvedProject, ResolvedSheet
 from ksch.verify import (
     NetlistNet,
@@ -90,7 +89,7 @@ def test_schema_net_mates_flattens_sheet_interfaces() -> None:
                 "/usb": SheetIR(
                     path="/usb",
                     source_path=Path("usb.ksch.yaml"),
-                    interface={"VBUS": PinDirection.POWER_IN},
+                    interface={"VBUS": "power_in"},
                 ),
             },
         ),
