@@ -614,7 +614,11 @@ class _AssemblySolver:
             port = component.ports.get(record.endpoint_key)
             if port is None:
                 continue
-            if component.kind == "symbol" and component.ref is not None:
+            if (
+                component.kind == "symbol"
+                and component.ref is not None
+                and component.unit is not None
+            ):
                 symbol = symbols.get((component.ref, component.unit))
                 if symbol is None:
                     continue
