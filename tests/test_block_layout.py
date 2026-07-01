@@ -65,7 +65,11 @@ def test_declared_blocks_render_as_four_titled_frames() -> None:
     block_names = set(project.sheets["/"].blocks)
 
     frames = [item for item in sheet.items if isinstance(item, PlacedGraphicRectangle)]
-    titles = [item.text for item in sheet.items if isinstance(item, PlacedText) and item.text in block_names]
+    titles = [
+        item.text
+        for item in sheet.items
+        if isinstance(item, PlacedText) and item.text in block_names
+    ]
 
     assert len(frames) == 4
     assert set(titles) == {"CAN Controller", "CAN Transceiver", "Vehicle Conn", "12V Sense"}
@@ -73,7 +77,11 @@ def test_declared_blocks_render_as_four_titled_frames() -> None:
 
 def test_declared_block_members_are_inside_exactly_one_frame() -> None:
     project, sheet = _can_controller_sheet()
-    frames = [_rect_for_frame(item) for item in sheet.items if isinstance(item, PlacedGraphicRectangle)]
+    frames = [
+        _rect_for_frame(item)
+        for item in sheet.items
+        if isinstance(item, PlacedGraphicRectangle)
+    ]
     geometry = placed_items_geometry(sheet.items, symbol_library=project.symbol_library)
     body_rect_by_uuid = {
         box.id.removesuffix(":body"): box.rect
@@ -92,7 +100,11 @@ def test_declared_block_members_are_inside_exactly_one_frame() -> None:
 
 def test_declared_block_frames_do_not_overlap() -> None:
     _project, sheet = _can_controller_sheet()
-    frames = [_rect_for_frame(item) for item in sheet.items if isinstance(item, PlacedGraphicRectangle)]
+    frames = [
+        _rect_for_frame(item)
+        for item in sheet.items
+        if isinstance(item, PlacedGraphicRectangle)
+    ]
 
     for index, frame in enumerate(frames):
         for other in frames[index + 1 :]:
@@ -101,13 +113,21 @@ def test_declared_block_frames_do_not_overlap() -> None:
 
 def test_cross_block_nets_use_labels_instead_of_frame_crossing_wires() -> None:
     _project, sheet = _can_controller_sheet()
-    frames = [_rect_for_frame(item) for item in sheet.items if isinstance(item, PlacedGraphicRectangle)]
+    frames = [
+        _rect_for_frame(item)
+        for item in sheet.items
+        if isinstance(item, PlacedGraphicRectangle)
+    ]
     can_txd_labels = [
         item
         for item in sheet.items
         if isinstance(item, PlacedLabel) and "CAN_TXD" in item.nets and item.name == "CAN_TXD"
     ]
-    can_txd_wires = [item for item in sheet.items if isinstance(item, PlacedWire) and "CAN_TXD" in item.nets]
+    can_txd_wires = [
+        item
+        for item in sheet.items
+        if isinstance(item, PlacedWire) and "CAN_TXD" in item.nets
+    ]
 
     label_frames = {
         index
@@ -118,8 +138,12 @@ def test_cross_block_nets_use_labels_instead_of_frame_crossing_wires() -> None:
 
     assert len(label_frames) == 2
     for wire in can_txd_wires:
-        start_frames = {index for index, frame in enumerate(frames) if _contains_point(frame, wire.start)}
-        end_frames = {index for index, frame in enumerate(frames) if _contains_point(frame, wire.end)}
+        start_frames = {
+            index for index, frame in enumerate(frames) if _contains_point(frame, wire.start)
+        }
+        end_frames = {
+            index for index, frame in enumerate(frames) if _contains_point(frame, wire.end)
+        }
         assert start_frames == end_frames
 
 

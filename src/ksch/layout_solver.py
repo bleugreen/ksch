@@ -329,7 +329,9 @@ class _AssemblySolver:
         block_of = self._component_blocks()
         pack_units: list[Assembly] = []
         for block_name in self._ordered_block_names(block_of):
-            members = {component_id for component_id, owner in block_of.items() if owner == block_name}
+            members = {
+                component_id for component_id, owner in block_of.items() if owner == block_name
+            }
             if not members:
                 continue
             previous_block_scope = self._framed_block_scope
@@ -3541,7 +3543,9 @@ class _AssemblySolver:
             if not local:
                 continue
             all_records = self._full_net_records.get(net_name, records)
-            external = [record for record in all_records if record.component_id not in component_ids]
+            external = [
+                record for record in all_records if record.component_id not in component_ids
+            ]
             unconnected = [
                 record for record in local if record.endpoint_key not in connected_endpoints
             ]
