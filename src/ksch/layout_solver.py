@@ -6990,6 +6990,40 @@ def _items_rect(
     )
 
 
+def _assembly_frame_rect(assembly: Assembly) -> Rect | None:
+    frames = [item for item in assembly.items if isinstance(item, PlacedGraphicRectangle)]
+    if len(frames) != 1 or not assembly.id.startswith("block:"):
+        return None
+    frame = frames[0]
+    return Rect(
+        frame.at[0],
+        frame.at[1],
+        frame.at[0] + frame.size[0],
+        frame.at[1] + frame.size[1],
+    )
+
+
+def _items_fit_rect(
+    items: tuple[PlacedItem, ...],
+    symbol_library: dict[str, SymbolInfo],
+    frame: Rect,
+) -> bool:
+    rect = _items_rect(items, symbol_library)
+    if rect is None:
+        return True
+    return _rect_contains(frame, rect)
+
+
+def _rect_contains(outer: Rect, inner: Rect) -> bool:
+    epsilon = 0.01
+    return (
+        inner.left >= outer.left - epsilon
+        and inner.top >= outer.top - epsilon
+        and inner.right <= outer.right + epsilon
+        and inner.bottom <= outer.bottom + epsilon
+    )
+
+
 def _local_net_root(records: list[NetEndpoint], components: dict[str, Component]) -> NetEndpoint:
     return max(
         records,
