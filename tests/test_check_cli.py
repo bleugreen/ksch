@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+import ksch.cli as cli
 from ksch.cli import app
 
 runner = CliRunner()
@@ -104,3 +105,61 @@ def test_verify_reports_generated_output_drift(tmp_path: Path) -> None:
 
     assert verify_result.exit_code == 1
     assert "drift: generated file differs demo.kicad_sch" in verify_result.stdout
+
+
+def test_verify_fails_when_generated_netlist_merges_schema_nets(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    compile_result = runner.invoke(
+        app,
+        [
+            "compile",
+            "tests/fixtures/project/project.ksch.yaml",
+            "--out",
+            str(tmp_path),
+            "--symbol-library",
+            "Test=tests/fixtures/kicad/symbols/Test.kicad_sym",
+        ],
+    )
+    assert compile_result.exit_code == 0
+
+    def fake_export_kicad_netlist(_schematic: Path, target: Path) -> None:
+        target.write_text(
+            "\n".join(
+                [
+                    "(export",
+                    "  (nets",
+                    "    (net (code \"1\") (name \"SHORT\")",
+                    "      (node (ref \"J1\") (pin \"A4\"))",
+                    "      (node (ref \"J1\") (pin \"B4\"))",
+                    "      (node (ref \"J1\") (pin \"A6\"))",
+                    "      (node (ref \"J1\") (pin \"B6\"))",
+                    "      (node (ref \"U2\") (pin \"1\"))",
+                    "      (node (ref \"U2\") (pin \"3\"))))",
+                    ")",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(cli, "export_kicad_netlist", fake_export_kicad_netlist)
+
+    verify_result = runner.invoke(
+        app,
+        [
+            "verify",
+            "tests/fixtures/project/project.ksch.yaml",
+            "--out",
+            str(tmp_path),
+            "--no-erc",
+            "--symbol-library",
+            "Test=tests/fixtures/kicad/symbols/Test.kicad_sym",
+        ],
+    )
+
+    assert verify_result.exit_code == 1
+    assert "netlist parity: J1.A4 net-mates differ" in verify_result.stdout
+    assert "schema net +5V" in verify_result.stdout
+    assert "exported net SHORT" in verify_result.stdout
