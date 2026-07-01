@@ -64,8 +64,8 @@ class SymbolDecl(BaseModel):
 
 
 class BlockDecl(BaseModel):
-    model_config = ConfigDict(extra="allow")
-    params: dict[str, str] = Field(default_factory=dict)
+    model_config = ConfigDict(extra="forbid")
+    members: list[str] = Field(default_factory=list)
 
 
 class UseDecl(BaseModel):
@@ -97,4 +97,23 @@ class SourceDocument(BaseModel):
             raise ValueError("document must define either project or sheet")
         if self.project is not None and self.sheet is not None:
             raise ValueError("document cannot define both project and sheet")
+        self._validate_blocks()
         return self
+
+    def _validate_blocks(self) -> None:
+        assigned_refs: dict[str, str] = {}
+        for block_name, block in self.blocks.items():
+            for ref in block.members:
+                if ref not in self.symbols:
+                    raise ValueError(
+                        f"blocks.{block_name}.members: ref {ref} does not exist on this sheet; "
+                        f"add symbol {ref} under symbols or remove {ref} from block {block_name}"
+                    )
+                existing_block = assigned_refs.get(ref)
+                if existing_block is not None:
+                    raise ValueError(
+                        f"blocks.{block_name}.members: ref {ref} is already in block "
+                        f"{existing_block}; remove {ref} from one block so each symbol ref "
+                        "appears in only one block"
+                    )
+                assigned_refs[ref] = block_name

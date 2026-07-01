@@ -2,7 +2,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ksch.model.source import PinDirection, SymbolDecl
+from ksch.model.source import BlockDecl, PinDirection, SymbolDecl
 
 
 class ChildInstanceIR(BaseModel):
@@ -26,6 +26,7 @@ class SheetIR(BaseModel):
     no_connect_paths: list[str] = Field(default_factory=list)
     assertions: list[dict[str, object]] = Field(default_factory=list)
     child_instances: dict[str, ChildInstanceIR] = Field(default_factory=dict)
+    blocks: dict[str, BlockDecl] = Field(default_factory=dict)
 
 
 class ProjectIR(BaseModel):
