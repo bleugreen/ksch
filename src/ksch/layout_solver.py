@@ -503,14 +503,14 @@ class _AssemblySolver:
         ]
         # A point is anchored when a pin-bearing (terminal) wire of this net
         # touches it; the BFS must not prune past such nodes.
-        anchored: set[tuple[float, float]] = set()
-        for wire in net_wires:
-            if wire.start_terminals or wire.end_terminals:
-                anchored.add((_snap(wire.start[0]), _snap(wire.start[1])))
-                anchored.add((_snap(wire.end[0]), _snap(wire.end[1])))
-
         def key(point: tuple[float, float]) -> tuple[float, float]:
             return (_snap(point[0]), _snap(point[1]))
+
+        anchored: set[tuple[float, float]] = self._net_terminal_points(items, net_name)
+        for wire in net_wires:
+            if wire.start_terminals or wire.end_terminals:
+                anchored.add(key(wire.start))
+                anchored.add(key(wire.end))
 
         remove_wire_ids: set[str] = set()
         visited: set[tuple[float, float]] = set()
@@ -518,6 +518,8 @@ class _AssemblySolver:
         visited.update(frontier)
         while frontier:
             point = frontier.pop()
+            if point in anchored:
+                continue
             for wire in net_wires:
                 if wire.uuid in remove_wire_ids:
                     continue
@@ -526,9 +528,11 @@ class _AssemblySolver:
                 ends = (key(wire.start), key(wire.end))
                 if point not in ends:
                     continue
-                remove_wire_ids.add(wire.uuid)
                 other = ends[1] if ends[0] == point else ends[0]
-                if other not in anchored and other not in visited:
+                if other in anchored:
+                    return None
+                remove_wire_ids.add(wire.uuid)
+                if other not in visited:
                     visited.add(other)
                     frontier.append(other)
 
@@ -556,6 +560,12 @@ class _AssemblySolver:
         # Refuse to strip the net's last on-sheet assertion if it still has pins.
         if remaining_power_ports == 0 and self._net_has_terminals(items, net_name):
             return None
+        if any(
+            key(wire.start) in anchored or key(wire.end) in anchored
+            for wire in net_wires
+            if wire.uuid in remove_wire_ids
+        ):
+            return None
 
         pruned: list[PlacedItem] = []
         for item in items:
@@ -577,11 +587,56 @@ class _AssemblySolver:
         return pruned
 
     def _net_has_terminals(self, items: list[PlacedItem], net_name: str) -> bool:
+        if self._net_terminal_points(items, net_name):
+            return True
         for item in items:
             if isinstance(item, PlacedWire) and net_name in item.nets:
                 if item.start_terminals or item.end_terminals:
                     return True
         return False
+
+    def _net_terminal_points(
+        self,
+        items: list[PlacedItem],
+        net_name: str,
+    ) -> set[tuple[float, float]]:
+        symbols: dict[tuple[str, int], PlacedSymbol] = {
+            (item.reference, item.unit): item for item in items if isinstance(item, PlacedSymbol)
+        }
+        sheets: dict[str, PlacedSheetBlock] = {
+            item.sheet_name: item for item in items if isinstance(item, PlacedSheetBlock)
+        }
+        points: set[tuple[float, float]] = set()
+        for record in self.net_records.get(net_name, []):
+            component = self.components.get(record.component_id)
+            if component is None:
+                continue
+            port = component.ports.get(record.endpoint_key)
+            if port is None:
+                continue
+            if component.kind == "symbol" and component.ref is not None:
+                symbol = symbols.get((component.ref, component.unit))
+                if symbol is None:
+                    continue
+                point = _component_port_point(
+                    component,
+                    port,
+                    Point(symbol.at[0], symbol.at[1]),
+                    symbol.rotation,
+                )
+                points.add(point)
+            elif component.kind == "sheet" and component.ref is not None:
+                sheet = sheets.get(component.ref)
+                if sheet is None:
+                    continue
+                point = _component_port_point(
+                    component,
+                    port,
+                    Point(sheet.at[0], sheet.at[1]),
+                    0,
+                )
+                points.add(point)
+        return points
 
     def _label_branch(
         self,
