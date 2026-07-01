@@ -316,6 +316,7 @@ class _AssemblySolver:
         self._placed_component_cache: dict[tuple[str, int, bool], PlacedComponent] = {}
         self._full_net_records: dict[str, list[NetEndpoint]] = {}
         self._item_frame_rects: dict[str, Rect] = {}
+        self._framed_block_scope = False
 
     def solve(self) -> SheetLayoutState:
         self._build_components()
@@ -331,9 +332,14 @@ class _AssemblySolver:
             members = {component_id for component_id, owner in block_of.items() if owner == block_name}
             if not members:
                 continue
-            with self._scoped_view(members):
-                owners = self._passive_owners()
-                assemblies = self._build_assemblies(owners)
+            previous_block_scope = self._framed_block_scope
+            self._framed_block_scope = True
+            try:
+                with self._scoped_view(members):
+                    owners = self._passive_owners()
+                    assemblies = self._build_assemblies(owners)
+            finally:
+                self._framed_block_scope = previous_block_scope
             pack_units.append(self._frame_block_assembly(block_name, assemblies))
 
         leftovers = {component_id for component_id, owner in block_of.items() if owner is None}
@@ -4221,7 +4227,8 @@ class _AssemblySolver:
             sample = self._place_component(
                 component, Point(0.0, 0.0), 0, compact_value=component.passive
             )
-            if cursor_x > 0.001 and cursor_x + sample.rect.width > 180.0:
+            max_row_width = 110.0 if self._framed_block_scope else 180.0
+            if cursor_x > 0.001 and cursor_x + sample.rect.width > max_row_width:
                 cursor_x = 0.0
                 y = _snap(y + row_height + SUPPORT_STEP)
                 row_height = 0.0
