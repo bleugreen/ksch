@@ -4195,6 +4195,7 @@ class _AssemblySolver:
                         f"rail:{group_id}:{side}:{net_name}",
                         existing_items=[*existing_items, *items],
                         symbol_library=self.project.symbol_library,
+                        route_root_local=self._framed_block_scope,
                     )
                 )
             rails.append((items, group))
