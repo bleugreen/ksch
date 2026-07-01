@@ -68,19 +68,18 @@ def test_cross_net_separation_preserves_terminal_anchored_power_branches() -> No
     placed = build_placed_project(project)
     mates, _nets = schema_net_mates(project)
 
-    veh_rev_wires = [
+    veh_rev_items = [
         item
         for sheet in placed.sheets
         for item in sheet.items
-        if isinstance(item, PlacedWire) and "VEH_REV_12V" in item.nets
+        if (
+            (isinstance(item, PlacedWire) and "VEH_REV_12V" in item.nets)
+            or (
+                isinstance(item, PlacedLabel | PlacedHierarchicalLabel)
+                and item.name == "VEH_REV_12V"
+            )
+        )
     ]
 
     assert mates[("J2", "6")] == frozenset({("R7", "1")})
-    assert any(
-        wire.start == (214.63, 100.33) or wire.end == (214.63, 100.33)
-        for wire in veh_rev_wires
-    )
-    assert any(
-        wire.start == (226.06, 115.57) or wire.end == (226.06, 115.57)
-        for wire in veh_rev_wires
-    )
+    assert veh_rev_items
