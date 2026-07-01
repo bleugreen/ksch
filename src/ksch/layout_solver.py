@@ -2485,6 +2485,7 @@ class _AssemblySolver:
                                 axis_locked=component.kind == "sheet" or not component.passive,
                                 existing_items=[*existing_items, *items],
                                 symbol_library=self.project.symbol_library,
+                                route_root_local=self._framed_block_scope,
                             )
                         )
                     continue
@@ -2567,6 +2568,7 @@ class _AssemblySolver:
                     axis_locked=component.kind == "sheet" or not component.passive,
                     existing_items=[*existing_items, *items],
                     symbol_library=self.project.symbol_library,
+                    route_root_local=self._framed_block_scope,
                 )
                 items.extend(label_items)
                 occupied.extend(_wire_avoid_rects(label_items))
@@ -3810,6 +3812,7 @@ class _AssemblySolver:
                 existing_items=[*base_items, *items],
                 symbol_library=self.project.symbol_library,
                 path_context=label_path_context,
+                route_root_local=self._framed_block_scope,
             )
             items.extend(label_items)
             occupied.extend(_wire_avoid_rects(label_items))
@@ -3933,6 +3936,7 @@ class _AssemblySolver:
                         axis_locked=False,
                         existing_items=[*existing_items, *items],
                         symbol_library=self.project.symbol_library,
+                        route_root_local=self._framed_block_scope,
                     )
                 items.extend(marker_items)
                 occupied.extend(_wire_avoid_rects(marker_items))
@@ -5989,9 +5993,10 @@ def _label_items(
     existing_items: list[PlacedItem] | None = None,
     symbol_library: dict[str, SymbolInfo] | None = None,
     path_context: _PathContext | None = None,
+    route_root_local: bool = False,
 ) -> list[PlacedItem]:
     key = f"{sheet_path}:{endpoint_key}:{net_name}:label"
-    if sheet_path == "/" and kind == "local":
+    if sheet_path == "/" and kind == "local" and not route_root_local:
         anchor = (_snap(point[0]), _snap(point[1]))
         justify: Literal["left", "right"] = "right" if side == "WEST" else "left"
         rect = text_rect(Point(anchor[0], anchor[1]), label_text, justify=justify)
