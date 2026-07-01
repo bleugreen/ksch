@@ -59,10 +59,10 @@ symbols:
 project:
   name: demo
 symbols:
-  C1:
-    lib: Test:C
   U1:
     lib: Test:Controller
+  C1:
+    lib: Test:C
 blocks:
   CAN Controller:
     members:
