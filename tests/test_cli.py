@@ -129,6 +129,11 @@ def test_cli_schema_show_outputs_json_schema() -> None:
     assert schema["title"] == "ksch Schema v1"
     assert schema["properties"]["ksch"]["const"] == 1
     assert "symbols" in schema["properties"]
+    block_decl = schema["$defs"]["BlockDecl"]
+    assert "members" in block_decl["properties"]
+    assert schema["properties"]["blocks"]["additionalProperties"]["$ref"].endswith(
+        "/$defs/BlockDecl"
+    )
 
 
 def test_cli_expand_lists_sheets() -> None:

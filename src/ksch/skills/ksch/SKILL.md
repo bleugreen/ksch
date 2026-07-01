@@ -63,6 +63,7 @@ Core top-level keys:
 - `sheets` for hierarchy.
 - `symbols` for placed electrical parts.
 - `connects` under symbols and sheet instances for electrical connectivity.
+- `blocks` for sheet-local functional groups that guide future layout intent.
 - `power_flags` for intentional powered nets.
 - `nc` as a reserved `connects` value for intentional NC pins.
 
@@ -81,6 +82,18 @@ symbols:
 
 Use `@pin_number` when duplicate pin names need one physical pin. Use `/all`
 when every duplicate pin with that name is connected.
+
+Declare functional blocks on the same sheet as their symbols. Blocks use human
+readable names and sheet-local refs; ungrouped symbols are allowed, but a ref can
+appear in only one block:
+
+```yaml
+blocks:
+  CAN Controller:
+    members: [U1, Y1, C1, C2]
+  CAN Transceiver:
+    members: [U2, D3, R8]
+```
 
 ## Authoring Checks
 

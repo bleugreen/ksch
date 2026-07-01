@@ -38,3 +38,34 @@ def test_wraps_yaml_parse_errors() -> None:
 def test_formatter_orders_top_level_keys() -> None:
     text = "symbols: {}\nksch: 1\nproject:\n  name: demo\n"
     assert format_schema_text(text) == "ksch: 1\nproject:\n  name: demo\nsymbols: {}\n"
+
+
+def test_formatter_preserves_and_orders_blocks() -> None:
+    text = """
+ksch: 1
+project:
+  name: demo
+blocks:
+  CAN Controller:
+    members: [U1, C1]
+symbols:
+  U1:
+    lib: Test:Controller
+  C1:
+    lib: Test:C
+"""
+
+    assert format_schema_text(text) == """ksch: 1
+project:
+  name: demo
+symbols:
+  C1:
+    lib: Test:C
+  U1:
+    lib: Test:Controller
+blocks:
+  CAN Controller:
+    members:
+      - U1
+      - C1
+"""

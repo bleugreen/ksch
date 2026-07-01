@@ -17,7 +17,8 @@ Project documents define the root schematic and sheet tree:
 - `sheets`: child sheet instances by local child name, with optional port `connects`.
 - `symbols`: root-sheet symbols by reference, with optional pin `connects`.
 - `assertions`: schema-level checks reserved for verification.
-- `blocks` and `use`: reusable schematic fragments reserved for expansion.
+- `blocks`: optional root-sheet functional groups for layout intent.
+- `use`: reusable schematic fragments reserved for expansion.
 
 Example project-local library declaration:
 
@@ -43,7 +44,8 @@ Sheet documents define one reusable or instantiated schematic sheet:
 - `sheets`: nested child sheet instances, with optional port `connects`.
 - `symbols`: sheet-local symbols by reference, with optional pin `connects`.
 - `assertions`: sheet-local checks reserved for verification.
-- `blocks` and `use`: reusable schematic fragments reserved for expansion.
+- `blocks`: optional sheet-local functional groups for layout intent.
+- `use`: reusable schematic fragments reserved for expansion.
 
 ## Connections
 
@@ -99,3 +101,31 @@ directions use the same vocabulary as schema pin directions:
 During KiCad emission, `power_in` and `power_out` sheet pins are emitted as
 KiCad `passive` sheet pins because KiCad sheet-pin shapes do not model power
 direction separately.
+
+## Functional Blocks
+
+A sheet may declare functional `blocks` that group sheet-local symbol references by
+author intent. Blocks are sheet-scoped: a root document's blocks only name root
+symbols, and each child sheet document owns its own blocks. Symbols may be left
+out of blocks; the layout solver can place ungrouped symbols later.
+
+Use one mapping entry per human-readable block name, with a `members` list of
+symbol refs:
+
+```yaml
+blocks:
+  CAN Controller:
+    members:
+      - U1
+      - Y1
+      - C1
+  CAN Transceiver:
+    members:
+      - U2
+      - D3
+```
+
+Every member must exist under that same sheet's `symbols`, and a symbol ref may
+appear in at most one block on the sheet. Fix validation errors by either adding
+the missing symbol to `symbols`, removing the member from the block, or moving a
+duplicate member so each ref belongs to only one block.
