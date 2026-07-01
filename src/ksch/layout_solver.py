@@ -352,7 +352,7 @@ class _AssemblySolver:
         regardless, so the other net's connectivity is left untouched.
         """
         items = list(items)
-        for _iteration in range(8):
+        for _iteration in range(32):
             bad = self._cross_net_bad_points(items)
             if not bad:
                 return items
@@ -368,10 +368,87 @@ class _AssemblySolver:
                     progressed = True
                     break
             if not progressed:
-                # No safe lossless prune available; stop rather than risk
-                # disconnecting a net.
+                for net_name in sorted(bad):
+                    rerouted = self._reroute_cross_net_label_branch(items, net_name, bad[net_name])
+                    if rerouted is not None:
+                        items = rerouted
+                        progressed = True
+                        break
+            if not progressed:
+                # No safe lossless prune/reroute available; stop rather than
+                # risk disconnecting a net.
                 return items
         return items
+
+    def _reroute_cross_net_label_branch(
+        self,
+        items: list[PlacedItem],
+        net_name: str,
+        bad_points: set[tuple[float, float]],
+    ) -> list[PlacedItem] | None:
+        for label in items:
+            label_net = _placed_label_net(label)
+            if label_net != net_name:
+                continue
+            branch = self._label_branch(items, net_name, label)
+            if branch is None:
+                continue
+            terminal_point, terminal, wire_ids = branch
+            branch_wires = [
+                item
+                for item in items
+                if isinstance(item, PlacedWire) and item.uuid in wire_ids
+            ]
+            if not any(
+                _point_on_wire_key(point, wire)
+                for point in bad_points
+                for wire in branch_wires
+            ) and _point_key(label.at) not in bad_points:
+                continue
+            remaining = [
+                item
+                for item in items
+                if not (
+                    isinstance(item, PlacedWire) and item.uuid in wire_ids
+                )
+                and item is not label
+            ]
+            if terminal is None:
+                if not self._net_has_assertion(remaining, net_name):
+                    continue
+                candidate_bad = self._cross_net_bad_points(remaining)
+                if len(candidate_bad.get(net_name, set())) < len(bad_points):
+                    return remaining
+                continue
+            side = self._terminal_side(net_name, terminal) or _segment_endpoint_side(terminal_point, label.at)
+            kind: Literal["local", "hierarchical"] = "hierarchical" if isinstance(label, PlacedHierarchicalLabel) else "local"
+            for candidate_side in _label_candidate_sides(side, axis_locked=False):
+                occupied = [
+                    _inflate(box.rect, GRID / 2)
+                    for box in placed_items_geometry(
+                        tuple(remaining),
+                        symbol_library=self.project.symbol_library,
+                    ).boxes
+                ]
+                label_items = _label_items(
+                    self.sheet_path,
+                    net_name,
+                    label.name,
+                    terminal_point,
+                    candidate_side,
+                    kind,
+                    occupied,
+                    terminal,
+                    f"separate-cross-net:{label.uuid}:{candidate_side}",
+                    axis_locked=True,
+                    existing_items=remaining,
+                    symbol_library=self.project.symbol_library,
+                )
+                candidate = [*remaining, *label_items]
+                candidate_bad = self._cross_net_bad_points(candidate)
+                if len(candidate_bad.get(net_name, set())) < len(bad_points):
+                    return candidate
+        return None
 
     def _cross_net_bad_points(self, items: list[PlacedItem]) -> dict[str, set[tuple[float, float]]]:
         geometry = placed_items_geometry(tuple(items), symbol_library=self.project.symbol_library)
@@ -502,6 +579,72 @@ class _AssemblySolver:
                 if item.start_terminals or item.end_terminals:
                     return True
         return False
+
+    def _label_branch(
+        self,
+        items: list[PlacedItem],
+        net_name: str,
+        label: PlacedLabel | PlacedHierarchicalLabel,
+    ) -> tuple[tuple[float, float], str | None, set[str]] | None:
+        label_point = (_snap(label.at[0]), _snap(label.at[1]))
+        wires = [item for item in items if isinstance(item, PlacedWire) and net_name in item.nets]
+        wires_by_point: dict[tuple[float, float], list[PlacedWire]] = {}
+        for wire in wires:
+            wires_by_point.setdefault(_point_key(wire.start), []).append(wire)
+            wires_by_point.setdefault(_point_key(wire.end), []).append(wire)
+
+        visited_points = {label_point}
+        visited_wires: set[str] = set()
+        frontier = [label_point]
+        terminals: list[tuple[tuple[float, float], str | None]] = []
+        while frontier:
+            point = frontier.pop()
+            for wire in wires_by_point.get(point, []):
+                if wire.uuid in visited_wires:
+                    continue
+                visited_wires.add(wire.uuid)
+                start = _point_key(wire.start)
+                end = _point_key(wire.end)
+                for wire_point, wire_terminals in (
+                    (start, wire.start_terminals),
+                    (end, wire.end_terminals),
+                ):
+                    if wire_terminals:
+                        terminals.append((wire_point, sorted(wire_terminals)[0]))
+                other = end if start == point else start
+                if other not in visited_points:
+                    visited_points.add(other)
+                    frontier.append(other)
+        if not visited_wires:
+            return None
+        if len(terminals) > 1:
+            return None
+        if len(terminals) == 1:
+            terminal_point, terminal = terminals[0]
+            return terminal_point, terminal, visited_wires
+        return label_point, None, visited_wires
+
+    def _net_has_assertion(self, items: list[PlacedItem], net_name: str) -> bool:
+        for item in items:
+            if _placed_label_net(item) == net_name:
+                return True
+            if isinstance(item, PlacedWire) and net_name in item.nets:
+                if item.start_terminals or item.end_terminals:
+                    return True
+        return False
+
+    def _terminal_side(self, net_name: str, terminal: str | None) -> PortSide | None:
+        if terminal is None:
+            return None
+        for record in self.net_records.get(net_name, []):
+            if record.terminal != terminal:
+                continue
+            component = self.components.get(record.component_id)
+            if component is None:
+                return None
+            port = component.ports.get(record.endpoint_key)
+            return port.side if port is not None else None
+        return None
 
     def _ensure_power_driver_symbols(self, items: list[PlacedItem]) -> list[PlacedItem]:
         normalized: list[PlacedItem] = []
@@ -6344,3 +6487,19 @@ def _snap_within(value: float, low: float, high: float) -> float:
 
 def _same_point(first: tuple[float, float], second: tuple[float, float]) -> bool:
     return abs(first[0] - second[0]) < 0.001 and abs(first[1] - second[1]) < 0.001
+
+
+def _point_key(point: tuple[float, float]) -> tuple[float, float]:
+    return (_snap(point[0]), _snap(point[1]))
+
+
+def _point_on_wire_key(point: tuple[float, float], wire: PlacedWire) -> bool:
+    return point_on_segment(point, (wire.start[0], wire.start[1], wire.end[0], wire.end[1]))
+
+
+def _placed_label_net(item: PlacedItem) -> str | None:
+    if isinstance(item, PlacedLabel) and len(item.nets) == 1:
+        return next(iter(item.nets))
+    if isinstance(item, PlacedHierarchicalLabel):
+        return item.name
+    return None
