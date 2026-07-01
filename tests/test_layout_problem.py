@@ -1,7 +1,7 @@
 from ksch.layout import Point, Rect
 from ksch.layout_solver import _wire_items_avoiding
 from ksch.power_flags import POWER_PORT_LIB_ID, power_port_symbol, power_port_symbol_definition
-from ksch.placed import PlacedProperty, PlacedSymbol
+from ksch.placed import PlacedGraphicRectangle, PlacedLabel, PlacedProperty, PlacedText, PlacedSymbol
 from ksch.schematic_geometry import (
     LayoutElement,
     LayoutProblem,
@@ -359,3 +359,30 @@ def test_avoiding_router_uses_canonical_blockers() -> None:
         )
         for wire in wires
     )
+
+
+def test_block_frame_does_not_overlap_contained_geometry_or_block_routes() -> None:
+    geometry = placed_items_geometry(
+        (
+            PlacedGraphicRectangle(at=(0.0, 0.0), size=(60.0, 40.0), uuid="frame"),
+            PlacedLabel(name="NET_A", at=(10.0, 10.0), uuid="label", nets=frozenset({"NET_A"})),
+            PlacedText(text="CAN Controller", at=(5.0, 5.0), uuid="title"),
+        )
+    )
+
+    assert [box.kind for box in geometry.boxes] == ["graphic_frame", "label", "text"]
+    assert geometry.as_problem().overlaps() == ()
+    assert geometry.route_blockers() == ()
+
+
+def test_block_title_text_is_occupied_geometry() -> None:
+    geometry = placed_items_geometry(
+        (
+            PlacedText(text="CAN Controller", at=(10.0, 10.0), uuid="title"),
+            PlacedLabel(name="CAN", at=(10.0, 10.0), uuid="label", nets=frozenset({"CAN"})),
+        )
+    )
+
+    assert [(hit.first.id, hit.second.id) for hit in geometry.as_problem().overlaps()] == [
+        ("title", "label")
+    ]

@@ -14,6 +14,7 @@ from ksch.layout import Point, Rect, title_block_rect_for_paper, usable_page_rec
 from ksch.model.endpoint import EndpointKind, parse_endpoint
 from ksch.model.source import PinDirection, SymbolDecl
 from ksch.placed import (
+    PlacedGraphicRectangle,
     PlacedHierarchicalLabel,
     PlacedItem,
     PlacedJunction,
@@ -5984,6 +5985,8 @@ def _translate_item(item: PlacedItem, dx: float, dy: float) -> PlacedItem:
     if isinstance(item, PlacedLabel):
         return replace(item, at=_translate_point(item.at, dx, dy))
     if isinstance(item, PlacedHierarchicalLabel):
+        return replace(item, at=_translate_point(item.at, dx, dy))
+    if isinstance(item, PlacedGraphicRectangle):
         return replace(item, at=_translate_point(item.at, dx, dy))
     if isinstance(item, PlacedText):
         return replace(item, at=_translate_point(item.at, dx, dy))

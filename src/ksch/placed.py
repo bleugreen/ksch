@@ -109,10 +109,20 @@ class PlacedHierarchicalLabel:
 
 
 @dataclass(frozen=True)
+class PlacedGraphicRectangle:
+    at: PlacedPoint
+    size: PlacedPoint
+    uuid: str
+    stroke_width: float = 0.1524
+    stroke_type: Literal["solid", "dash", "dot", "dash_dot", "dash_dot_dot", "default"] = "solid"
+
+
+@dataclass(frozen=True)
 class PlacedText:
     text: str
     at: PlacedPoint
     uuid: str
+    size: PlacedPoint = (1.27, 1.27)
     justify: Literal["left", "right"] = "left"
     rotation: int = 0
 
@@ -125,6 +135,7 @@ type PlacedItem = (
     | PlacedLabel
     | PlacedNoConnect
     | PlacedHierarchicalLabel
+    | PlacedGraphicRectangle
     | PlacedText
 )
 

@@ -15,6 +15,7 @@ from ksch.power_flags import (
     power_port_symbol_definition,
 )
 from ksch.placed import (
+    PlacedGraphicRectangle,
     PlacedHierarchicalLabel,
     PlacedItem,
     PlacedJunction,
@@ -162,9 +163,18 @@ def _format_sexpr(value: Any, *, indent: int = 0) -> str:
 
 
 def _effects(*, justify: str = "left", hidden: bool = False) -> list[Any]:
+    return _text_effects(size=(1.27, 1.27), justify=justify, hidden=hidden)
+
+
+def _text_effects(
+    *,
+    size: tuple[float, float],
+    justify: str = "left",
+    hidden: bool = False,
+) -> list[Any]:
     expr: list[Any] = [
         _a("effects"),
-        [_a("font"), [_a("size"), 1.27, 1.27]],
+        [_a("font"), [_a("size"), size[0], size[1]]],
         [_a("justify"), _a(justify)],
     ]
     if hidden:
@@ -322,12 +332,27 @@ def _hierarchical_label_expr(label: PlacedHierarchicalLabel) -> list[Any]:
     ]
 
 
+def _graphic_rectangle_expr(rectangle: PlacedGraphicRectangle) -> list[Any]:
+    return [
+        _a("rectangle"),
+        [_a("start"), rectangle.at[0], rectangle.at[1]],
+        [_a("end"), rectangle.at[0] + rectangle.size[0], rectangle.at[1] + rectangle.size[1]],
+        [
+            _a("stroke"),
+            [_a("width"), rectangle.stroke_width],
+            [_a("type"), _a(rectangle.stroke_type)],
+        ],
+        [_a("fill"), [_a("type"), _a("none")]],
+        [_a("uuid"), rectangle.uuid],
+    ]
+
+
 def _text_expr(text: PlacedText) -> list[Any]:
     return [
         _a("text"),
         text.text,
         [_a("at"), text.at[0], text.at[1], text.rotation],
-        _effects(justify=text.justify),
+        _text_effects(size=text.size, justify=text.justify),
         [_a("uuid"), text.uuid],
     ]
 
@@ -347,6 +372,8 @@ def _item_expr(item: PlacedItem) -> list[Any]:
         return _no_connect_expr(item)
     if isinstance(item, PlacedHierarchicalLabel):
         return _hierarchical_label_expr(item)
+    if isinstance(item, PlacedGraphicRectangle):
+        return _graphic_rectangle_expr(item)
     if isinstance(item, PlacedText):
         return _text_expr(item)
     raise TypeError(f"unknown placed item: {item!r}")

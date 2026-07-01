@@ -15,6 +15,7 @@ from ksch.kicad.sexpr import atom
 from ksch.kicad.symbols import SymbolInfo, SymbolPin, symbol_info_from_definition
 from ksch.layout import GEOMETRY_EPSILON, Point, Rect, snap_grid
 from ksch.placed import (
+    PlacedGraphicRectangle,
     PlacedHierarchicalLabel,
     PlacedItem,
     PlacedJunction,
@@ -206,6 +207,8 @@ def _allowed_element_overlap(first: LayoutElement, second: LayoutElement) -> boo
     if first.owner == second.owner and first.kind.startswith("pin_") and second.kind.startswith("pin_"):
         return True
     kinds = {first.kind, second.kind}
+    if "graphic_frame" in kinds:
+        return True
     if "no_connect" in kinds and any(kind.startswith("pin_") for kind in kinds):
         return _terminal_sets_related(first.terminals, second.terminals)
     return kinds == {"no_connect", "symbol_body"}
@@ -221,6 +224,8 @@ def segment_blocked_by_element(segment: LayoutSegment, box: LayoutElement) -> bo
     if _is_zero_length_label_anchor(segment):
         return False
     if box.kind == "no_connect":
+        return False
+    if box.kind == "graphic_frame":
         return False
     if box.owner == segment.owner:
         return False
@@ -669,6 +674,23 @@ def placed_items_geometry(
                     nets=nets,
                 )
             )
+        elif isinstance(item, PlacedGraphicRectangle):
+            x, y = item.at
+            width, height = item.size
+            boxes.append(
+                LayoutElement(
+                    id=item.uuid,
+                    owner=item.uuid,
+                    kind="graphic_frame",
+                    rect=Rect(
+                        left=min(x, x + width),
+                        top=min(y, y + height),
+                        right=max(x, x + width),
+                        bottom=max(y, y + height),
+                    ),
+                    nets=frozenset(),
+                )
+            )
         elif isinstance(item, PlacedText):
             boxes.append(
                 LayoutElement(
@@ -680,6 +702,8 @@ def placed_items_geometry(
                         item.text,
                         justify=item.justify,
                         rotation=item.rotation,
+                        char_width=item.size[0],
+                        half_height=item.size[1],
                     ),
                     nets=frozenset(),
                 )
