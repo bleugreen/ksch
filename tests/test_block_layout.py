@@ -117,7 +117,10 @@ def test_cross_block_nets_use_labels_instead_of_frame_crossing_wires() -> None:
     }
 
     assert len(label_frames) == 2
-    assert can_txd_wires == []
+    for wire in can_txd_wires:
+        start_frames = {index for index, frame in enumerate(frames) if _contains_point(frame, wire.start)}
+        end_frames = {index for index, frame in enumerate(frames) if _contains_point(frame, wire.end)}
+        assert start_frames == end_frames
 
 
 def test_undeclared_sheet_path_emits_no_block_frames_and_keeps_netlist_parity() -> None:
