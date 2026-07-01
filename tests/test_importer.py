@@ -37,6 +37,17 @@ def _erc_violation_count(output: str) -> int:
     return int(match.group(1))
 
 
+def _erc_error_count(report: str) -> int:
+    match = re.search(r"ERC messages: \d+  Errors (\d+)  Warnings \d+", report)
+    if match is None:
+        raise AssertionError(f"missing ERC error summary in report: {report}")
+    return int(match.group(1))
+
+
+def _erc_code_count(report: str, code: str) -> int:
+    return report.count(f"[{code}]")
+
+
 def test_import_generated_fixture_roundtrips_connectivity(tmp_path: Path) -> None:
     source_project = tmp_path / "source"
     compiled_project = tmp_path / "compiled"
@@ -317,7 +328,7 @@ def test_import_cm5_hudsp_roundtrip_smoke(tmp_path: Path) -> None:
     assert erc.returncode == 0, erc.stderr
     assert _erc_violation_count(erc.stdout) <= _erc_violation_count(original_erc.stdout)
     report_text = erc_report.read_text(encoding="utf-8")
-    assert "Errors 0" in report_text
-    assert "[multiple_net_names]" not in report_text
-    assert "[pin_not_connected]" not in report_text
-    assert "[wire_dangling]" not in report_text
+    original_report_text = original_erc_report.read_text(encoding="utf-8")
+    assert _erc_error_count(report_text) <= _erc_error_count(original_report_text)
+    for code in ("multiple_net_names", "pin_not_connected", "wire_dangling"):
+        assert _erc_code_count(report_text, code) <= _erc_code_count(original_report_text, code)

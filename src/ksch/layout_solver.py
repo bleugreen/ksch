@@ -6144,11 +6144,18 @@ def _is_power_net(net_name: str) -> bool:
     upper = net_name.upper()
     if _is_ground_net(net_name):
         return True
-    if re.search(r"_(SCL|SDA|RXD?|TXD?|INT|RST|RESET|EN|CS|MISO|MOSI|SCLK|CLK|DP|DN|D[0-9]+[NP]?)$", upper):
+    signal_suffix = "|".join(
+        ("SCL", "SDA", "RXD?", "TXD?", "INT", "RST", "RESET", "ENABLE", "EN", "CS",
+         "MISO", "MOSI", "SCLK", "CLK", "DP", "DN", r"D[0-9]+[NP]?")
+    )
+    if re.search(rf"_({signal_suffix})$", upper):
         return False
     if re.search(r"(?:^|[_+-])\d+(?:V\d*|\.\d+V)(?:[A-Z0-9_]*)?$", upper):
         return True
-    return any(token in upper for token in ("VCC", "VDD", "AVDD", "VREF", "VBAT", "VBUS", "1V", "3V3", "5V", "12V"))
+    return re.search(
+        r"(?:^|[_+-])(?:VCC|VDD|AVDD|VREF|VBAT|VBUS)(?:[A-Z0-9_]*$|[_+-])",
+        upper,
+    ) is not None
 
 
 def _qualified_prefix_from_names(net_names: object) -> str | None:

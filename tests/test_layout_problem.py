@@ -1,5 +1,7 @@
+import pytest
+
 from ksch.layout import Point, Rect
-from ksch.layout_solver import _wire_items_avoiding
+from ksch.layout_solver import _is_power_net, _wire_items_avoiding
 from ksch.placed import (
     PlacedGraphicRectangle,
     PlacedLabel,
@@ -140,6 +142,22 @@ def test_half_turn_symbol_property_geometry_uses_absolute_field_rotation() -> No
     value_box = next(box for box in geometry.boxes if box.kind == "field")
 
     assert value_box.rect == text_rect(Point(10.0, 20.0), "100k", rotation=0)
+
+
+@pytest.mark.parametrize(
+    "net_name",
+    ["CM5_3V3_OUT", "USB_ESI_VBUS", "+5V", "3V3A", "VDDIO", "GND"],
+)
+def test_power_net_classifier_accepts_rails(net_name: str) -> None:
+    assert _is_power_net(net_name)
+
+
+@pytest.mark.parametrize(
+    "net_name",
+    ["s3v3_supervision_PWR_LED_BUF", "power_input_5v_ENABLE", "CM5_LED_nPWR"],
+)
+def test_power_net_classifier_rejects_signals_with_powerish_qualifiers(net_name: str) -> None:
+    assert not _is_power_net(net_name)
 
 
 def test_generated_power_port_geometry_counts_only_visible_value_field() -> None:
