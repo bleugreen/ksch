@@ -1,7 +1,7 @@
 import subprocess
+from collections.abc import Collection
 from dataclasses import dataclass
 from filecmp import dircmp
-from collections.abc import Collection
 from pathlib import Path
 from typing import Any
 
