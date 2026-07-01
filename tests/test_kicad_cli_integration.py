@@ -133,6 +133,7 @@ def test_verify_runs_erc_and_netlist_parity(tmp_path: Path) -> None:
 
     assert verify_result.exit_code == 0, verify_result.output
     assert "erc: 0 violation(s)" in verify_result.stdout
+    assert "netlist parity: schema matches generated schematic" in verify_result.stdout
     assert "netlist: matches" in verify_result.stdout
     assert "drift: generated output matches" in verify_result.stdout
     assert "verification passed" in verify_result.stdout

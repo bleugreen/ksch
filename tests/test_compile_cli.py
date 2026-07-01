@@ -126,6 +126,9 @@ def test_gen_uses_project_config_from_current_directory(
 
     assert result.exit_code == 0, result.output
     assert (project_dir / "kicad" / "starter-board.kicad_sch").exists()
+    assert (project_dir / "kicad" / "layout-report.json").exists()
+    assert "layout report:" in result.stdout
+    assert "visible_overlaps" in result.stdout
 
 
 def test_gen_uses_config_symbol_library_relative_to_config_path(tmp_path: Path) -> None:
@@ -167,6 +170,8 @@ def test_gen_uses_config_symbol_library_relative_to_config_path(tmp_path: Path) 
 
     assert result.exit_code == 0, result.output
     assert (tmp_path / "out" / "demo.kicad_sch").exists()
+    assert (tmp_path / "out" / "layout-report.json").exists()
+    assert "layout report:" in result.stdout
 
 
 def test_check_uses_project_config_from_current_directory(

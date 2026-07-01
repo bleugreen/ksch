@@ -1,5 +1,7 @@
+import shutil
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from ksch.cli import app
@@ -37,6 +39,7 @@ def test_check_reports_clean_generated_output(tmp_path: Path) -> None:
     assert "generated output matches schema" in check_result.stdout
 
 
+@pytest.mark.skipif(shutil.which("kicad-cli") is None, reason="kicad-cli is not installed")
 def test_verify_reports_clean_generated_output_without_erc(tmp_path: Path) -> None:
     compile_result = runner.invoke(
         app,
@@ -65,10 +68,12 @@ def test_verify_reports_clean_generated_output_without_erc(tmp_path: Path) -> No
     )
 
     assert verify_result.exit_code == 0
+    assert "netlist parity: schema matches generated schematic" in verify_result.stdout
     assert "drift: generated output matches" in verify_result.stdout
     assert "verification passed" in verify_result.stdout
 
 
+@pytest.mark.skipif(shutil.which("kicad-cli") is None, reason="kicad-cli is not installed")
 def test_verify_reports_generated_output_drift(tmp_path: Path) -> None:
     compile_result = runner.invoke(
         app,
