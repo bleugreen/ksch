@@ -359,6 +359,131 @@ class _AssemblySolver:
             layout_errors=tuple(self.layout_errors),
         )
 
+    def _prime_label_text_caches(self) -> None:
+        self._local_label_texts()
+        self._project_label_text_counts()
+
+    def _component_blocks(self) -> dict[str, str | None]:
+        block_of: dict[str, str | None] = {component_id: None for component_id in self.components}
+        if self.resolved_sheet is None or not self.resolved_sheet.blocks:
+            return block_of
+
+        declared_ref_blocks: dict[str, str] = {}
+        for block_name, refs in self.resolved_sheet.blocks.items():
+            for ref in refs:
+                declared_ref_blocks[ref] = block_name
+        for component_id, component in self.components.items():
+            if component.kind == "symbol" and component.ref in declared_ref_blocks:
+                block_of[component_id] = declared_ref_blocks[cast(str, component.ref)]
+
+        owners = self._expanded_support_owners(self._passive_owners())
+        changed = True
+        while changed:
+            changed = False
+            for component_id, owner_id in sorted(owners.items()):
+                if block_of.get(component_id) is not None:
+                    continue
+                owner_block = block_of.get(owner_id)
+                if owner_block is None:
+                    continue
+                block_of[component_id] = owner_block
+                changed = True
+        return block_of
+
+    @contextmanager
+    def _scoped_view(self, member_ids: set[str]) -> Iterator[None]:
+        original_components = self.components
+        original_net_records = self.net_records
+        original_endpoint_to_component = self.endpoint_to_component
+        try:
+            self.components = {
+                component_id: component
+                for component_id, component in original_components.items()
+                if component_id in member_ids
+            }
+            self.endpoint_to_component = {
+                endpoint_key: component_id
+                for endpoint_key, component_id in original_endpoint_to_component.items()
+                if component_id in member_ids
+            }
+            self.net_records = {
+                net_name: scoped
+                for net_name, records in original_net_records.items()
+                if (
+                    scoped := [record for record in records if record.component_id in member_ids]
+                )
+            }
+            yield
+        finally:
+            self.components = original_components
+            self.net_records = original_net_records
+            self.endpoint_to_component = original_endpoint_to_component
+
+    def _ordered_block_names(self, block_of: dict[str, str | None]) -> list[str]:
+        del block_of
+        if self.resolved_sheet is None:
+            return []
+        return list(self.resolved_sheet.blocks)
+
+    def _frame_block_assembly(self, block_name: str, assemblies: list[Assembly]) -> Assembly:
+        content = usable_page_rect_for_paper(PAPER)
+        if content is None:
+            content = Rect(0.0, 0.0, 420.0, 297.0)
+        ordered = sorted(assemblies, key=_assembly_area_order_key)
+        placements = _pack_ordered_assemblies_geometry(
+            ordered,
+            content,
+            self.project.symbol_library,
+            (),
+        )
+        block_items: list[PlacedItem] = []
+        block_ports: dict[str, tuple[float, float]] = {}
+        block_port_sides: dict[str, PortSide] = {}
+        component_ids: set[str] = set()
+        for assembly in ordered:
+            dx, dy = placements.get(assembly.id, (content.left, content.top))
+            block_items.extend(_translate_item(item, dx, dy) for item in assembly.items)
+            for key, point in assembly.ports.items():
+                block_ports[key] = _translate_point(point, dx, dy)
+            block_port_sides.update(assembly.port_sides)
+            component_ids.update(assembly.component_ids)
+
+        env = _items_rect(tuple(block_items), self.project.symbol_library)
+        if env is None:
+            env = Rect(content.left, content.top, content.left + GRID * 4, content.top + GRID * 4)
+        margin = GRID * 2
+        title_band = GRID * 3
+        frame = Rect(
+            _snap(env.left - margin),
+            _snap(env.top - margin - title_band),
+            _snap(env.right + margin),
+            _snap(env.bottom + margin),
+        )
+        frame_item = PlacedGraphicRectangle(
+            at=(frame.left, frame.top),
+            size=(frame.width, frame.height),
+            uuid=stable_uuid(f"{self.sheet_path}:block:{block_name}:frame"),
+        )
+        title_item = PlacedText(
+            text=block_name,
+            at=(_snap(frame.left + GRID), _snap(frame.top + GRID)),
+            uuid=stable_uuid(f"{self.sheet_path}:block:{block_name}:title"),
+            size=(2.0, 2.0),
+            justify="left",
+        )
+        items = tuple([*block_items, frame_item, title_item])
+        rect = _items_rect(items, self.project.symbol_library) or frame
+        return _normalize_assembly(
+            Assembly(
+                id=f"block:{block_name}",
+                items=items,
+                rect=rect,
+                ports=block_ports,
+                port_sides=block_port_sides,
+                component_ids=frozenset(component_ids),
+            )
+        )
+
     def _legalized_sheet_items(self, items: list[PlacedItem]) -> list[PlacedItem]:
         legalized = _drop_overlapping_junctions(items, self.project.symbol_library)
         for _iteration in range(3):
