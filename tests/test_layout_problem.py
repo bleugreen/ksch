@@ -6,6 +6,7 @@ from ksch.placed import (
     PlacedProperty,
     PlacedSymbol,
     PlacedText,
+    PlacedWire,
 )
 from ksch.power_flags import POWER_PORT_LIB_ID, power_port_symbol, power_port_symbol_definition
 from ksch.schematic_geometry import (

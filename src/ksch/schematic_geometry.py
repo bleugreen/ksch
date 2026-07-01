@@ -6,13 +6,11 @@ from typing import Literal
 
 from ksch.geometry import (
     PinPoint,
+    Rect as TupleRect,
     WireSegment,
     sexpr_point,
     symbol_body_rect,
     symbol_pin_coordinate,
-)
-from ksch.geometry import (
-    Rect as TupleRect,
 )
 from ksch.kicad.sexpr import atom
 from ksch.kicad.symbols import SymbolInfo, SymbolPin, symbol_info_from_definition
