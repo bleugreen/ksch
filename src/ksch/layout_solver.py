@@ -387,6 +387,8 @@ class _AssemblySolver:
         bad_points: set[tuple[float, float]],
     ) -> list[PlacedItem] | None:
         for label in items:
+            if not isinstance(label, PlacedLabel | PlacedHierarchicalLabel):
+                continue
             label_net = _placed_label_net(label)
             if label_net != net_name:
                 continue
@@ -420,8 +422,13 @@ class _AssemblySolver:
                 if len(candidate_bad.get(net_name, set())) < len(bad_points):
                     return remaining
                 continue
-            side = self._terminal_side(net_name, terminal) or _segment_endpoint_side(terminal_point, label.at)
-            kind: Literal["local", "hierarchical"] = "hierarchical" if isinstance(label, PlacedHierarchicalLabel) else "local"
+            side = self._terminal_side(net_name, terminal) or _segment_endpoint_side(
+                terminal_point,
+                label.at,
+            )
+            kind: Literal["local", "hierarchical"] = (
+                "hierarchical" if isinstance(label, PlacedHierarchicalLabel) else "local"
+            )
             for candidate_side in _label_candidate_sides(side, axis_locked=False):
                 occupied = [
                     _inflate(box.rect, GRID / 2)
@@ -472,14 +479,14 @@ class _AssemblySolver:
                 continue
             if item.lib_id not in {POWER_PORT_LIB_ID, POWER_DRIVER_LIB_ID}:
                 continue
-            net_name = _symbol_property_value(item, "Value")
-            if net_name is None:
+            port_net_name = _symbol_property_value(item, "Value")
+            if port_net_name is None:
                 continue
             for segment in problem.segments:
-                if not segment.nets or net_name in segment.nets:
+                if not segment.nets or port_net_name in segment.nets:
                     continue
                 if point_on_segment(item.at, segment.wire_segment()):
-                    mark(net_name, item.at)
+                    mark(port_net_name, item.at)
                     break
         return bad
 
@@ -685,9 +692,9 @@ class _AssemblySolver:
         for item in items:
             if not isinstance(item, PlacedSymbol) or item.lib_id != POWER_PORT_LIB_ID:
                 continue
-            net_name = _symbol_property_value(item, "Value")
-            if net_name is not None:
-                power_ports.append((net_name, item))
+            port_net_name = _symbol_property_value(item, "Value")
+            if port_net_name is not None:
+                power_ports.append((port_net_name, item))
 
         driven_points = {
             item.at
