@@ -1,0 +1,43 @@
+ksch: 1
+project:
+  name: cm5_gmsl2_u8_short
+libraries:
+  symbols:
+    project:
+      CM5IO: symbols/cm5io.kicad_sym
+      Connector: symbols/connector.kicad_sym
+      Connector_Generic: symbols/connector_generic.kicad_sym
+      Device: symbols/device.kicad_sym
+      Interface: symbols/interface.kicad_sym
+      Interface_CAN_LIN: symbols/interface_can_lin.kicad_sym
+      Interface_USB: symbols/interface_usb.kicad_sym
+      Mechanical: symbols/mechanical.kicad_sym
+      Power_Management: symbols/regulator_switching.kicad_sym
+      Power_Protection: symbols/power_protection.kicad_sym
+      Regulator_Linear: symbols/regulator_linear.kicad_sym
+      Regulator_Switching: symbols/regulator_switching.kicad_sym
+      Transistor_FET: symbols/transistor_fet.kicad_sym
+      cm5hudsp: symbols/cm5hudsp.kicad_sym
+      power: symbols/power.kicad_sym
+sheets:
+  gmsl2_camera:
+    source: sheets/gmsl2_camera.ksch.yaml
+    connects:
+      CAM_CSI_C_N: CAM_CSI_C_N
+      CAM_CSI_C_P: CAM_CSI_C_P
+      CAM_CSI_D0_N: CAM_CSI_D0_N
+      CAM_CSI_D0_P: CAM_CSI_D0_P
+      CAM_CSI_D1_N: CAM_CSI_D1_N
+      CAM_CSI_D1_P: CAM_CSI_D1_P
+      CAM_CSI_D2_N: CAM_CSI_D2_N
+      CAM_CSI_D2_P: CAM_CSI_D2_P
+      CAM_CSI_D3_N: CAM_CSI_D3_N
+      CAM_CSI_D3_P: CAM_CSI_D3_P
+      CAM_GPIO0: CAM_GPIO0
+      CAM_GPIO1: CAM_GPIO1
+      CAM_I2C_SCL: CAM_I2C_SCL
+      CAM_I2C_SDA: CAM_I2C_SDA
+      CM5_3V3_OUT: CM5_3V3_OUT
+      CM5_5V_IN: CM5_5V_IN
+      GND: GND
+      VBAT_PROT: VBAT_PROT
