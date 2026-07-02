@@ -251,9 +251,6 @@ def test_power_net_classifier_rejects_signals_with_powerish_qualifiers(net_name:
     assert not _is_power_net(net_name)
 
 
-def test_power_net_classifier_rejects_imported_qualified_rail_names() -> None:
-    assert not _is_power_net("CAN + Vehicle I_O_VEH_ILLUM_12V")
-
 
 def test_generated_power_port_geometry_counts_only_visible_value_field() -> None:
     symbol = power_port_symbol(

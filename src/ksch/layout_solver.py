@@ -7983,8 +7983,6 @@ def _is_power_net(net_name: str) -> bool:
     upper = net_name.upper()
     if _is_ground_net(net_name):
         return True
-    if any(char.isspace() for char in net_name):
-        return False
     signal_suffix = "|".join(
         (
             "SCL",
