@@ -294,9 +294,6 @@ def test_label_text_boxes_stay_inside_their_owning_block_frame() -> None:
 
 def test_vehicle_connector_uses_one_flush_label_per_net_without_body_crossing_wires() -> None:
     project, sheet = _can_controller_sheet()
-    j2 = next(
-        item for item in sheet.items if isinstance(item, PlacedSymbol) and item.reference == "J2"
-    )
     pin_points_by_net = _symbol_pin_points_by_net(project, sheet)
     j2_points_by_net = {
         net_name: [point for ref, _pin_number, point in points if ref == "J2"]

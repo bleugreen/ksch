@@ -2039,6 +2039,18 @@ class _AssemblySolver:
             bridge_occupied,
         )
         items.extend(wire_items)
+        for net_name, _root_record, _bridge_record in module.links:
+            cap = cap_records[net_name]
+            junction_point = placed[cap.component_id].ports[cap.signal_record.endpoint_key]
+            items.append(
+                PlacedJunction(
+                    at=junction_point,
+                    uuid=stable_uuid(
+                        f"{self.sheet_path}:stanza:crystal_load_caps:{module.bridge_id}:{net_name}:junction"
+                    ),
+                    nets=frozenset({net_name}),
+                )
+            )
         gnd_anchor = (rail_left, ground_y)
         value_at, justify = _power_port_value_position(gnd_text, gnd_anchor, "WEST")
         items.append(
@@ -2103,7 +2115,10 @@ class _AssemblySolver:
                         root_link_point = placed_root.ports[link_root_record.endpoint_key]
                         bridge_link_point = placed.ports[link_bridge_record.endpoint_key]
                         link_distance += _manhattan(root_link_point, bridge_link_point)
-                        if placed.port_sides[link_bridge_record.endpoint_key] not in {"WEST", "EAST"}:
+                        if placed.port_sides[link_bridge_record.endpoint_key] not in {
+                            "WEST",
+                            "EAST",
+                        }:
                             side_mismatch += 1
                     score = overlap * 1_000_000.0 + side_mismatch * 100_000.0 + link_distance
                     if best is None or score < best[0]:
