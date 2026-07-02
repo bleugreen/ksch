@@ -3881,7 +3881,15 @@ class _AssemblySolver:
                     )
                     connected_endpoints.add(record.endpoint_key)
                 continue
-            if not _is_power_net(net_name) and len(local) >= 2 and not external:
+            route_as_local_pair = (
+                not _is_power_net(net_name)
+                or (
+                    len(local) == 2
+                    and not external
+                    and any(char.isspace() for char in net_name)
+                )
+            )
+            if route_as_local_pair and len(local) >= 2 and not external:
                 root_record = _local_net_root(local, self.components)
                 root_point = placed[root_record.component_id].ports[root_record.endpoint_key]
                 local_support_net = self._local_support_net(local)
