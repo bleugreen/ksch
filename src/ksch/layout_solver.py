@@ -2044,16 +2044,16 @@ class _AssemblySolver:
             bridge_point = placed_bridge.ports[bridge_record.endpoint_key]
             cap_point = placed[cap.component_id].ports[cap.signal_record.endpoint_key]
             junction_point = (_snap(cap_point[0]), _snap(bridge_point[1]))
-            items.append(
-                PlacedJunction(
-                    at=junction_point,
-                    uuid=stable_uuid(
-                        f"{self.sheet_path}:stanza:crystal_load_caps:{module.bridge_id}:{net_name}:junction"
-                    ),
-                    nets=frozenset({net_name}),
-                )
-            )
             if self._framed_block_scope:
+                items.append(
+                    PlacedJunction(
+                        at=junction_point,
+                        uuid=stable_uuid(
+                            f"{self.sheet_path}:stanza:crystal_load_caps:{module.bridge_id}:{net_name}:junction"
+                        ),
+                        nets=frozenset({net_name}),
+                    )
+                )
                 items.append(
                     PlacedLabel(
                         name=net_name,
