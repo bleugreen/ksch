@@ -37,6 +37,8 @@ from ksch.segment_geometry import point_on_segment, segment_intersects_rect, seg
 SCHEMATIC_GRID = 2.54
 PIN_LABEL_STUB = 5.08
 FIELD_CLEARANCE = 5.08
+PIN_TEXT_CHAR_WIDTH = 1.27
+PIN_TEXT_HALF_HEIGHT = 1.0
 
 
 @dataclass(frozen=True)
@@ -965,8 +967,8 @@ def _symbol_pin_text_boxes(
                     pin.name,
                     justify=name_justify,
                     rotation=name_rotation,
-                    char_width=0.9,
-                    half_height=1.0,
+                    char_width=PIN_TEXT_CHAR_WIDTH,
+                    half_height=PIN_TEXT_HALF_HEIGHT,
                 ),
                 terminal,
             )
@@ -1002,8 +1004,8 @@ def _centered_text_rect(
     text: str,
     *,
     rotation: int = 0,
-    char_width: float = 0.9,
-    half_height: float = 1.0,
+    char_width: float = PIN_TEXT_CHAR_WIDTH,
+    half_height: float = PIN_TEXT_HALF_HEIGHT,
 ) -> Rect:
     width = max(char_width, len(text) * char_width)
     if rotation % 180 != 0:

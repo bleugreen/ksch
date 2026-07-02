@@ -1,5 +1,6 @@
 import pytest
 
+from ksch.kicad.symbols import SymbolInfo, SymbolPin
 from ksch.layout import Point, Rect
 from ksch.layout_solver import _is_power_net, _wire_items_avoiding
 from ksch.placed import (
@@ -85,6 +86,96 @@ def test_text_rect_tracks_left_and_right_justified_anchors() -> None:
     assert right.left < 10
     assert right.right == 10
     assert left.top < 20 < left.bottom
+
+
+def test_pin_name_geometry_reports_label_over_true_rendered_text_extent() -> None:
+    symbol = PlacedSymbol(
+        lib_id="Test:LongPinName",
+        at=(0.0, 0.0),
+        unit=1,
+        uuid="U1",
+        project_name="demo",
+        sheet_instance_path="/",
+        reference="U1",
+        properties=(),
+    )
+    pin_library = {
+        "Test:LongPinName": SymbolInfo(
+            lib_id="Test:LongPinName",
+            name="LongPinName",
+            footprint=None,
+            pins=[
+                SymbolPin(
+                    name="LONG_PIN_NAME",
+                    number="1",
+                    electrical_type="input",
+                    at=(0.0, 0.0, 0.0),
+                    length=2.54,
+                )
+            ],
+        )
+    }
+    geometry = placed_items_geometry(
+        (
+            symbol,
+            PlacedLabel(
+                name="NET",
+                at=(14.0, 0.0),
+                uuid="label-on-pin-name",
+                nets=frozenset({"NET"}),
+            ),
+        ),
+        symbol_library=pin_library,
+    )
+
+    assert [(hit.first.kind, hit.second.kind) for hit in geometry.as_problem().overlaps()] == [
+        ("pin_name", "label")
+    ]
+
+
+
+def test_pin_name_geometry_allows_label_clear_of_rendered_text_extent() -> None:
+    symbol = PlacedSymbol(
+        lib_id="Test:LongPinName",
+        at=(0.0, 0.0),
+        unit=1,
+        uuid="U1",
+        project_name="demo",
+        sheet_instance_path="/",
+        reference="U1",
+        properties=(),
+    )
+    pin_library = {
+        "Test:LongPinName": SymbolInfo(
+            lib_id="Test:LongPinName",
+            name="LongPinName",
+            footprint=None,
+            pins=[
+                SymbolPin(
+                    name="LONG_PIN_NAME",
+                    number="1",
+                    electrical_type="input",
+                    at=(0.0, 0.0, 0.0),
+                    length=2.54,
+                )
+            ],
+        )
+    }
+    geometry = placed_items_geometry(
+        (
+            symbol,
+            PlacedLabel(
+                name="NET",
+                at=(20.0, 0.0),
+                uuid="label-clear-of-pin-name",
+                nets=frozenset({"NET"}),
+            ),
+        ),
+        symbol_library=pin_library,
+    )
+
+    assert geometry.as_problem().overlaps() == ()
+
 
 
 def test_symbol_property_geometry_uses_effective_kicad_rotation() -> None:
