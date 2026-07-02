@@ -4,6 +4,7 @@ from collections.abc import Iterable
 
 from test_block_layout import _can_controller_sheet
 
+from ksch.power_flags import POWER_PORT_LIB_ID
 from ksch.placed import PlacedJunction, PlacedLabel, PlacedSymbol, PlacedWire
 
 SENSE_GROUPS = (
@@ -83,3 +84,37 @@ def test_crystal_load_caps_template_matches_can_controller_oscillator() -> None:
     assert any("CAN_XTAL2" in wire.nets for wire in wires)
     assert any("GND" in wire.nets for wire in wires)
     assert symbols["C1"].at[0] < symbols["Y1"].at[0] < symbols["C2"].at[0]
+
+    oscillator_wires = [
+        wire
+        for wire in wires
+        if wire.nets & {"CAN_XTAL1", "CAN_XTAL2"}
+        and (
+            wire.start_terminals
+            and any(terminal.startswith("U1.") for terminal in wire.start_terminals)
+            or wire.end_terminals
+            and any(terminal.startswith("U1.") for terminal in wire.end_terminals)
+        )
+    ]
+    assert oscillator_wires
+    assert max(
+        abs(wire.start[0] - wire.end[0]) + abs(wire.start[1] - wire.end[1])
+        for wire in oscillator_wires
+    ) <= 15.24 + 0.01
+
+
+def test_power_port_value_text_effective_rotation_stays_readable() -> None:
+    _project, sheet = _can_controller_sheet()
+    power_ports = [
+        item for item in sheet.items if isinstance(item, PlacedSymbol) and item.lib_id == POWER_PORT_LIB_ID
+    ]
+
+    assert power_ports
+    for symbol in power_ports:
+        value = next(prop for prop in symbol.properties if prop.name == "Value")
+        effective_rotation = (
+            value.rotation if symbol.rotation % 180 == 0 else (symbol.rotation + value.rotation) % 360
+        )
+        assert effective_rotation != 180
+        if effective_rotation in {90, 270}:
+            assert symbol.rotation in {90, 270}

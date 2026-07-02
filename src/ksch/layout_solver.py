@@ -1856,7 +1856,6 @@ class _AssemblySolver:
         center_x = _snap(
             sum(point[0] for point in bridge_signal_points) / len(bridge_signal_points)
         )
-        cap_signal_y = _snap(placed_bridge.rect.bottom + SUPPORT_GAP)
         cap_pitch = SUPPORT_STEP * 2
         cap_offsets = [
             (_index - (len(module.caps) - 1) / 2) * cap_pitch for _index in range(len(module.caps))
@@ -1876,8 +1875,9 @@ class _AssemblySolver:
                 return None
             cap_component = self.components[cap.component_id]
             signal_port = cap_component.ports[cap.signal_record.endpoint_key]
+            bridge_point = placed_bridge.ports[_bridge_record.endpoint_key]
             rotation = _rotation_between_sides(signal_port.side, "NORTH")
-            target = (_snap(center_x + cap_offsets[index]), cap_signal_y)
+            target = (_snap(center_x + cap_offsets[index]), _snap(bridge_point[1]))
             at = _component_at_for_port(cap_component, signal_port, target, rotation)
             placed_cap = self._place_component(
                 cap_component, Point(at[0], at[1]), rotation, compact_value=True
@@ -2110,13 +2110,13 @@ class _AssemblySolver:
                 for _net_name, root_record, _bridge_record in module.links
             ]
             center_x = _snap(sum(point[0] for point in root_points) / len(root_points))
-            root_edge = placed_root.rect.bottom if module.side == "SOUTH" else placed_root.rect.top
+            root_center_y = _snap(sum(point[1] for point in root_points) / len(root_points))
             direction = 1.0 if module.side == "SOUTH" else -1.0
             for rotation in (0, 180):
-                for distance in (GRID, SUPPORT_GAP, SUPPORT_STEP * 2):
+                for distance in (SUPPORT_GAP, SUPPORT_STEP, SUPPORT_STEP * 2):
                     placed = self._place_component(
                         component,
-                        Point(center_x, _snap(root_edge + direction * distance)),
+                        Point(center_x, _snap(root_center_y + direction * distance)),
                         rotation,
                         compact_value=True,
                     )
@@ -4854,6 +4854,10 @@ class _AssemblySolver:
                 records_by_net[net_name] = sorted(local, key=lambda record: record.endpoint_key)
 
         for net_name, records in records_by_net.items():
+            visible_record = min(
+                records,
+                key=lambda candidate: placed_component.ports[candidate.endpoint_key][0],
+            )
             for record in records:
                 label_point = placed_component.ports[record.endpoint_key]
                 side = placed_component.port_sides[record.endpoint_key]
@@ -4867,6 +4871,7 @@ class _AssemblySolver:
                         ),
                         justify=justify,
                         rotation=_label_rotation(justify),
+                        hidden=record.endpoint_key != visible_record.endpoint_key,
                         nets=frozenset({net_name}),
                     )
                 )

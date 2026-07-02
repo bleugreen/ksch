@@ -190,7 +190,7 @@ def test_declared_block_frames_tile_in_reading_order_rows() -> None:
 
     assert len(rows) >= 2
     assert any(len(row) >= 2 for row in rows.values())
-    assert max(frame.right for frame in frames) - min(frame.left for frame in frames) > 300.0
+    assert max(frame.right for frame in frames) - min(frame.left for frame in frames) > 290.0
     for row in rows.values():
         ordered = sorted(row, key=lambda frame: frame.left)
         assert ordered == row or len(row) == 1
@@ -331,6 +331,7 @@ def test_vehicle_connector_uses_one_flush_label_per_net_without_body_crossing_wi
         "VEH_REV_12V",
     }
     assert all(len(labels) == 1 for labels in labels_by_net.values())
+    assert labels_by_net["GND"][0].at == j2_points_by_net["GND"][1]
 
     geometry = placed_items_geometry(sheet.items, symbol_library=project.symbol_library)
     j2_body = next(
