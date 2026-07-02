@@ -1279,7 +1279,7 @@ class _AssemblySolver:
 
     def _passive_owners(self) -> dict[str, str]:
         owners: dict[str, str] = {}
-        shared_rail_cap_ids = self._shared_decoupling_row_ids()
+        shared_rail_cap_ids = self._decoupling_row_component_ids()
         for component_id, component in self.components.items():
             if not _is_local_support_component(component):
                 continue
@@ -1476,13 +1476,17 @@ class _AssemblySolver:
         connected_endpoints: set[str] = set()
         wire_requests: list[_WireRequest] = []
 
-        root_template_items, root_template_placed, root_template_connected, root_template_component_ids = (
-            self._root_stanza_template_items(
-                root_id,
-                owned_ids,
-                placed_root,
-                occupied,
-            )
+        (
+            root_template_items,
+            root_template_placed,
+            root_template_connected,
+            root_template_component_ids,
+        ) = self._root_stanza_template_items(
+            root_id,
+            owned_ids,
+            placed_root,
+            occupied,
+            template_ids=("crystal_load_caps",),
         )
         items.extend(root_template_items)
         placed_components.update(root_template_placed)
@@ -1534,21 +1538,6 @@ class _AssemblySolver:
             side: [lane for lane in lanes if lane[0] not in rail_component_ids]
             for side, lanes in side_lanes.items()
         }
-        for side in ("WEST", "EAST", "NORTH", "SOUTH"):
-            bank = self._place_side_stanza_support_bank(
-                side,
-                side_lanes[side],
-                placed_components,
-                occupied,
-                items,
-            )
-            items.extend(bank.items)
-            occupied.extend(bank.occupied)
-            wire_requests.extend(bank.wire_requests)
-            connected_endpoints.update(bank.connected)
-            component_ids.update(bank.component_ids)
-            for placed in bank.placed:
-                placed_components[placed.component.id] = placed
         progress = True
         while progress:
             progress = False
@@ -1614,16 +1603,19 @@ class _AssemblySolver:
         )
         items.extend(net_items)
         occupied.extend(_wire_avoid_rects(net_items))
-        cap_bank_items, cap_bank_connected, cap_bank_component_ids = (
-            self._root_decoupling_row_modules(
+        post_template_items, _post_template_placed, post_template_connected, post_template_ids = (
+            self._root_stanza_template_items(
                 root_id,
+                owned_ids,
                 placed_root,
                 occupied,
+                template_ids=("decoupling_row",),
+                placed_ids=component_ids,
             )
         )
-        items.extend(cap_bank_items)
-        component_ids.update(cap_bank_component_ids)
-        connected_endpoints.update(cap_bank_connected)
+        items.extend(post_template_items)
+        component_ids.update(post_template_ids)
+        connected_endpoints.update(post_template_connected)
         rect = _items_rect(tuple(items), self.project.symbol_library) or Rect(0.0, 0.0, 0.0, 0.0)
         return _normalize_assembly(
             Assembly(
@@ -1642,6 +1634,9 @@ class _AssemblySolver:
         owned_ids: list[str],
         placed_root: PlacedComponent,
         occupied: list[Rect],
+        *,
+        template_ids: tuple[str, ...] = ("crystal_load_caps", "decoupling_row"),
+        placed_ids: set[str] | None = None,
     ) -> tuple[list[PlacedItem], dict[str, PlacedComponent], set[str], set[str]]:
         items: list[PlacedItem] = []
         placed: dict[str, PlacedComponent] = {}
@@ -1649,25 +1644,42 @@ class _AssemblySolver:
         component_ids: set[str] = set()
         base_items = list(placed_root.items)
         owned_set = set(owned_ids)
-        for module in self._crystal_load_caps_root_matches(root_id, owned_set, placed_root):
-            if module.bridge_id in component_ids or any(
-                cap.component_id in component_ids for cap in module.caps
-            ):
-                continue
-            built = self._crystal_load_caps_assembly_items(
-                module, placed_root, occupied, [*base_items, *items]
+        already_placed = placed_ids if placed_ids is not None else set()
+        if "crystal_load_caps" in template_ids:
+            for module in self._crystal_load_caps_root_matches(root_id, owned_set, placed_root):
+                if module.bridge_id in already_placed or module.bridge_id in component_ids:
+                    continue
+                if any(
+                    cap.component_id in already_placed or cap.component_id in component_ids
+                    for cap in module.caps
+                ):
+                    continue
+                built = self._crystal_load_caps_assembly_items(
+                    module, placed_root, occupied, [*base_items, *items]
+                )
+                if built is None:
+                    continue
+                module_items, module_placed, module_connected, module_component_ids = built
+                items.extend(module_items)
+                placed.update(module_placed)
+                connected.update(module_connected)
+                component_ids.update(module_component_ids)
+                occupied.extend(
+                    _occupied_rects(
+                        tuple(module_items), self.project.symbol_library, margin=GRID / 2
+                    )
+                )
+                occupied.extend(_wire_avoid_rects(module_items))
+        if "decoupling_row" in template_ids:
+            row_items, row_connected, row_component_ids = self._decoupling_row_root_items(
+                root_id,
+                placed_root,
+                occupied,
+                already_placed | component_ids,
             )
-            if built is None:
-                continue
-            module_items, module_placed, module_connected, module_component_ids = built
-            items.extend(module_items)
-            placed.update(module_placed)
-            connected.update(module_connected)
-            component_ids.update(module_component_ids)
-            occupied.extend(
-                _occupied_rects(tuple(module_items), self.project.symbol_library, margin=GRID / 2)
-            )
-            occupied.extend(_wire_avoid_rects(module_items))
+            items.extend(row_items)
+            connected.update(row_connected)
+            component_ids.update(row_component_ids)
         return items, placed, connected, component_ids
 
     def _crystal_load_caps_root_matches(
@@ -3261,7 +3273,7 @@ class _AssemblySolver:
             )
         return candidates
 
-    def _shared_decoupling_row_ids(self) -> set[str]:
+    def _decoupling_row_component_ids(self) -> set[str]:
         groups: dict[tuple[str, str], list[str]] = {}
         for component_id in sorted(self.components):
             rail_cap = self._rail_cap_record(component_id)
@@ -3274,13 +3286,14 @@ class _AssemblySolver:
             component_id for group in groups.values() if len(group) >= 2 for component_id in group
         }
 
-    def _root_decoupling_row_modules(
+    def _decoupling_row_root_items(
         self,
         root_id: str,
         placed_root: PlacedComponent,
         occupied: list[Rect],
+        placed_ids: set[str],
     ) -> tuple[list[PlacedItem], set[str], set[str]]:
-        shared_cap_ids = self._shared_decoupling_row_ids()
+        shared_cap_ids = self._decoupling_row_component_ids() - placed_ids
         groups: dict[tuple[str, str], list[_DecouplingCap]] = {}
         for component_id in sorted(shared_cap_ids):
             if self._direct_owner(component_id) != root_id:
@@ -3300,7 +3313,7 @@ class _AssemblySolver:
         ):
             if len(group) < 2:
                 continue
-            assembly = self._shared_decoupling_row_assembly(rail_name, ground_name, group)
+            assembly = self._decoupling_row_assembly(rail_name, ground_name, group)
             dx, dy = self._root_cap_bank_placement(assembly, placed_root, occupied)
             translated_items = [_translate_item(item, dx, dy) for item in assembly.items]
             items.extend(translated_items)
@@ -3383,7 +3396,7 @@ class _AssemblySolver:
         assert best is not None
         return best[1]
 
-    def _shared_decoupling_row_assemblies(self, placed: set[str]) -> list[Assembly]:
+    def _decoupling_row_assemblies(self, placed: set[str]) -> list[Assembly]:
         groups: dict[tuple[str, str], list[_DecouplingCap]] = {}
         for component_id in sorted(self.components):
             if component_id in placed:
@@ -3400,7 +3413,7 @@ class _AssemblySolver:
         ):
             if len(group) < 2:
                 continue
-            assemblies.append(self._shared_decoupling_row_assembly(rail_name, ground_name, group))
+            assemblies.append(self._decoupling_row_assembly(rail_name, ground_name, group))
         return assemblies
 
     def _rail_cap_record(self, component_id: str) -> _DecouplingCap | None:
@@ -3423,7 +3436,7 @@ class _AssemblySolver:
             return None
         return _DecouplingCap(component_id, rail_records[0], ground_records[0])
 
-    def _shared_decoupling_row_assembly(
+    def _decoupling_row_assembly(
         self,
         rail_name: str,
         ground_name: str,
