@@ -2054,6 +2054,18 @@ class _AssemblySolver:
                         nets=frozenset({net_name}),
                     )
                 )
+                items.append(
+                    PlacedLabel(
+                        name=net_name,
+                        at=junction_point,
+                        uuid=stable_uuid(
+                            f"{self.sheet_path}:stanza:crystal_load_caps:{module.bridge_id}:{net_name}:net-assertion"
+                        ),
+                        justify="left",
+                        hidden=True,
+                        nets=frozenset({net_name}),
+                    )
+                )
 
         gnd_anchor = (rail_left, ground_y)
         value_at, justify = _power_port_value_position(gnd_text, gnd_anchor, "WEST")
