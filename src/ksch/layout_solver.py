@@ -1380,7 +1380,10 @@ class _AssemblySolver:
         for root_id, root in sorted(self.components.items()):
             if root.passive or root.kind == "power" or root_id in placed:
                 continue
-            assembly = self._root_assembly(root_id, root_owned.get(root_id, []))
+            if _is_connector_component(root):
+                assembly = self._connector_only_assembly(root_id)
+            else:
+                assembly = self._root_assembly(root_id, root_owned.get(root_id, []))
             assemblies.append(assembly)
             placed.update(assembly.component_ids)
         for root_id, root in sorted(self.components.items()):
@@ -7801,8 +7804,7 @@ def _is_loose_marker_component(component: Component) -> bool:
 
 def _is_connector_component(component: Component) -> bool:
     return (
-        component.passive
-        and component.kind == "symbol"
+        component.kind == "symbol"
         and component.ref is not None
         and component.ref.startswith("J")
         and len(component.ports) >= 2
