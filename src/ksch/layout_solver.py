@@ -3214,7 +3214,17 @@ class _AssemblySolver:
                         )
                     )
             states = sorted(next_states, key=lambda state: state.score)[:beam_width]
-        return min(states, key=lambda state: state.score)
+        state = min(states, key=lambda state: state.score)
+        wire_items = self._route_or_label_wire_requests(
+            list(state.wire_requests),
+            [*existing_items, *state.items],
+            [*occupied, *state.occupied],
+        )
+        return replace(
+            state,
+            items=(*state.items, *wire_items),
+            wire_requests=(),
+        )
 
     def _single_pull_root_candidates(
         self,
