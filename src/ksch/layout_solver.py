@@ -1856,7 +1856,7 @@ class _AssemblySolver:
         center_x = _snap(
             sum(point[0] for point in bridge_signal_points) / len(bridge_signal_points)
         )
-        cap_pitch = SUPPORT_STEP * 2
+        cap_pitch = SUPPORT_STEP * 3
         cap_offsets = [
             (_index - (len(module.caps) - 1) / 2) * cap_pitch for _index in range(len(module.caps))
         ]
@@ -5394,7 +5394,7 @@ def _placed_symbol(
         compact_symbol_property_points(
             at.x, at.y, symbol_info, ref=ref, value=value, symbol_rotation=rotation
         )
-        if compact_value and not ref.startswith("Y")
+        if compact_value
         else None
     )
     if props is None:
@@ -6611,7 +6611,12 @@ def _power_port_anchor(
                 value_at, justify = _power_port_value_position(
                     label_text, symbol_point, candidate_side
                 )
-                rect = text_rect(Point(value_at[0], value_at[1]), label_text, justify=justify)
+                rect = text_rect(
+                    Point(value_at[0], value_at[1]),
+                    label_text,
+                    justify=justify,
+                    rotation=_power_port_effective_text_rotation(candidate_side),
+                )
                 hard_overlap = _indexed_overlap_area(rect, hard_index)
                 overlap = _indexed_overlap_area(rect, occupied_index)
                 axis_penalty = abs(lane) * (1000.0 if axis_locked else 1.0)
@@ -6661,6 +6666,10 @@ def _power_port_stub_penalty(
         start_terminal=None,
         end_terminal=None,
     )
+
+
+def _power_port_effective_text_rotation(side: PortSide) -> int:
+    return 90 if side == "EAST" else 270 if side == "WEST" else 0
 
 
 def _power_port_value_position(
