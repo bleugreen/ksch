@@ -51,6 +51,10 @@ work, keep artifacts for inspection:
 ksch verify --against path/to/root.kicad_sch --artifacts .ksch-verify
 ```
 
+To verify a bare schema or fixture directory that has no `ksch.toml`, pass an explicit
+`--out` path, and usually `--no-drift` when there is no committed generated output to
+compare against.
+
 ## Schema Rules
 
 Use one schema format: YAML `.ksch.yaml`.
@@ -82,6 +86,12 @@ symbols:
 
 Use `@pin_number` when duplicate pin names need one physical pin. Use `/all`
 when every duplicate pin with that name is connected.
+
+`/all` is aggregate syntax: `ksch` parses a `/all` suffix on an endpoint as "all
+duplicate pins with this name," so a literal KiCad pin name that contains a slash is
+awkward or impossible to address by name. When creating project-local symbols for
+examples or tests, prefer endpoint-safe pin names such as `CLKO_SOF`, or address such a
+pin by number with `@PIN_NUMBER`.
 
 Declare functional blocks on the same sheet as their symbols. Blocks use human
 readable names and sheet-local refs; ungrouped symbols are allowed, but a ref can
