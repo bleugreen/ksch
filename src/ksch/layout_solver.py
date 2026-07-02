@@ -2185,9 +2185,21 @@ class _AssemblySolver:
         properties: list[PlacedProperty] = []
         for prop in symbol.properties:
             if prop.name == "Reference":
-                properties.append(replace(prop, at=(prop.at[0], _snap(prop.at[1] - GRID * 2))))
+                properties.append(
+                    replace(
+                        prop,
+                        at=(symbol.at[0], _snap(symbol.at[1] - GRID * 3)),
+                        justify="left",
+                    )
+                )
             elif prop.name == "Value":
-                properties.append(replace(prop, at=(prop.at[0], _snap(prop.at[1] + GRID * 2))))
+                properties.append(
+                    replace(
+                        prop,
+                        at=(symbol.at[0], _snap(symbol.at[1] + GRID * 3)),
+                        justify="left",
+                    )
+                )
             else:
                 properties.append(prop)
         items = (replace(symbol, properties=tuple(properties)), *placed.items[1:])
