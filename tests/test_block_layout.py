@@ -4,7 +4,14 @@ from ksch.compiler import build_placed_project
 from ksch.expand import load_project_ir
 from ksch.kicad.symbols import index_symbol_library
 from ksch.layout import Rect
-from ksch.placed import PlacedGraphicRectangle, PlacedLabel, PlacedSymbol, PlacedText, PlacedWire
+from ksch.placed import (
+    PlacedGraphicRectangle,
+    PlacedLabel,
+    PlacedSheet,
+    PlacedSymbol,
+    PlacedText,
+    PlacedWire,
+)
 from ksch.resolver import LibraryContext, ResolvedProject, resolve_project
 from ksch.schematic_geometry import placed_items_geometry
 from ksch.validation import placed_layout_report
@@ -54,7 +61,7 @@ def _contains_point(outer: Rect, point: tuple[float, float]) -> bool:
     )
 
 
-def _can_controller_sheet():
+def _can_controller_sheet() -> tuple[ResolvedProject, PlacedSheet]:
     project = _resolved_can_controller_project()
     placed = build_placed_project(project)
     return project, placed.sheets[0]
