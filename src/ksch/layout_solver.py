@@ -943,7 +943,7 @@ class _AssemblySolver:
                             Point(value_at[0], value_at[1]),
                             value=net_name,
                             justify="left",
-                            rotation=(-_power_port_symbol_rotation("EAST")) % 360,
+                                            rotation=0,
                             symbol_rotation=_power_port_symbol_rotation("EAST"),
                             hidden_value=True,
                             project_name=self.project.name,
@@ -2062,7 +2062,7 @@ class _AssemblySolver:
                             f"{self.sheet_path}:stanza:crystal_load_caps:{module.bridge_id}:{net_name}:net-assertion"
                         ),
                         justify="left",
-                        hidden=True,
+                            hidden=True,
                         nets=frozenset({net_name}),
                     )
                 )
@@ -2113,14 +2113,12 @@ class _AssemblySolver:
             root_edge = placed_root.rect.bottom if module.side == "SOUTH" else placed_root.rect.top
             direction = 1.0 if module.side == "SOUTH" else -1.0
             for rotation in (0, 180):
-                for distance in (SUPPORT_GAP, SUPPORT_STEP * 2, SUPPORT_STEP * 3):
-                    placed = self._spread_bridge_fields(
-                        self._place_component(
-                            component,
-                            Point(center_x, _snap(root_edge + direction * distance)),
-                            rotation,
-                            compact_value=False,
-                        )
+                for distance in (GRID, SUPPORT_GAP, SUPPORT_STEP * 2):
+                    placed = self._place_component(
+                        component,
+                        Point(center_x, _snap(root_edge + direction * distance)),
+                        rotation,
+                        compact_value=True,
                     )
                     inflated = _inflate(placed.rect, GRID)
                     overlap = _indexed_overlap_area(inflated, occupied_index)
@@ -2162,16 +2160,14 @@ class _AssemblySolver:
             _net_name, root_record, bridge_record = anchor_link
             root_point = placed_root.ports[root_record.endpoint_key]
             bridge_port = component.ports[bridge_record.endpoint_key]
-            for distance in (SUPPORT_GAP, SUPPORT_STEP * 2, SUPPORT_STEP * 3):
+            for distance in (GRID, SUPPORT_GAP, SUPPORT_STEP * 2):
                 target = (
                     _snap(port_edge + vector[0] * distance),
                     _snap(root_point[1]),
                 )
                 at = _component_at_for_port(component, bridge_port, target, rotation)
-                placed = self._spread_bridge_fields(
-                    self._place_component(
-                        component, Point(at[0], at[1]), rotation, compact_value=False
-                    )
+                placed = self._place_component(
+                    component, Point(at[0], at[1]), rotation, compact_value=True
                 )
                 inflated = _inflate(placed.rect, GRID)
                 overlap = _indexed_overlap_area(inflated, occupied_index)
@@ -4858,33 +4854,20 @@ class _AssemblySolver:
                 records_by_net[net_name] = sorted(local, key=lambda record: record.endpoint_key)
 
         for net_name, records in records_by_net.items():
-            label_record = records[0]
-            label_point = placed_component.ports[label_record.endpoint_key]
-            side = placed_component.port_sides[label_record.endpoint_key]
-            justify: Literal["left", "right"] = "right" if side == "WEST" else "left"
-            items.append(
-                PlacedLabel(
-                    name=self._label_text(net_name, "local"),
-                    at=label_point,
-                    uuid=stable_uuid(f"{self.sheet_path}:{label_record.endpoint_key}:{net_name}:connector-label"),
-                    justify=justify,
-                    rotation=_label_rotation(justify),
-                    nets=frozenset({net_name}),
-                )
-            )
-            for other in records[1:]:
-                items.extend(
-                    _wire_items_from_points(
-                        self.sheet_path,
-                        net_name,
-                        _connector_same_net_join_path(
-                            label_point,
-                            placed_component.ports[other.endpoint_key],
-                            placed_component.rect,
+            for record in records:
+                label_point = placed_component.ports[record.endpoint_key]
+                side = placed_component.port_sides[record.endpoint_key]
+                justify: Literal["left", "right"] = "right" if side == "WEST" else "left"
+                items.append(
+                    PlacedLabel(
+                        name=self._label_text(net_name, "local"),
+                        at=label_point,
+                        uuid=stable_uuid(
+                            f"{self.sheet_path}:{record.endpoint_key}:{net_name}:connector-label"
                         ),
-                        label_record.terminal,
-                        other.terminal,
-                        f"connector:{component_id}:{net_name}:{other.endpoint_key}:join",
+                        justify=justify,
+                        rotation=_label_rotation(justify),
+                        nets=frozenset({net_name}),
                     )
                 )
 
@@ -6531,7 +6514,7 @@ def _power_port_items(
             Point(value_at[0], value_at[1]),
             value=net_name if hidden_value else label_text,
             justify=justify,
-            rotation=(-_power_port_symbol_rotation(side)) % 360,
+            rotation=0,
             symbol_rotation=_power_port_symbol_rotation(side),
             hidden_value=hidden_value,
             project_name=project.name,
