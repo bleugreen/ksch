@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from test_block_layout import _can_controller_sheet
-
-from ksch.power_flags import POWER_PORT_LIB_ID
 from ksch.placed import PlacedJunction, PlacedLabel, PlacedSymbol, PlacedWire
+from ksch.power_flags import POWER_PORT_LIB_ID
+
+from test_block_layout import _can_controller_sheet
 
 SENSE_GROUPS = (
     ("R10", "C7", "D6", "R12"),
@@ -106,14 +106,18 @@ def test_crystal_load_caps_template_matches_can_controller_oscillator() -> None:
 def test_power_port_value_text_effective_rotation_stays_readable() -> None:
     _project, sheet = _can_controller_sheet()
     power_ports = [
-        item for item in sheet.items if isinstance(item, PlacedSymbol) and item.lib_id == POWER_PORT_LIB_ID
+        item
+        for item in sheet.items
+        if isinstance(item, PlacedSymbol) and item.lib_id == POWER_PORT_LIB_ID
     ]
 
     assert power_ports
     for symbol in power_ports:
         value = next(prop for prop in symbol.properties if prop.name == "Value")
         effective_rotation = (
-            value.rotation if symbol.rotation % 180 == 0 else (symbol.rotation + value.rotation) % 360
+            value.rotation
+            if symbol.rotation % 180 == 0
+            else (symbol.rotation + value.rotation) % 360
         )
         assert effective_rotation != 180
         if effective_rotation in {90, 270}:

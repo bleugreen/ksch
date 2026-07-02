@@ -2170,7 +2170,12 @@ class _AssemblySolver:
                 )
                 at = _component_at_for_port(component, bridge_port, target, rotation)
                 placed = self._compact_crystal_bridge_fields(
-                    self._place_component(component, Point(at[0], at[1]), rotation, compact_value=True)
+                    self._place_component(
+                        component,
+                        Point(at[0], at[1]),
+                        rotation,
+                        compact_value=True,
+                    )
                 )
                 inflated = _inflate(placed.rect, GRID)
                 overlap = _indexed_overlap_area(inflated, occupied_index)
