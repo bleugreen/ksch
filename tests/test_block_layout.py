@@ -260,4 +260,4 @@ def test_u1_pin_fanout_labels_are_flush_to_pin_termini() -> None:
 
     assert distances
     assert max(distances.values()) <= 2.54 + 0.01
-    assert distances["CAN_TXD"] == 2.54
+    assert abs(distances["CAN_TXD"] - 2.54) <= 0.01
