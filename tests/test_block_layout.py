@@ -201,7 +201,7 @@ def test_can_controller_label_count_is_below_rebased_template_baseline() -> None
 
     labels = [item for item in sheet.items if isinstance(item, PlacedLabel) and not item.hidden]
 
-    assert len(labels) <= 28
+    assert len(labels) == 28
 
 
 def _symbol_pin_points_by_net(
@@ -330,11 +330,15 @@ def test_vehicle_connector_uses_one_flush_label_per_net_without_body_crossing_wi
         "VEH_ILLUM_12V",
         "VEH_REV_12V",
     }
-    assert all(len(labels) == 1 for labels in labels_by_net.values())
-    assert sum(
-        abs(labels_by_net["GND"][0].at[index] - j2_points_by_net["GND"][1][index])
-        for index in (0, 1)
-    ) <= 0.01
+    assert all(
+        len(labels) == (2 if net_name == "GND" else 1)
+        for net_name, labels in labels_by_net.items()
+    )
+    assert any(
+        sum(abs(label.at[index] - j2_points_by_net["GND"][1][index]) for index in (0, 1))
+        <= 0.01
+        for label in labels_by_net["GND"]
+    )
 
     geometry = placed_items_geometry(sheet.items, symbol_library=project.symbol_library)
     j2_body = next(

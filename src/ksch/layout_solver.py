@@ -2054,18 +2054,7 @@ class _AssemblySolver:
                         nets=frozenset({net_name}),
                     )
                 )
-                items.append(
-                    PlacedLabel(
-                        name=net_name,
-                        at=junction_point,
-                        uuid=stable_uuid(
-                            f"{self.sheet_path}:stanza:crystal_load_caps:{module.bridge_id}:{net_name}:net-assertion"
-                        ),
-                        justify="left",
-                            hidden=True,
-                        nets=frozenset({net_name}),
-                    )
-                )
+
         gnd_anchor = (rail_left, ground_y)
         value_at, justify = _power_port_value_position(gnd_text, gnd_anchor, "WEST")
         items.append(
@@ -4895,10 +4884,6 @@ class _AssemblySolver:
                 records_by_net[net_name] = sorted(local, key=lambda record: record.endpoint_key)
 
         for net_name, records in records_by_net.items():
-            visible_record = min(
-                records,
-                key=lambda candidate: placed_component.ports[candidate.endpoint_key][0],
-            )
             for record in records:
                 label_point = placed_component.ports[record.endpoint_key]
                 side = placed_component.port_sides[record.endpoint_key]
@@ -4912,7 +4897,7 @@ class _AssemblySolver:
                         ),
                         justify=justify,
                         rotation=_label_rotation(justify),
-                        hidden=record.endpoint_key != visible_record.endpoint_key,
+                        hidden=False,
                         nets=frozenset({net_name}),
                     )
                 )
