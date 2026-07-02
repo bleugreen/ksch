@@ -1760,7 +1760,7 @@ class _AssemblySolver:
                 side = root_sides[0]
                 if side not in {"WEST", "EAST"}:
                     continue
-            elif set(root_sides) == {"WEST", "EAST"}:
+            elif self._framed_block_scope and set(root_sides) == {"WEST", "EAST"}:
                 side = "SOUTH"
             else:
                 continue
@@ -3786,7 +3786,7 @@ class _AssemblySolver:
                 root_point = placed[root_record.component_id].ports[root_record.endpoint_key]
                 local_support_net = self._local_support_net(local)
                 if local_support_net:
-                    if not unconnected:
+                    if self._framed_block_scope and not unconnected:
                         continue
                     connected_local = [
                         record for record in local if record.endpoint_key in connected_endpoints
