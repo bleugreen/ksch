@@ -369,6 +369,34 @@ def test_vehicle_connector_uses_one_flush_label_per_net_without_body_crossing_wi
             assert not box.overlaps(other)
 
 
+def test_can_termination_resistor_is_vertical_across_bus_pair() -> None:
+    project, sheet = _can_controller_sheet()
+    symbols = {item.reference: item for item in sheet.items if isinstance(item, PlacedSymbol)}
+    pin_points_by_net = _symbol_pin_points_by_net(project, sheet)
+    d3_can_points = [
+        point
+        for net_name, points in pin_points_by_net.items()
+        if net_name in {"CANH", "CANL"}
+        for ref, _pin_number, point in points
+        if ref == "D3"
+    ]
+    r8_can_points = [
+        point
+        for net_name, points in pin_points_by_net.items()
+        if net_name in {"CANH", "CANL"}
+        for ref, _pin_number, point in points
+        if ref == "R8"
+    ]
+
+    assert symbols["R8"].rotation in {90, 270}
+    assert d3_can_points and r8_can_points
+    assert min(
+        abs(d3_point[0] - r8_point[0]) + abs(d3_point[1] - r8_point[1])
+        for d3_point in d3_can_points
+        for r8_point in r8_can_points
+    ) <= 35.56 + 0.01
+
+
 def test_u1_pin_fanout_labels_are_flush_to_pin_termini() -> None:
     project, sheet = _can_controller_sheet()
     u1 = next(

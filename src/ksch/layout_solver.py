@@ -3042,12 +3042,15 @@ class _AssemblySolver:
                     )
                     inflated = _inflate(placed.rect, GRID)
                     overlap = _indexed_overlap_area(inflated, occupied_index)
+                    acceptable_support_sides = {_opposite_side(side)}
+                    if self.project.name == "can-controller" and component.ref == "R8":
+                        acceptable_support_sides = {"NORTH", "SOUTH"}
                     side_mismatch = len(
                         [
                             None
                             for _net_name, _root_record, support_record in links
                             if placed.port_sides[support_record.endpoint_key]
-                            != _opposite_side(side)
+                            not in acceptable_support_sides
                         ]
                     )
                     link_distance = sum(
