@@ -2039,9 +2039,11 @@ class _AssemblySolver:
             bridge_occupied,
         )
         items.extend(wire_items)
-        for net_name, _root_record, _bridge_record in module.links:
+        for net_name, _root_record, bridge_record in module.links:
             cap = cap_records[net_name]
-            junction_point = placed[cap.component_id].ports[cap.signal_record.endpoint_key]
+            bridge_point = placed_bridge.ports[bridge_record.endpoint_key]
+            cap_point = placed[cap.component_id].ports[cap.signal_record.endpoint_key]
+            junction_point = (_snap(cap_point[0]), _snap(bridge_point[1]))
             items.append(
                 PlacedJunction(
                     at=junction_point,
