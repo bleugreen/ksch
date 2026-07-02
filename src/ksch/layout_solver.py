@@ -1753,8 +1753,13 @@ class _AssemblySolver:
                 placed_root.port_sides[root_record.endpoint_key]
                 for _net_name, root_record, _bridge_record in links
             ]
-            side = root_sides[0]
-            if side not in {"WEST", "EAST"} or any(candidate != side for candidate in root_sides):
+            if len(set(root_sides)) == 1:
+                side = root_sides[0]
+                if side not in {"WEST", "EAST"}:
+                    continue
+            elif set(root_sides) == {"WEST", "EAST"}:
+                side = "SOUTH"
+            else:
                 continue
             caps: list[_CrystalLoadCap] = []
             used_caps: set[str] = set()
@@ -2067,6 +2072,41 @@ class _AssemblySolver:
         occupied: list[Rect],
     ) -> PlacedComponent | None:
         component = self.components[module.bridge_id]
+        best: tuple[float, PlacedComponent] | None = None
+        occupied_index = _RectIndex(occupied)
+        if module.side in {"NORTH", "SOUTH"}:
+            root_points = [
+                placed_root.ports[root_record.endpoint_key]
+                for _net_name, root_record, _bridge_record in module.links
+            ]
+            center_x = _snap(sum(point[0] for point in root_points) / len(root_points))
+            root_edge = placed_root.rect.bottom if module.side == "SOUTH" else placed_root.rect.top
+            direction = 1.0 if module.side == "SOUTH" else -1.0
+            for rotation in (0, 180):
+                for distance in (SUPPORT_GAP, SUPPORT_STEP * 2, SUPPORT_STEP * 3):
+                    placed = self._spread_bridge_fields(
+                        self._place_component(
+                            component,
+                            Point(center_x, _snap(root_edge + direction * distance)),
+                            rotation,
+                            compact_value=False,
+                        )
+                    )
+                    inflated = _inflate(placed.rect, GRID)
+                    overlap = _indexed_overlap_area(inflated, occupied_index)
+                    link_distance = 0.0
+                    side_mismatch = 0
+                    for _link_net, link_root_record, link_bridge_record in module.links:
+                        root_link_point = placed_root.ports[link_root_record.endpoint_key]
+                        bridge_link_point = placed.ports[link_bridge_record.endpoint_key]
+                        link_distance += _manhattan(root_link_point, bridge_link_point)
+                        if placed.port_sides[link_bridge_record.endpoint_key] not in {"WEST", "EAST"}:
+                            side_mismatch += 1
+                    score = overlap * 1_000_000.0 + side_mismatch * 100_000.0 + link_distance
+                    if best is None or score < best[0]:
+                        best = (score, placed)
+            return best[1] if best is not None else None
+
         vector = _side_vector(module.side)
         port_edges = [
             _port_body_edge(
@@ -2078,8 +2118,6 @@ class _AssemblySolver:
             for _net_name, root_record, _bridge_record in module.links
         ]
         port_edge = min(port_edges) if module.side == "WEST" else max(port_edges)
-        best: tuple[float, PlacedComponent] | None = None
-        occupied_index = _RectIndex(occupied)
         for rotation in (0, 90, 180, 270):
             facing_links = [
                 link
@@ -4710,6 +4748,8 @@ class _AssemblySolver:
         return _StanzaSolved(assembly, placed)
 
     def _floating_assembly(self, component_ids: tuple[str, ...]) -> Assembly:
+        if len(component_ids) == 1 and _is_connector_component(self.components[component_ids[0]]):
+            return self._connector_only_assembly(component_ids[0])
         items: list[PlacedItem] = []
         occupied: list[Rect] = []
         placed: dict[str, PlacedComponent] = {}
@@ -4753,6 +4793,60 @@ class _AssemblySolver:
                 _ports_for(placed),
                 _port_sides_for(placed),
                 component_id_set,
+            )
+        )
+
+    def _connector_only_assembly(self, component_id: str) -> Assembly:
+        component = self.components[component_id]
+        placed_component = self._place_component(component, Point(0.0, 0.0), 0, compact_value=False)
+        items: list[PlacedItem] = list(placed_component.items)
+        records_by_net: dict[str, list[NetEndpoint]] = {}
+        for net_name, records in sorted(self.net_records.items()):
+            local = [record for record in records if record.component_id == component_id]
+            if local:
+                records_by_net[net_name] = sorted(local, key=lambda record: record.endpoint_key)
+
+        for net_name, records in records_by_net.items():
+            label_record = records[0]
+            label_point = placed_component.ports[label_record.endpoint_key]
+            side = placed_component.port_sides[label_record.endpoint_key]
+            justify: Literal["left", "right"] = "right" if side == "WEST" else "left"
+            items.append(
+                PlacedLabel(
+                    name=self._label_text(net_name, "local"),
+                    at=label_point,
+                    uuid=stable_uuid(f"{self.sheet_path}:{label_record.endpoint_key}:{net_name}:connector-label"),
+                    justify=justify,
+                    rotation=_label_rotation(justify),
+                    nets=frozenset({net_name}),
+                )
+            )
+            for other in records[1:]:
+                items.extend(
+                    _wire_items_from_points(
+                        self.sheet_path,
+                        net_name,
+                        _connector_same_net_join_path(
+                            label_point,
+                            placed_component.ports[other.endpoint_key],
+                            placed_component.rect,
+                        ),
+                        label_record.terminal,
+                        other.terminal,
+                        f"connector:{component_id}:{net_name}:{other.endpoint_key}:join",
+                    )
+                )
+
+        rect = _items_rect(tuple(items), self.project.symbol_library) or Rect(0.0, 0.0, 0.0, 0.0)
+        placed = {component_id: placed_component}
+        return _normalize_assembly(
+            Assembly(
+                f"connector:{component_id}",
+                tuple(items),
+                rect,
+                _ports_for(placed),
+                _port_sides_for(placed),
+                frozenset({component_id}),
             )
         )
 
@@ -6603,6 +6697,18 @@ def _label_items(
     return items
 
 
+def _connector_same_net_join_path(
+    first: tuple[float, float], second: tuple[float, float], rect: Rect
+) -> list[tuple[float, float]]:
+    if _same_point(first, second):
+        return [first]
+    if abs(first[0] - second[0]) < 0.001 or abs(first[1] - second[1]) < 0.001:
+        detour_y = _snap(rect.top - GRID)
+        return _dedupe_path([first, (first[0], detour_y), (second[0], detour_y), second])
+    detour_x = _snap(rect.left - GRID) if first[0] < rect.left else _snap(rect.right + GRID)
+    return _dedupe_path([first, (detour_x, first[1]), (detour_x, second[1]), second])
+
+
 def _label_rotation(justify: Literal["left", "right"]) -> int:
     del justify
     return 0
@@ -7691,6 +7797,16 @@ def _is_loose_marker_component(component: Component) -> bool:
     if len(component.ports) != 1:
         return False
     return component.ref.startswith("TP") or "TestPoint" in component.symbol_decl.lib
+
+
+def _is_connector_component(component: Component) -> bool:
+    return (
+        component.passive
+        and component.kind == "symbol"
+        and component.ref is not None
+        and component.ref.startswith("J")
+        and len(component.ports) >= 2
+    )
 
 
 def _is_local_support_component(component: Component) -> bool:
