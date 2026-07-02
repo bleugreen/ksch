@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from ksch.placed import PlacedJunction, PlacedLabel, PlacedSymbol, PlacedWire
-
 from test_block_layout import _can_controller_sheet
 
+from ksch.placed import PlacedJunction, PlacedLabel, PlacedSymbol, PlacedWire
 
 SENSE_GROUPS = (
     ("R10", "C7", "D6", "R12"),
