@@ -445,10 +445,49 @@ class _AssemblySolver:
             self.endpoint_to_component = original_endpoint_to_component
 
     def _ordered_block_names(self, block_of: dict[str, str | None]) -> list[str]:
-        del block_of
         if self.resolved_sheet is None:
             return []
-        return list(self.resolved_sheet.blocks)
+        declared = list(self.resolved_sheet.blocks)
+        block_nets: dict[str, set[str]] = {block_name: set() for block_name in declared}
+        block_refs: dict[str, set[str]] = {block_name: set() for block_name in declared}
+        for component_id, block_name in block_of.items():
+            if block_name is None:
+                continue
+            component = self.components[component_id]
+            if component.ref is not None:
+                block_refs[block_name].add(component.ref)
+            for net_name, records in self.net_records.items():
+                if any(record.component_id == component_id for record in records):
+                    block_nets[block_name].add(net_name)
+
+        remaining = declared[:]
+        if not remaining:
+            return []
+        ordered = [remaining.pop(0)]
+        while remaining:
+            previous = ordered[-1]
+            next_name = max(
+                remaining,
+                key=lambda name: (
+                    len(block_nets[previous] & block_nets[name]),
+                    -sum(ref.startswith("J") for ref in block_refs[name]),
+                    -declared.index(name),
+                ),
+            )
+            ordered.append(next_name)
+            remaining.remove(next_name)
+
+        connector_blocks = [
+            name
+            for name in ordered
+            if any(ref.startswith("J") for ref in block_refs[name])
+            or len(block_nets[name]) == max(len(nets) for nets in block_nets.values())
+        ]
+        for name in connector_blocks:
+            if name in ordered and name != ordered[-1]:
+                ordered.remove(name)
+                ordered.append(name)
+        return ordered
 
     def _frame_block_assembly(self, block_name: str, assemblies: list[Assembly]) -> Assembly:
         content = usable_page_rect_for_paper(PAPER)
@@ -4932,12 +4971,14 @@ class _AssemblySolver:
         )
         title_block = title_block_rect_for_paper(PAPER)
         initial_blockers = (title_block,) if title_block is not None else ()
-        ordered, placements = _best_pack_placements(
-            assemblies,
-            (comfort, content),
-            self.project.symbol_library,
-            initial_blockers,
-        )
+        ordered, placements = self._framed_row_tile_placements(assemblies, comfort)
+        if not placements:
+            ordered, placements = _best_pack_placements(
+                assemblies,
+                (comfort, content),
+                self.project.symbol_library,
+                initial_blockers,
+            )
         placed_rects: list[Rect] = []
         overflow: list[str] = []
         for assembly in ordered:
@@ -4975,6 +5016,27 @@ class _AssemblySolver:
             for key, point in assembly.ports.items():
                 ports[key] = _translate_point(point, dx, dy)
         return items, ports
+
+    def _framed_row_tile_placements(
+        self, assemblies: list[Assembly], content: Rect
+    ) -> tuple[list[Assembly], dict[str, tuple[float, float]]]:
+        if not assemblies or not all(_assembly_frame_rect(assembly) is not None for assembly in assemblies):
+            return [], {}
+        placements: dict[str, tuple[float, float]] = {}
+        cursor_x = content.left
+        cursor_y = content.top
+        row_height = 0.0
+        for assembly in assemblies:
+            width = assembly.rect.width
+            height = assembly.rect.height
+            if cursor_x > content.left + 0.01 and cursor_x + width > content.right:
+                cursor_x = content.left
+                cursor_y = _snap(cursor_y + row_height + SUPPORT_STEP * 2)
+                row_height = 0.0
+            placements[assembly.id] = (_snap(cursor_x), _snap(cursor_y))
+            cursor_x = _snap(cursor_x + width + SUPPORT_STEP * 2)
+            row_height = max(row_height, height)
+        return assemblies, placements
 
     def _component_no_connects(
         self,
