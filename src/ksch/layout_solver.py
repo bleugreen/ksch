@@ -2033,7 +2033,7 @@ class _AssemblySolver:
                 )
                 at = _component_at_for_port(component, bridge_port, target, rotation)
                 placed = self._place_component(
-                    component, Point(at[0], at[1]), rotation, compact_value=True
+                    component, Point(at[0], at[1]), rotation, compact_value=False
                 )
                 inflated = _inflate(placed.rect, GRID)
                 overlap = _indexed_overlap_area(inflated, occupied_index)
@@ -4849,7 +4849,11 @@ class _AssemblySolver:
         current_width = 0.0
         minimum_gap = SUPPORT_STEP * 2
         for assembly in assemblies:
-            next_width = assembly.rect.width if not current_row else current_width + minimum_gap + assembly.rect.width
+            next_width = (
+                assembly.rect.width
+                if not current_row
+                else current_width + minimum_gap + assembly.rect.width
+            )
             if current_row and next_width > content.width:
                 rows.append(current_row)
                 current_row = []
