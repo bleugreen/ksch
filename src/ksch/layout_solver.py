@@ -4915,9 +4915,9 @@ class _AssemblySolver:
             if local:
                 records_by_net[net_name] = sorted(local, key=lambda record: record.endpoint_key)
 
-        flush_all_duplicate_pins = self.project.name == "can-controller" and component.ref == "J2"
         for net_name, records in records_by_net.items():
-            label_records = records if flush_all_duplicate_pins else records[:1]
+            flush_duplicate_pins = _is_power_net(net_name) and len(records) > 1
+            label_records = records if flush_duplicate_pins else records[:1]
             for record in label_records:
                 label_point = placed_component.ports[record.endpoint_key]
                 side = placed_component.port_sides[record.endpoint_key]
@@ -4935,7 +4935,7 @@ class _AssemblySolver:
                         nets=frozenset({net_name}),
                     )
                 )
-            if flush_all_duplicate_pins:
+            if flush_duplicate_pins:
                 continue
             label_record = records[0]
             label_point = placed_component.ports[label_record.endpoint_key]
