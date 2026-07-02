@@ -2064,6 +2064,8 @@ class _AssemblySolver:
                         justify="left",
                         hidden=True,
                         nets=frozenset({net_name}),
+                        size=(0.01, 0.01),
+                        export_hidden=False,
                     )
                 )
 

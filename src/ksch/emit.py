@@ -305,10 +305,10 @@ def _junction_expr(junction: PlacedJunction) -> list[Any]:
 
 
 def _label_expr(label: PlacedLabel) -> list[Any]:
-    effects = (
-        _text_effects(size=(0.01, 0.01), justify=label.justify, hidden=False)
-        if label.hidden
-        else _effects(justify=label.justify)
+    effects = _text_effects(
+        size=label.size,
+        justify=label.justify,
+        hidden=label.hidden if label.export_hidden is None else label.export_hidden,
     )
     return [
         _a("label"),
