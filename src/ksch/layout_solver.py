@@ -4476,7 +4476,8 @@ class _AssemblySolver:
         for component_id, component in sorted(self.components.items()):
             if component_id in placed_ids or not _is_loose_marker_component(component):
                 continue
-            groups.setdefault(self._loose_marker_template_key(component_id), []).append(component_id)
+            key = self._loose_marker_template_key(component_id)
+            groups.setdefault(key, []).append(component_id)
         return [
             self._loose_marker_template_assembly(
                 key, tuple(sorted(component_ids, key=self._loose_marker_sort_key))
@@ -4784,7 +4785,9 @@ class _AssemblySolver:
         )
         title_block = title_block_rect_for_paper(PAPER)
         initial_blockers = (title_block,) if title_block is not None else ()
-        ordered, placements = self._framed_row_tile_placements(assemblies, comfort)
+        ordered, placements = self._framed_row_tile_placements(
+            assemblies, comfort, initial_blockers
+        )
         if not placements:
             ordered, placements = _best_pack_placements(
                 assemblies,
@@ -4831,26 +4834,59 @@ class _AssemblySolver:
         return items, ports
 
     def _framed_row_tile_placements(
-        self, assemblies: list[Assembly], content: Rect
+        self,
+        assemblies: list[Assembly],
+        content: Rect,
+        blockers: tuple[Rect, ...],
     ) -> tuple[list[Assembly], dict[str, tuple[float, float]]]:
         if not assemblies:
             return [], {}
         if not all(_assembly_frame_rect(assembly) is not None for assembly in assemblies):
             return [], {}
-        placements: dict[str, tuple[float, float]] = {}
-        cursor_x = content.left
-        cursor_y = content.top
-        row_height = 0.0
+
+        rows: list[list[Assembly]] = []
+        current_row: list[Assembly] = []
+        current_width = 0.0
+        minimum_gap = SUPPORT_STEP * 2
         for assembly in assemblies:
-            width = assembly.rect.width
-            height = assembly.rect.height
-            if cursor_x > content.left + 0.01 and cursor_x + width > content.right:
-                cursor_x = content.left
-                cursor_y = _snap(cursor_y + row_height + SUPPORT_STEP * 2)
-                row_height = 0.0
-            placements[assembly.id] = (_snap(cursor_x), _snap(cursor_y))
-            cursor_x = _snap(cursor_x + width + SUPPORT_STEP * 2)
-            row_height = max(row_height, height)
+            next_width = assembly.rect.width if not current_row else current_width + minimum_gap + assembly.rect.width
+            if current_row and next_width > content.width:
+                rows.append(current_row)
+                current_row = []
+                current_width = 0.0
+                next_width = assembly.rect.width
+            if assembly.rect.width > content.width:
+                return [], {}
+            current_row.append(assembly)
+            current_width = next_width
+        if current_row:
+            rows.append(current_row)
+
+        placements: dict[str, tuple[float, float]] = {}
+        cursor_y = content.top
+        for row in rows:
+            row_height = max(assembly.rect.height for assembly in row)
+            if cursor_y + row_height > content.bottom + 0.01:
+                return [], {}
+            total_width = sum(assembly.rect.width for assembly in row)
+            if len(row) == 1:
+                gap = 0.0
+            else:
+                gap = max(minimum_gap, (content.width - total_width) / (len(row) - 1))
+            cursor_x = content.left
+            for assembly in row:
+                placement = (_snap(cursor_x), _snap(cursor_y))
+                frame = Rect(
+                    placement[0],
+                    placement[1],
+                    placement[0] + assembly.rect.width,
+                    placement[1] + assembly.rect.height,
+                )
+                if any(frame.overlaps(blocker) for blocker in blockers):
+                    return [], {}
+                placements[assembly.id] = placement
+                cursor_x = _snap(cursor_x + assembly.rect.width + gap)
+            cursor_y = _snap(cursor_y + row_height + minimum_gap)
         return assemblies, placements
 
     def _component_no_connects(

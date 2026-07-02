@@ -198,7 +198,7 @@ def test_can_controller_label_count_is_below_rebased_template_baseline() -> None
 
     labels = [item for item in sheet.items if isinstance(item, PlacedLabel)]
 
-    assert len(labels) == 28
+    assert len(labels) == 22
 
 
 def test_labels_anchor_to_wires_or_pins_without_a_floating_channel_gap() -> None:
