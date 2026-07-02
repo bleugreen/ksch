@@ -2859,7 +2859,7 @@ class _AssemblySolver:
         connected: set[str] = set()
         component_ids: set[str] = set()
         wire_requests: list[_WireRequest] = []
-        for component_id in sorted(owned_ids):
+        for component_id in sorted(owned_ids, key=self._support_bridge_sort_key):
             bridge = self._root_signal_bridge(root_id, component_id, placed_root, occupied)
             if bridge is None:
                 continue
@@ -2890,6 +2890,12 @@ class _AssemblySolver:
                     )
                     connected.update({root_record.endpoint_key, support_record.endpoint_key})
         return items, placed, connected, component_ids, wire_requests
+
+    def _support_bridge_sort_key(self, component_id: str) -> tuple[int, str]:
+        component = self.components[component_id]
+        if component.passive and len(component.ports) == 2:
+            return (0, component_id)
+        return (1, component_id)
 
     def _root_signal_bridge(
         self,
