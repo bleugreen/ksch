@@ -177,25 +177,6 @@ class _RouteCandidate:
 
 
 @dataclass(frozen=True)
-class _PassiveBankCandidate:
-    placed: PlacedComponent
-    wire_request: _WireRequest | None
-    occupied: tuple[Rect, ...]
-    score: float
-
-
-@dataclass(frozen=True)
-class _PassiveBankState:
-    score: float
-    items: tuple[PlacedItem, ...]
-    occupied: tuple[Rect, ...]
-    placed: tuple[PlacedComponent, ...]
-    wire_requests: tuple[_WireRequest, ...]
-    connected: frozenset[str]
-    component_ids: frozenset[str]
-
-
-@dataclass(frozen=True)
 class _LabelRequest:
     net_name: str
     label_text: str
@@ -3081,198 +3062,6 @@ class _AssemblySolver:
         placed = self._place_component(component, Point(at[0], at[1]), rotation, compact_value=True)
         return placed.rect
 
-    def _place_side_stanza_support_bank(
-        self,
-        side: PortSide,
-        lanes: list[tuple[str, NetEndpoint, NetEndpoint]],
-        placed_components: dict[str, PlacedComponent],
-        occupied: list[Rect],
-        existing_items: list[PlacedItem],
-    ) -> _PassiveBankState:
-        if not lanes:
-            return _PassiveBankState(
-                0.0,
-                (),
-                (),
-                (),
-                (),
-                frozenset(),
-                frozenset(),
-            )
-
-        side_count = len(lanes)
-        states = [
-            _PassiveBankState(
-                0.0,
-                (),
-                (),
-                (),
-                (),
-                frozenset(),
-                frozenset(),
-            )
-        ]
-        beam_width = 8
-        candidate_limit = 6
-        for component_id, peer_record, passive_record in lanes:
-            component = self.components[component_id]
-            next_states: list[_PassiveBankState] = []
-            for state in states:
-                state_items = [*existing_items, *state.items]
-                state_occupied = [*occupied, *state.occupied]
-                candidates = self._side_stanza_support_candidates(
-                    component,
-                    placed_components[peer_record.component_id],
-                    peer_record,
-                    passive_record,
-                    side,
-                    side_count,
-                    state_occupied,
-                    existing_items=state_items,
-                    prior_wire_requests=state.wire_requests,
-                    limit=candidate_limit,
-                )
-                for candidate in candidates:
-                    connected = set(state.connected)
-                    wire_requests = list(state.wire_requests)
-                    if candidate.wire_request is not None:
-                        wire_requests.append(candidate.wire_request)
-                        connected.update({peer_record.endpoint_key, passive_record.endpoint_key})
-                    next_states.append(
-                        _PassiveBankState(
-                            state.score + candidate.score,
-                            (*state.items, *candidate.placed.items),
-                            (*state.occupied, *candidate.occupied),
-                            (*state.placed, candidate.placed),
-                            tuple(wire_requests),
-                            frozenset(connected),
-                            frozenset((*state.component_ids, component_id)),
-                        )
-                    )
-            states = sorted(next_states, key=lambda state: state.score)[:beam_width]
-        return min(states, key=lambda state: state.score)
-
-    def _side_stanza_support_candidates(
-        self,
-        component: Component,
-        peer: PlacedComponent,
-        peer_record: NetEndpoint,
-        passive_record: NetEndpoint,
-        side: PortSide,
-        side_count: int,
-        occupied: list[Rect],
-        *,
-        existing_items: list[PlacedItem] | None = None,
-        prior_wire_requests: tuple[_WireRequest, ...] = (),
-        limit: int | None = None,
-    ) -> list[_PassiveBankCandidate]:
-        placed_root = peer
-        peer_point = placed_root.ports[peer_record.endpoint_key]
-        passive_port = component.ports[passive_record.endpoint_key]
-        raw_candidates: list[tuple[float, tuple[float, float], int, _WireRequest | None]] = []
-        max_columns = 3 if side_count > 6 else 2
-        axis_limit = 4 if side_count <= 8 else 6
-        shunt_support = self._has_power_return(component.id, passive_record.endpoint_key)
-        existing_segments = _existing_wire_segments(existing_items or [])
-        occupied_index = _RectIndex(occupied)
-        rotation = _rotation_between_sides(passive_port.side, _opposite_side(side))
-        port_edge = _port_body_edge(
-            placed_root,
-            peer_record.endpoint_key,
-            side,
-            self.project.symbol_library,
-        )
-        for column in range(max_columns):
-            for axis_delta in _port_axis_offsets(limit=axis_limit):
-                if side == "WEST":
-                    target = (
-                        _snap(port_edge - SUPPORT_GAP - column * BANK_COLUMN_STEP),
-                        _snap(peer_point[1] + axis_delta),
-                    )
-                elif side == "EAST":
-                    target = (
-                        _snap(port_edge + SUPPORT_GAP + column * BANK_COLUMN_STEP),
-                        _snap(peer_point[1] + axis_delta),
-                    )
-                elif side == "NORTH":
-                    target = (
-                        _snap(peer_point[0] + axis_delta),
-                        _snap(port_edge - SUPPORT_GAP - column * BANK_COLUMN_STEP),
-                    )
-                else:
-                    target = (
-                        _snap(peer_point[0] + axis_delta),
-                        _snap(port_edge + SUPPORT_GAP + column * BANK_COLUMN_STEP),
-                    )
-                at = _component_at_for_port(component, passive_port, target, rotation)
-                placed = self._candidate_component_geometry(
-                    component, Point(at[0], at[1]), rotation, compact_value=True
-                )
-                inflated = _inflate(placed.rect, GRID)
-                overlap = _indexed_overlap_area(inflated, occupied_index)
-                passive_point = placed.ports[passive_record.endpoint_key]
-                distance = _manhattan(peer_point, passive_point)
-                route_score = 0.0
-                wire_request: _WireRequest | None = None
-                if (
-                    existing_items is not None
-                    and not _is_power_net(passive_record.net_name)
-                    and passive_record.net_name not in self.sheet.interface
-                    and _direct_support_wire_allowed(
-                        placed_root,
-                        placed,
-                        passive_record.net_name,
-                        peer_point,
-                        passive_point,
-                    )
-                ):
-                    wire_request = _WireRequest(
-                        passive_record.net_name,
-                        peer_point,
-                        passive_point,
-                        peer_record.terminal,
-                        passive_record.terminal,
-                        f"assembly:{peer.component.id}:{component.id}:{passive_record.net_name}",
-                        placed_root.port_sides[peer_record.endpoint_key],
-                        placed.port_sides[passive_record.endpoint_key],
-                    )
-                    route_score = _provisional_wire_score(
-                        prior_wire_requests,
-                        wire_request,
-                        existing_segments=tuple(existing_segments),
-                    )
-                column_score = (
-                    abs(column - 1) * 2_000.0
-                    if shunt_support and max_columns > 1
-                    else column * 2_000.0
-                )
-                score = (
-                    overlap * 100_000.0
-                    + route_score
-                    + abs(axis_delta) * 100.0
-                    + distance * 10.0
-                    + column_score
-                )
-                raw_candidates.append((score, at, rotation, wire_request))
-        candidates: list[_PassiveBankCandidate] = []
-        for score, at, rotation, wire_request in sorted(
-            raw_candidates, key=lambda candidate: candidate[0]
-        )[:limit]:
-            placed = self._place_component(
-                component, Point(at[0], at[1]), rotation, compact_value=True
-            )
-            candidates.append(
-                _PassiveBankCandidate(
-                    placed,
-                    wire_request,
-                    tuple(
-                        _occupied_rects(placed.items, self.project.symbol_library, margin=GRID / 2)
-                    ),
-                    score,
-                )
-            )
-        return candidates
-
     def _decoupling_row_component_ids(self) -> set[str]:
         groups: dict[tuple[str, str], list[str]] = {}
         for component_id in sorted(self.components):
@@ -3396,7 +3185,7 @@ class _AssemblySolver:
         assert best is not None
         return best[1]
 
-    def _decoupling_row_assemblies(self, placed: set[str]) -> list[Assembly]:
+    def _decoupling_row_template_assemblies(self, placed: set[str]) -> list[Assembly]:
         groups: dict[tuple[str, str], list[_DecouplingCap]] = {}
         for component_id in sorted(self.components):
             if component_id in placed:
@@ -4288,11 +4077,21 @@ class _AssemblySolver:
         return {key: group for key, group in groups.items() if len(group) >= 2}
 
     def _stanza_template_assemblies(self, placed_ids: set[str]) -> list[Assembly]:
-        matches = self._stanza_template_matches(placed_ids)
+        assemblies: list[Assembly] = []
+        placed = set(placed_ids)
+        for producer in (
+            self._decoupling_row_template_assemblies,
+            self._loose_marker_template_assemblies,
+            self._standalone_symbol_template_assemblies,
+        ):
+            for assembly in producer(placed):
+                assemblies.append(assembly)
+                placed.update(assembly.component_ids)
+
+        matches = self._stanza_template_matches(placed)
         groups: dict[tuple[Any, ...], list[_StanzaMatch]] = {}
         for match in matches:
             groups.setdefault(match.key, []).append(match)
-        assemblies: list[Assembly] = []
         for key, group in sorted(groups.items(), key=lambda item: str(item[0])):
             solved = [self._solve_stanza_template(match) for match in group]
             if not solved:
@@ -4672,21 +4471,21 @@ class _AssemblySolver:
             )
         )
 
-    def _loose_marker_stanza_assemblies(self, placed_ids: set[str]) -> list[Assembly]:
+    def _loose_marker_template_assemblies(self, placed_ids: set[str]) -> list[Assembly]:
         groups: dict[str, list[str]] = {}
         for component_id, component in sorted(self.components.items()):
             if component_id in placed_ids or not _is_loose_marker_component(component):
                 continue
-            groups.setdefault(self._loose_marker_stanza_key(component_id), []).append(component_id)
+            groups.setdefault(self._loose_marker_template_key(component_id), []).append(component_id)
         return [
-            self._loose_marker_stanza_assembly(
+            self._loose_marker_template_assembly(
                 key, tuple(sorted(component_ids, key=self._loose_marker_sort_key))
             )
             for key, component_ids in sorted(groups.items())
             if len(component_ids) >= 2
         ]
 
-    def _loose_marker_stanza_key(self, component_id: str) -> str:
+    def _loose_marker_template_key(self, component_id: str) -> str:
         text = self._loose_marker_sort_key(component_id)
         tokens = [token for token in re.split(r"[^A-Za-z0-9]+", text.upper()) if token]
         if not tokens:
@@ -4710,7 +4509,7 @@ class _AssemblySolver:
             return component.symbol_decl.value
         return component.ref or component_id
 
-    def _loose_marker_stanza_assembly(
+    def _loose_marker_template_assembly(
         self, bank_key: str, component_ids: tuple[str, ...]
     ) -> Assembly:
         items: list[PlacedItem] = []
@@ -4749,15 +4548,15 @@ class _AssemblySolver:
             )
         )
 
-    def _standalone_symbol_stanza_assemblies(self, placed_ids: set[str]) -> list[Assembly]:
+    def _standalone_symbol_template_assemblies(self, placed_ids: set[str]) -> list[Assembly]:
         groups: dict[tuple[str, str, str], list[str]] = {}
         for component_id, component in sorted(self.components.items()):
             if component_id in placed_ids or not self._is_standalone_symbol(component_id):
                 continue
-            key = self._standalone_symbol_stanza_key(component)
+            key = self._standalone_symbol_template_key(component)
             groups.setdefault(key, []).append(component_id)
         return [
-            self._standalone_symbol_stanza_assembly(
+            self._standalone_symbol_template_assembly(
                 key, tuple(sorted(component_ids, key=_component_ref_sort_key))
             )
             for key, component_ids in sorted(groups.items())
@@ -4776,7 +4575,7 @@ class _AssemblySolver:
             for record in records
         )
 
-    def _standalone_symbol_stanza_key(self, component: Component) -> tuple[str, str, str]:
+    def _standalone_symbol_template_key(self, component: Component) -> tuple[str, str, str]:
         assert component.symbol_decl is not None
         return (
             component.symbol_decl.lib,
@@ -4784,7 +4583,7 @@ class _AssemblySolver:
             component.symbol_decl.footprint or "",
         )
 
-    def _standalone_symbol_stanza_assembly(
+    def _standalone_symbol_template_assembly(
         self,
         bank_key: tuple[str, str, str],
         component_ids: tuple[str, ...],
