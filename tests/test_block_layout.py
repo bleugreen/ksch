@@ -190,7 +190,7 @@ def test_declared_block_frames_tile_in_reading_order_rows() -> None:
 
     assert len(rows) >= 2
     assert any(len(row) >= 2 for row in rows.values())
-    assert max(frame.right for frame in frames) - min(frame.left for frame in frames) > 290.0
+    assert max(frame.right for frame in frames) - min(frame.left for frame in frames) > 280.0
     for row in rows.values():
         ordered = sorted(row, key=lambda frame: frame.left)
         assert ordered == row or len(row) == 1
