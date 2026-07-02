@@ -15,3 +15,7 @@ symbols:
       VBUS/all: +5V
       D+/all: USB_UP_DP
       D-/all: nc
+blocks:
+  USB Input:
+    members:
+      - J1

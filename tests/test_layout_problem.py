@@ -1,7 +1,17 @@
+import pytest
+
+from ksch.kicad.symbols import SymbolInfo, SymbolPin
 from ksch.layout import Point, Rect
-from ksch.layout_solver import _wire_items_avoiding
+from ksch.layout_solver import _is_power_net, _wire_items_avoiding
+from ksch.placed import (
+    PlacedGraphicRectangle,
+    PlacedLabel,
+    PlacedProperty,
+    PlacedSymbol,
+    PlacedText,
+    PlacedWire,
+)
 from ksch.power_flags import POWER_PORT_LIB_ID, power_port_symbol, power_port_symbol_definition
-from ksch.placed import PlacedProperty, PlacedSymbol
 from ksch.schematic_geometry import (
     LayoutElement,
     LayoutProblem,
@@ -42,8 +52,18 @@ def test_layout_problem_reports_same_owner_visible_overlaps() -> None:
 def test_layout_problem_ignores_same_owner_symbol_body_self_overlap() -> None:
     problem = LayoutProblem(
         elements=(
-            LayoutElement(id="U1:body:0", owner="U1", kind="symbol_body", rect=Rect(0, 0, 20, 20)),
-            LayoutElement(id="U1:body:1", owner="U1", kind="symbol_body", rect=Rect(10, 10, 30, 30)),
+            LayoutElement(
+                id="U1:body:0",
+                owner="U1",
+                kind="symbol_body",
+                rect=Rect(0, 0, 20, 20),
+            ),
+            LayoutElement(
+                id="U1:body:1",
+                owner="U1",
+                kind="symbol_body",
+                rect=Rect(10, 10, 30, 30),
+            ),
         )
     )
 
@@ -66,6 +86,96 @@ def test_text_rect_tracks_left_and_right_justified_anchors() -> None:
     assert right.left < 10
     assert right.right == 10
     assert left.top < 20 < left.bottom
+
+
+def test_pin_name_geometry_reports_label_over_true_rendered_text_extent() -> None:
+    symbol = PlacedSymbol(
+        lib_id="Test:LongPinName",
+        at=(0.0, 0.0),
+        unit=1,
+        uuid="U1",
+        project_name="demo",
+        sheet_instance_path="/",
+        reference="U1",
+        properties=(),
+    )
+    pin_library = {
+        "Test:LongPinName": SymbolInfo(
+            lib_id="Test:LongPinName",
+            name="LongPinName",
+            footprint=None,
+            pins=[
+                SymbolPin(
+                    name="LONG_PIN_NAME",
+                    number="1",
+                    electrical_type="input",
+                    at=(0.0, 0.0, 0.0),
+                    length=2.54,
+                )
+            ],
+        )
+    }
+    geometry = placed_items_geometry(
+        (
+            symbol,
+            PlacedLabel(
+                name="NET",
+                at=(14.0, 0.0),
+                uuid="label-on-pin-name",
+                nets=frozenset({"NET"}),
+            ),
+        ),
+        symbol_library=pin_library,
+    )
+
+    assert [(hit.first.kind, hit.second.kind) for hit in geometry.as_problem().overlaps()] == [
+        ("pin_name", "label")
+    ]
+
+
+
+def test_pin_name_geometry_allows_label_clear_of_rendered_text_extent() -> None:
+    symbol = PlacedSymbol(
+        lib_id="Test:LongPinName",
+        at=(0.0, 0.0),
+        unit=1,
+        uuid="U1",
+        project_name="demo",
+        sheet_instance_path="/",
+        reference="U1",
+        properties=(),
+    )
+    pin_library = {
+        "Test:LongPinName": SymbolInfo(
+            lib_id="Test:LongPinName",
+            name="LongPinName",
+            footprint=None,
+            pins=[
+                SymbolPin(
+                    name="LONG_PIN_NAME",
+                    number="1",
+                    electrical_type="input",
+                    at=(0.0, 0.0, 0.0),
+                    length=2.54,
+                )
+            ],
+        )
+    }
+    geometry = placed_items_geometry(
+        (
+            symbol,
+            PlacedLabel(
+                name="NET",
+                at=(20.0, 0.0),
+                uuid="label-clear-of-pin-name",
+                nets=frozenset({"NET"}),
+            ),
+        ),
+        symbol_library=pin_library,
+    )
+
+    assert geometry.as_problem().overlaps() == ()
+
 
 
 def test_symbol_property_geometry_uses_effective_kicad_rotation() -> None:
@@ -125,6 +235,23 @@ def test_half_turn_symbol_property_geometry_uses_absolute_field_rotation() -> No
     assert value_box.rect == text_rect(Point(10.0, 20.0), "100k", rotation=0)
 
 
+@pytest.mark.parametrize(
+    "net_name",
+    ["CM5_3V3_OUT", "USB_ESI_VBUS", "+5V", "3V3A", "VDDIO", "GND"],
+)
+def test_power_net_classifier_accepts_rails(net_name: str) -> None:
+    assert _is_power_net(net_name)
+
+
+@pytest.mark.parametrize(
+    "net_name",
+    ["s3v3_supervision_PWR_LED_BUF", "power_input_5v_ENABLE", "CM5_LED_nPWR"],
+)
+def test_power_net_classifier_rejects_signals_with_powerish_qualifiers(net_name: str) -> None:
+    assert not _is_power_net(net_name)
+
+
+
 def test_generated_power_port_geometry_counts_only_visible_value_field() -> None:
     symbol = power_port_symbol(
         "/",
@@ -139,9 +266,7 @@ def test_generated_power_port_geometry_counts_only_visible_value_field() -> None
         symbol_definitions={POWER_PORT_LIB_ID: power_port_symbol_definition()},
     )
 
-    assert [(box.kind, box.owner) for box in geometry.boxes] == [
-        ("field", symbol.reference)
-    ]
+    assert [(box.kind, box.owner) for box in geometry.boxes] == [("field", symbol.reference)]
     assert geometry.boxes[0].rect == text_rect(Point(12.54, 20.0), "CM5_3V3_OUT")
 
 
@@ -329,7 +454,7 @@ def test_avoiding_router_uses_canonical_blockers() -> None:
         rect=Rect(8, -2, 12, 2),
     )
 
-    wires = _wire_items_avoiding(
+    items = _wire_items_avoiding(
         "/",
         "NET",
         (0.0, 0.0),
@@ -340,9 +465,13 @@ def test_avoiding_router_uses_canonical_blockers() -> None:
         [blocker],
         [],
     )
+    wires = [item for item in items if isinstance(item, PlacedWire)]
 
-    assert wires
-    assert any(abs(wire.start[1]) > 0.001 or abs(wire.end[1]) > 0.001 for wire in wires)
+    assert all(isinstance(wire, PlacedWire) for wire in wires)
+    wire_items = tuple(wire for wire in wires if isinstance(wire, PlacedWire))
+
+    assert wire_items
+    assert any(abs(wire.start[1]) > 0.001 or abs(wire.end[1]) > 0.001 for wire in wire_items)
     assert not any(
         segment_blocked_by_element(
             LayoutSegment(
@@ -357,5 +486,32 @@ def test_avoiding_router_uses_canonical_blockers() -> None:
             ),
             blocker,
         )
-        for wire in wires
+        for wire in wire_items
     )
+
+
+def test_block_frame_does_not_overlap_contained_geometry_or_block_routes() -> None:
+    geometry = placed_items_geometry(
+        (
+            PlacedGraphicRectangle(at=(0.0, 0.0), size=(60.0, 40.0), uuid="frame"),
+            PlacedLabel(name="NET_A", at=(10.0, 10.0), uuid="label", nets=frozenset({"NET_A"})),
+            PlacedText(text="CAN Controller", at=(5.0, 5.0), uuid="title"),
+        )
+    )
+
+    assert [box.kind for box in geometry.boxes] == ["graphic_frame", "label", "text"]
+    assert geometry.as_problem().overlaps() == ()
+    assert geometry.route_blockers() == ()
+
+
+def test_block_title_text_is_occupied_geometry() -> None:
+    geometry = placed_items_geometry(
+        (
+            PlacedText(text="CAN Controller", at=(10.0, 10.0), uuid="title"),
+            PlacedLabel(name="CAN", at=(10.0, 10.0), uuid="label", nets=frozenset({"CAN"})),
+        )
+    )
+
+    assert [(hit.first.id, hit.second.id) for hit in geometry.as_problem().overlaps()] == [
+        ("title", "label")
+    ]

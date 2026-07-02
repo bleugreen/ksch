@@ -97,8 +97,7 @@ def test_init_from_existing_kicad_project_imports_schema(tmp_path: Path) -> None
     assert (existing / "ksch" / "project.ksch.yaml").exists()
     assert (existing / "ksch" / "sheets" / "usb.ksch.yaml").exists()
     assert (existing / "ksch.toml").read_text(encoding="utf-8") == (
-        'schema = "ksch/project.ksch.yaml"\n'
-        'out = "."\n'
+        'schema = "ksch/project.ksch.yaml"\nout = "."\n'
     )
     assert (existing / "scripts" / "gen-ksch-schematic.sh").exists()
     assert (existing / "demo.kicad_sch").exists()
@@ -141,8 +140,7 @@ def test_init_defaults_to_current_directory_for_existing_kicad_project(
     assert result.exit_code == 0, result.output
     assert (existing / "ksch" / "project.ksch.yaml").exists()
     assert (existing / "ksch.toml").read_text(encoding="utf-8") == (
-        'schema = "ksch/project.ksch.yaml"\n'
-        'out = "."\n'
+        'schema = "ksch/project.ksch.yaml"\nout = "."\n'
     )
 
 
@@ -168,6 +166,5 @@ def test_init_detects_child_kicad_project_and_targets_child_output(tmp_path: Pat
     assert result.exit_code == 0, result.output
     assert (repo / "ksch" / "project.ksch.yaml").exists()
     assert (repo / "ksch.toml").read_text(encoding="utf-8") == (
-        'schema = "ksch/project.ksch.yaml"\n'
-        'out = "board"\n'
+        'schema = "ksch/project.ksch.yaml"\nout = "board"\n'
     )

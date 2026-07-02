@@ -5,6 +5,7 @@ import pytest
 from ksch.geometry import PinPoint
 from ksch.layout import Point
 from ksch.placed import (
+    PlacedGraphicRectangle,
     PlacedItem,
     PlacedLabel,
     PlacedProject,
@@ -246,3 +247,27 @@ def test_sheet_symbol_pin_point_matches_symbol_pin_point() -> None:
         info.pins[0],
         symbol_info=info,
     )
+
+
+def test_validation_allows_block_frame_around_existing_geometry() -> None:
+    project = _project(
+        PlacedGraphicRectangle(at=(40.0, 35.0), size=(60.0, 40.0), uuid="frame"),
+        _placed_box("U1", 60.0, 55.0),
+        PlacedText(text="CAN Controller", at=(42.0, 38.0), uuid="title"),
+        lib_symbols=(_box_symbol_definition(),),
+    )
+
+    report = placed_layout_report(project)
+
+    assert report.is_legal
+
+
+def test_validation_rejects_symbol_overlapping_block_title_text() -> None:
+    project = _project(
+        PlacedText(text="CAN Controller", at=(50.0, 50.0), uuid="title"),
+        _placed_box("U1", 55.0, 50.0),
+        lib_symbols=(_box_symbol_definition(),),
+    )
+
+    with pytest.raises(PlacedLayoutError, match="visible geometry overlap"):
+        validate_placed_project(project)

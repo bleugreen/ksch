@@ -98,7 +98,9 @@ def _flatten_definition(
     return flattened
 
 
-def _find_pin_fields(pin_expr: list[Any]) -> tuple[str, str, tuple[float, float, float] | None, float]:
+def _find_pin_fields(
+    pin_expr: list[Any],
+) -> tuple[str, str, tuple[float, float, float] | None, float]:
     name = ""
     number = ""
     at = None

@@ -158,6 +158,19 @@ Symbol-local connection keys use pin names. Use `@pin_number` when a symbol has
 duplicate pin names and only one physical pin is connected. Use `/all` when all
 pins with that name are connected.
 
+Sheets can declare named functional blocks. Each block renders as a titled frame
+with its members laid out locally; nets that leave a block connect by matching
+net labels:
+
+```yaml
+blocks:
+  CAN Controller:
+    members: [U1, Y1, C1, C2]
+```
+
+See [examples/can-controller](examples/can-controller) for a complete
+block-organized project.
+
 Project-local KiCad libraries can be declared in the schema:
 
 ```yaml
@@ -275,7 +288,7 @@ The implementation is split into compiler stages:
 
 ```text
 schema loader -> source model -> project IR -> resolver
-  -> placement/routing/layout validation -> KiCad emitter
+  -> block/stanza layout solver -> canonical geometry validation -> KiCad emitter
 ```
 
 Important modules:
@@ -285,8 +298,13 @@ Important modules:
 - `ksch.kicad`: KiCad library, symbol, footprint, and S-expression helpers
 - `ksch.resolver`: endpoint and net resolution
 - `ksch.graph`, `ksch.edit`: project graph indexing and structured schema edits
-- `ksch.placement`, `ksch.net_routing`, `ksch.layout_problem`: schematic layout
-- `ksch.compiler`: placed-project construction and generation orchestration
+- `ksch.layout_solver`: sheet layout — declared-block partition, stanza templates,
+  local wiring, labels, power symbols, frame/title emission, and packing
+- `ksch.schematic_geometry`: the canonical occupied-geometry model and legality checks
+- `ksch.layout`: geometry primitives and page metrics
+- `ksch.validation`: placed-project layout report (overlaps, route blockers,
+  cross-net contacts, out-of-bounds)
+- `ksch.compiler`: placed-project construction (a pure serializer of solver output)
 - `ksch.emit`: serialization of placed objects to KiCad files
 - `ksch.importer`: KiCad schematic to schema conversion
 - `ksch.verify`: generated output and netlist comparison

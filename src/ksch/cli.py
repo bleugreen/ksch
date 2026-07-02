@@ -40,7 +40,9 @@ from ksch.validation import placed_layout_report
 from ksch.verify import (
     compare_dirs,
     compare_netlist_signatures,
+    compare_netlist_to_schema,
     export_kicad_netlist,
+    parse_kicadsexpr_netlist,
     run_kicad_erc,
 )
 
@@ -380,13 +382,12 @@ def layout_report_command(
         typer.Option("--symbol-library", help="Symbol library as NICKNAME=PATH."),
     ] = None,
 ) -> None:
-    """Write a best-effort layout artifact and canonical geometry metrics without failing on illegality."""
+    """Write best-effort layout artifacts and canonical geometry metrics."""
     try:
         resolved, symbol_libraries = _resolved_project_context(path, symbol_library or [])
         layout_errors: list[str] = []
         placed_project = build_placed_project(
             resolved,
-            strict_geometry=False,
             layout_errors=layout_errors,
         )
         write_placed_project(
@@ -421,15 +422,18 @@ def gen_command(
     """Generate the configured KiCad project from ksch.toml."""
     try:
         project_config = load_project_config(config)
-        _compile_project(
+        report_data = _compile_project(
             project_config.schema,
             project_config.out,
             _configured_symbol_libraries(project_config, symbol_library),
         )
+        report_path = _write_layout_report(project_config.out, report_data)
     except (KschError, ValidationError, ValueError, OSError) as exc:
         _exit_error(_format_error(exc))
 
     console.print(f"wrote {project_config.out}")
+    console.print(f"layout report: {report_path}")
+    console.print(json.dumps(report_data["counts"], indent=2))
 
 
 @app.command("import")
@@ -555,7 +559,7 @@ def verify_command(
     root = Path(temp_context.name) if temp_context is not None else artifacts
     assert root is not None
     try:
-        generated_dir = root / "generated" if artifacts is not None else root
+        generated_dir = root / "generated"
         generated_dir.mkdir(parents=True, exist_ok=True)
         project_config = _load_config_for_defaults(
             config,
@@ -603,11 +607,20 @@ def verify_command(
                     else "rerun with --artifacts DIR to keep erc.rpt"
                 )
                 findings.append(f"ERC found {erc.violations} violation(s); {report_hint}")
+        generated_netlist = root / "generated.net"
+        export_kicad_netlist(generated_root, generated_netlist)
+        parity_findings = compare_netlist_to_schema(
+            resolved,
+            parse_kicadsexpr_netlist(generated_netlist),
+        )
+        if parity_findings:
+            findings.extend(f"netlist parity: {finding}" for finding in parity_findings)
+        else:
+            console.print("netlist parity: schema matches generated schematic")
+
         if against is not None:
             reference_netlist = root / "reference.net"
-            generated_netlist = root / "generated.net"
             export_kicad_netlist(against, reference_netlist)
-            export_kicad_netlist(generated_root, generated_netlist)
             netlist_findings = compare_netlist_signatures(reference_netlist, generated_netlist)
             if netlist_findings:
                 findings.extend(f"netlist: {finding}" for finding in netlist_findings)

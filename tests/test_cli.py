@@ -129,6 +129,11 @@ def test_cli_schema_show_outputs_json_schema() -> None:
     assert schema["title"] == "ksch Schema v1"
     assert schema["properties"]["ksch"]["const"] == 1
     assert "symbols" in schema["properties"]
+    block_decl = schema["$defs"]["BlockDecl"]
+    assert "members" in block_decl["properties"]
+    assert schema["properties"]["blocks"]["additionalProperties"]["$ref"].endswith(
+        "/$defs/BlockDecl"
+    )
 
 
 def test_cli_expand_lists_sheets() -> None:
@@ -431,9 +436,7 @@ def test_cli_edit_add_symbol_updates_configured_schema(
 
     assert result.exit_code == 0, result.output
     assert "added symbol J1" in result.stdout
-    assert "  J1:\n    lib: Test:USB_C\n    value: USB_IN\n" in schema.read_text(
-        encoding="utf-8"
-    )
+    assert "  J1:\n    lib: Test:USB_C\n    value: USB_IN\n" in schema.read_text(encoding="utf-8")
 
 
 def test_cli_skill_show_prints_bundled_skill() -> None:

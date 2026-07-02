@@ -1,12 +1,11 @@
-from pathlib import Path
 import ast
+from pathlib import Path
 
 from ksch.compiler import build_placed_project
 from ksch.expand import load_project_ir
 from ksch.kicad.symbols import index_symbol_library
 from ksch.placed import PlacedProject, PlacedSymbol
 from ksch.resolver import LibraryContext, resolve_project
-
 
 DELETED_GEOMETRY_MODULES = (
     "src/ksch/placement.py",
@@ -48,8 +47,7 @@ def test_canonical_geometry_owns_layout_problem_types() -> None:
 
 def test_deleted_placement_solver_names_stay_deleted() -> None:
     production_source = "\n".join(
-        path.read_text(encoding="utf-8")
-        for path in Path("src/ksch").glob("*.py")
+        path.read_text(encoding="utf-8") for path in Path("src/ksch").glob("*.py")
     )
 
     for forbidden in (
@@ -67,8 +65,7 @@ def test_deleted_placement_solver_names_stay_deleted() -> None:
 
 def test_no_late_whole_sheet_label_rescue_names() -> None:
     production_source = "\n".join(
-        path.read_text(encoding="utf-8")
-        for path in Path("src/ksch").glob("*.py")
+        path.read_text(encoding="utf-8") for path in Path("src/ksch").glob("*.py")
     )
 
     for forbidden in (
@@ -148,3 +145,52 @@ def test_compiler_build_is_emit_always_not_validation_gated() -> None:
     assert "legalize_sheet_geometry(" not in compiler_source
     assert "return placed_project" in compiler_source
     assert "validate_placed_project(" not in Path("src/ksch/emit.py").read_text(encoding="utf-8")
+
+
+def test_bespoke_motif_method_names_are_subsumed_by_stanza_templates() -> None:
+    production_source = "\n".join(
+        path.read_text(encoding="utf-8") for path in Path("src/ksch").glob("*.py")
+    )
+
+    for forbidden in (
+        "def _oscillator_modules",
+        "def _oscillator_module_candidates",
+        "def _oscillator_cap_for_net",
+        "def _root_rail_cap_bank_modules",
+        "def _shared_rail_cap_bank_assemblies",
+        "def _shared_rail_cap_bank_assembly",
+        "def _place_side_passive_bank",
+        "def _passive_bank_candidates",
+        "def _loose_marker_bank_assemblies",
+        "def _loose_marker_bank_assembly",
+        "def _standalone_symbol_bank_assemblies",
+        "def _standalone_symbol_bank_assembly",
+    ):
+        assert forbidden not in production_source
+    assert "_stanza_template_assemblies" in production_source
+    assert "_series_clamp_assembly" in production_source
+    assert "oscillator:" not in production_source
+    assert "shared-cap-bank" not in production_source
+
+
+def _function_source(source: str, name: str) -> str:
+    marker = f"    def {name}"
+    start = source.index(marker)
+    next_def = source.find("\n    def ", start + len(marker))
+    return source[start:] if next_def == -1 else source[start:next_def]
+
+
+def test_stanza_templates_are_the_live_grouped_motif_entrypoints() -> None:
+    source = Path("src/ksch/layout_solver.py").read_text(encoding="utf-8")
+    build_assemblies = _function_source(source, "_build_assemblies")
+    root_assembly = _function_source(source, "_root_assembly")
+    stanza_entry = _function_source(source, "_stanza_template_assemblies")
+    root_entry = _function_source(source, "_root_stanza_template_items")
+
+    assert "self._stanza_template_assemblies(placed)" in build_assemblies
+    assert "_decoupling_row_template_assemblies" in stanza_entry
+    assert "_loose_marker_template_assemblies" in stanza_entry
+    assert "_standalone_symbol_template_assemblies" in stanza_entry
+    assert "self._root_stanza_template_items(" in root_assembly
+    assert "_decoupling_row_root_items" not in root_assembly
+    assert "_decoupling_row_root_items" in root_entry

@@ -85,11 +85,7 @@ def _matching_symbol_pins(
     pin_name: str,
     pin_number: str | None = None,
 ) -> list[str]:
-    pins = [
-        pin
-        for pin in symbol.pins
-        if pin.name == pin_name or pin.number == pin_name
-    ]
+    pins = [pin for pin in symbol.pins if pin.name == pin_name or pin.number == pin_name]
     if pin_number is not None:
         pins = [pin for pin in pins if pin.number == pin_number]
     return [

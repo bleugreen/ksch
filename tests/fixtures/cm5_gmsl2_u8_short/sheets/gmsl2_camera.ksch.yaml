@@ -1,0 +1,473 @@
+ksch: 1
+sheet:
+  id: gmsl2_camera
+interface:
+  CAM_CSI_C_N: passive
+  CAM_CSI_C_P: passive
+  CAM_CSI_D0_N: passive
+  CAM_CSI_D0_P: passive
+  CAM_CSI_D1_N: passive
+  CAM_CSI_D1_P: passive
+  CAM_CSI_D2_N: passive
+  CAM_CSI_D2_P: passive
+  CAM_CSI_D3_N: passive
+  CAM_CSI_D3_P: passive
+  CAM_GPIO0: passive
+  CAM_GPIO1: passive
+  CAM_I2C_SCL: passive
+  CAM_I2C_SDA: passive
+  CM5_3V3_OUT: passive
+  CM5_5V_IN: passive
+  GND: passive
+  VBAT_PROT: passive
+symbols:
+  C22:
+    lib: Device:C
+    value: 10uF 10V
+    footprint: Capacitor_SMD:C_0805_2012Metric
+    fields:
+      'LCSC Part #': C15850
+    connects:
+      '1': CM5_5V_IN
+      '2': GND
+  C23:
+    lib: Device:C
+    value: 10nF 50V
+    footprint: Capacitor_SMD:C_0603_1608Metric
+    fields:
+      'LCSC Part #': C57112
+    connects:
+      '1': GMSL2 Camera_CAM_12V_FUSED
+      '2': GND
+  C24:
+    lib: Device:C
+    value: 100nF 50V
+    footprint: Capacitor_SMD:C_0805_2012Metric
+    fields:
+      'LCSC Part #': C28233
+    connects:
+      '1': GMSL2 Camera_CAM_12V_FUSED
+      '2': GND
+  C25:
+    lib: Device:C
+    value: 27pF
+    footprint: Capacitor_SMD:C_0603_1608Metric
+    fields:
+      'LCSC Part #': C126557
+    connects:
+      '2': GND
+      '1': gmsl2_camera_X1
+  C26:
+    lib: Device:C
+    value: 10nF
+    footprint: Capacitor_SMD:C_0402_1005Metric
+    fields:
+      'LCSC Part #': C1524
+    connects:
+      '1': GMSL2 Camera_GMSL_CAPVDD
+      '2': GND
+  C27:
+    lib: Device:C
+    value: 100nF
+    footprint: Capacitor_SMD:C_0603_1608Metric
+    fields:
+      'LCSC Part #': C14663
+    connects:
+      '2': gmsl2_camera_COAX_CENTER
+      '1': gmsl2_camera_SIO
+  C28:
+    lib: Device:C
+    value: 100nF
+    footprint: Capacitor_SMD:C_0603_1608Metric
+    fields:
+      Design Note: 'Rev2 IC-audit (U8-1): SIOP unused-input termination now SERIES AC-coupled per MAX96714
+        Table 2 / Fig 35 (was R||C parallel to GND, which DC-loaded SIOP and drooped the in-band impedance).
+        Path: SIOP(pin13) -> C25(0.1uF link isolation) -> GMSL_SIOP_AC -> R31(49.9R) -> GND. Cap closest
+        to the pin.'
+      'LCSC Part #': C14663
+    connects:
+      '2': gmsl2_camera_SIOP_AC
+      '1': gmsl2_camera_SIOP_TERM
+  C29:
+    lib: Device:C
+    value: 27pF
+    footprint: Capacitor_SMD:C_0603_1608Metric
+    fields:
+      'LCSC Part #': C126557
+    connects:
+      '2': GND
+      '1': gmsl2_camera_X2
+  C30:
+    lib: Device:C
+    value: 10uF 10V
+    footprint: Capacitor_SMD:C_0805_2012Metric
+    fields:
+      'LCSC Part #': C15850
+    connects:
+      '1': GMSL2 Camera_GMSL_1V8
+      '2': GND
+  C31:
+    lib: Device:C
+    value: 100nF
+    footprint: Capacitor_SMD:C_0402_1005Metric
+    fields:
+      'LCSC Part #': C152814
+    connects:
+      '2': gmsl2_camera_BST
+      '1': gmsl2_camera_SW
+  C32:
+    lib: Device:C
+    value: 10uF 10V
+    footprint: Capacitor_SMD:C_0805_2012Metric
+    fields:
+      'LCSC Part #': C15850
+    connects:
+      '1': GMSL2 Camera_GMSL_CAPVDD
+      '2': GND
+  C33:
+    lib: Device:C
+    value: 10nF
+    footprint: Capacitor_SMD:C_0402_1005Metric
+    fields:
+      'LCSC Part #': C1524
+    connects:
+      '1': GMSL2 Camera_GMSL_1V8
+      '2': GND
+  C34:
+    lib: Device:C
+    value: 10nF
+    footprint: Capacitor_SMD:C_0402_1005Metric
+    fields:
+      'LCSC Part #': C1524
+    connects:
+      '1': GMSL2 Camera_GMSL_1V2
+      '2': GND
+  C35:
+    lib: Device:C
+    value: 10uF 10V
+    footprint: Capacitor_SMD:C_0805_2012Metric
+    fields:
+      'LCSC Part #': C15850
+    connects:
+      '1': GMSL2 Camera_GMSL_1V0
+      '2': GND
+  C36:
+    lib: Device:C
+    value: 10uF 10V
+    footprint: Capacitor_SMD:C_0805_2012Metric
+    fields:
+      'LCSC Part #': C15850
+    connects:
+      '1': CM5_3V3_OUT
+      '2': GND
+  C37:
+    lib: Device:C
+    value: 100pF
+    footprint: Capacitor_SMD:C_0603_1608Metric
+    fields:
+      'LCSC Part #': C335544
+    connects:
+      '1': GMSL2 Camera_GMSL_1V8
+      '2': gmsl2_camera_FB
+  C38:
+    lib: Device:C
+    value: 10nF
+    footprint: Capacitor_SMD:C_0402_1005Metric
+    fields:
+      'LCSC Part #': C1524
+    connects:
+      '1': GMSL2 Camera_GMSL_1V0
+      '2': GND
+  C39:
+    lib: Device:C
+    value: 22uF 10V
+    footprint: Capacitor_SMD:C_0805_2012Metric
+    fields:
+      'LCSC Part #': C380338
+    connects:
+      '1': GMSL2 Camera_GMSL_1V8
+      '2': GND
+  C40:
+    lib: Device:C
+    value: 10uF 10V
+    footprint: Capacitor_SMD:C_0805_2012Metric
+    fields:
+      'LCSC Part #': C15850
+    connects:
+      '1': GMSL2 Camera_GMSL_1V2
+      '2': GND
+  C41:
+    lib: Device:C
+    value: 10nF
+    footprint: Capacitor_SMD:C_0402_1005Metric
+    fields:
+      'LCSC Part #': C1524
+    connects:
+      '1': CM5_3V3_OUT
+      '2': GND
+  C42:
+    lib: Device:C
+    value: 1uF
+    footprint: Capacitor_SMD:C_0402_1005Metric
+    fields:
+      'LCSC Part #': C106253
+    connects:
+      '1': GMSL2 Camera_GMSL_1V8
+      '2': GND
+  C43:
+    lib: Device:C
+    value: 1uF
+    footprint: Capacitor_SMD:C_0402_1005Metric
+    fields:
+      'LCSC Part #': C106253
+    connects:
+      '1': GMSL2 Camera_GMSL_1V8
+      '2': GND
+  F3:
+    lib: Device:Fuse
+    value: 500mA
+    footprint: Fuse:Fuse_1206_3216Metric
+    fields:
+      'LCSC Part #': C151162
+    connects:
+      '2': GMSL2 Camera_CAM_12V_FUSED
+      '1': VBAT_PROT
+  J4:
+    lib: Connector:Conn_Coaxial
+    value: KH-FAKRA-Z-CB
+    footprint: cm5hudsp:KH-FAKRA-Z-CB
+    fields:
+      Camera: Waveshare GMSL-2MP-Camera-A
+      Design Note: Board-side FAKRA Z male connector for Waveshare included dual-female coax cable; 
+        JLC Standard PCBA only and fixture-needed/high difficulty per JLC.
+      'JLCPCB Part #': C5365914
+      'LCSC Part #': C5365914
+      Manufacturer: Shenzhen Kinghelm Elec
+    connects:
+      Ext: GND
+      In: gmsl2_camera_COAX_CENTER
+  L3:
+    lib: Device:L
+    value: 47uH
+    footprint: Inductor_SMD:L_1210_3225Metric
+    fields:
+      Design Note: 'PoC bias-T, single broadband choke (2026-06-29). Camera (Waveshare GMSL-2MP-Camera-A,
+        MAX96717F) draws <200mA@12V, fused 500mA (F3). History: original 0.47/6.8/22/100uH discrete ladder
+        was unbuildable (no in-stock PoC-rated parts) AND ordered backwards (largest at coax); re-staggered
+        2026-06-28 to a 5-stage ADL3225V ladder; |Z| modelling (scripts/poc_zmodel.py) then showed the
+        multi-stage ladder was heavily over-margined vs the 50ohm coax. Collapsed to a SINGLE ADL3225V,
+        which is exactly the part TDK markets as a one-component broadband PoC choke (high |Z| from ~MHz
+        into GHz via an engineered high SRF -- replaces a discrete choke ladder). L4 = 47uH (C435260,
+        300mA Isat, 0.9ohm) directly from CAM_12V_FUSED to the coax center; R32 (5.1k) damps the |Z| peak
+        across it. 1210, AEC-Q200. Modelled series |Z| 295ohm@1MHz -> 591@2MHz -> 3.0kohm@10MHz (inductive
+        region exact; GHz coverage is the ADL3225V published broadband |Z|, not the lumped model). DCR
+        0.9ohm -> 0.18V drop at 200mA; 300mA Isat carries the 200mA load and saturates only in a >300mA
+        fault the 500mA fuse already bounds. Footprint 1210 -> PCB re-lay needed (was a 5-stage 0603/0805/1210
+        mix). The 47uH has the lowest SRF of the family, so if the GMSL2 forward rate sits at the top
+        of the band, add a 4.7uH (C531415) high-SRF stage in series at the coax (2-stage). CONFIRM broadband
+        |Z| vs TDK ADL3225V |Z|-f curve before fab.'
+      'LCSC Part #': C435260
+    connects:
+      '1': GMSL2 Camera_CAM_12V_FUSED
+      '2': gmsl2_camera_COAX_CENTER
+  L4:
+    lib: Device:L
+    value: SRN4018-4R7M
+    footprint: Inductor_SMD:L_Bourns-SRN4018
+    fields:
+      'LCSC Part #': C780206
+    connects:
+      '2': GMSL2 Camera_GMSL_1V8
+      '1': gmsl2_camera_SW
+  R20:
+    lib: Device:R
+    value: 5.1k
+    footprint: Resistor_SMD:R_0402_1005Metric
+    fields:
+      'LCSC Part #': C25905
+    connects:
+      '1': GMSL2 Camera_CAM_12V_FUSED
+      '2': gmsl2_camera_COAX_CENTER
+  R21:
+    lib: Device:R
+    value: 10k
+    footprint: Resistor_SMD:R_0402_1005Metric
+    fields:
+      'LCSC Part #': C25744
+    connects:
+      '2': CAM_GPIO1
+      '1': CM5_3V3_OUT
+  R22:
+    lib: Device:R
+    value: 402R 1%
+    footprint: Resistor_SMD:R_0402_1005Metric
+    fields:
+      'LCSC Part #': C2933096
+    connects:
+      '2': GND
+      '1': gmsl2_camera_XRES
+  R23:
+    lib: Device:R
+    value: 10k
+    footprint: Resistor_SMD:R_0402_1005Metric
+    fields:
+      'LCSC Part #': C25744
+    connects:
+      '2': CAM_GPIO0
+      '1': CM5_3V3_OUT
+  R24:
+    lib: Device:R
+    value: 4.99k
+    footprint: Resistor_SMD:R_0402_1005Metric
+    fields:
+      'LCSC Part #': C2933102
+    connects:
+      '2': CAM_I2C_SDA
+      '1': CM5_3V3_OUT
+  R25:
+    lib: Device:R
+    value: 10k
+    footprint: Resistor_SMD:R_0402_1005Metric
+    fields:
+      'LCSC Part #': C25744
+    connects:
+      '2': GND
+      '1': gmsl2_camera_CFG0
+  R26:
+    lib: Device:R
+    value: 4.99k
+    footprint: Resistor_SMD:R_0402_1005Metric
+    fields:
+      'LCSC Part #': C2933102
+    connects:
+      '2': CAM_I2C_SCL
+      '1': CM5_3V3_OUT
+  R27:
+    lib: Device:R
+    value: 10k 1%
+    footprint: Resistor_SMD:R_0402_1005Metric
+    fields:
+      'LCSC Part #': C25744
+    connects:
+      '1': CM5_3V3_OUT
+      '2': gmsl2_camera_CFG1
+  R28:
+    lib: Device:R
+    value: 49.9R 1%
+    footprint: Resistor_SMD:R_0402_1005Metric
+    fields:
+      Design Note: 'Rev2 IC-audit (U8-1): in series after C25 (SIOP -> C25 -> GMSL_SIOP_AC -> R31 -> GND)
+        so the 49.9R sets the in-band termination impedance with the cap DC-blocking. See C25.'
+      'LCSC Part #': C25120
+    connects:
+      '2': GND
+      '1': gmsl2_camera_SIOP_AC
+  R29:
+    lib: Device:R
+    value: 62.0k 1%
+    footprint: Resistor_SMD:R_0402_1005Metric
+    fields:
+      'LCSC Part #': C2909375
+    connects:
+      '2': GND
+      '1': gmsl2_camera_FB
+  R30:
+    lib: Device:R
+    value: 76.8k 1%
+    footprint: Resistor_SMD:R_0402_1005Metric
+    fields:
+      'LCSC Part #': C26987
+    connects:
+      '1': GMSL2 Camera_GMSL_1V8
+      '2': gmsl2_camera_FB
+  U5:
+    lib: Regulator_Linear:TLV73310PDBV
+    value: TLV73310PDBVR
+    footprint: Package_TO_SOT_SMD:SOT-23-5
+    fields:
+      'LCSC Part #': C83352
+    connects:
+      OUT: GMSL2 Camera_GMSL_1V0
+      EN: GMSL2 Camera_GMSL_1V8
+      IN: GMSL2 Camera_GMSL_1V8
+      GND: GND
+      '4': nc
+  U6:
+    lib: Regulator_Linear:TLV73312PDBV
+    value: TLV73312PDBVR
+    footprint: Package_TO_SOT_SMD:SOT-23-5
+    fields:
+      'LCSC Part #': C473364
+    connects:
+      OUT: GMSL2 Camera_GMSL_1V2
+      EN: GMSL2 Camera_GMSL_1V8
+      IN: GMSL2 Camera_GMSL_1V8
+      GND: GND
+      '4': nc
+  U7:
+    lib: Regulator_Switching:AP63200WU
+    value: AP63200WU-7
+    footprint: Package_TO_SOT_SMD:TSOT-23-6
+    fields:
+      'LCSC Part #': C2071868
+    connects:
+      EN: CM5_5V_IN
+      IN: CM5_5V_IN
+      GND: GND
+      BST: gmsl2_camera_BST
+      FB: gmsl2_camera_FB
+      SW: gmsl2_camera_SW
+  U8:
+    lib: cm5hudsp:MAX96714
+    value: MAX96714GTJ/VY+T
+    footprint: Package_DFN_QFN:TQFN-32-1EP_5x5mm_P0.5mm_EP3.4x3.4mm_ThermalVias
+    fields:
+      Design Note: CFG0 low is I2C address 0x50; CFG1 10k pullup selects MAX96714 6Gbps coax GMSL2 
+        tunnel mode for the Waveshare MAX96717F camera.
+      'LCSC Part #': C22662002
+    connects:
+      CKN: CAM_CSI_C_N
+      CKP: CAM_CSI_C_P
+      D0N: CAM_CSI_D0_N
+      D0P: CAM_CSI_D0_P
+      D1N: CAM_CSI_D1_N
+      D1P: CAM_CSI_D1_P
+      D2N: CAM_CSI_D2_N
+      D2P: CAM_CSI_D2_P
+      D3N: CAM_CSI_D3_N
+      D3P: CAM_CSI_D3_P
+      PWDNB: CAM_GPIO0
+      MFP5: CAM_GPIO1
+      MFP4: CAM_I2C_SCL
+      MFP3: CAM_I2C_SDA
+      VDDIO: CM5_3V3_OUT
+      VDD: GMSL2 Camera_GMSL_1V0
+      VDD18: GMSL2 Camera_GMSL_1V8
+      CAP_VDD: GMSL2 Camera_GMSL_CAPVDD
+      EP: GND
+      X1: Net-(U8-X1)
+      X2: Net-(U8-X2)
+      CFG0: gmsl2_camera_CFG0
+      CFG1: gmsl2_camera_CFG1
+      SION/SIO: gmsl2_camera_SIO
+      SIOP: gmsl2_camera_SIOP_TERM
+      XRES: gmsl2_camera_XRES
+      '1': nc
+      '18': nc
+      '19': nc
+      '2': nc
+      '20': nc
+      '3': nc
+      '32': nc
+  Y2:
+    lib: Device:Crystal_GND24
+    value: 25MHz
+    footprint: Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm
+    fields:
+      'LCSC Part #': C70585
+    connects:
+      '1': Net-(U8-X1)
+      '3': Net-(U8-X2)
+      G/all: Net-(Y2-G-Pad2)
+power_flags:
+  - GMSL2 Camera_GMSL_1V8

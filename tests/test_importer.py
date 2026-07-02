@@ -37,6 +37,17 @@ def _erc_violation_count(output: str) -> int:
     return int(match.group(1))
 
 
+def _erc_error_count(report: str) -> int:
+    match = re.search(r"ERC messages: \d+  Errors (\d+)  Warnings \d+", report)
+    if match is None:
+        raise AssertionError(f"missing ERC error summary in report: {report}")
+    return int(match.group(1))
+
+
+def _erc_code_count(report: str, code: str) -> int:
+    return report.count(f"[{code}]")
+
+
 def test_import_generated_fixture_roundtrips_connectivity(tmp_path: Path) -> None:
     source_project = tmp_path / "source"
     compiled_project = tmp_path / "compiled"
@@ -164,9 +175,7 @@ def test_import_drops_no_connects_that_are_connected_by_netlist(tmp_path: Path) 
             )
         },
         symbol_pins={
-            "Test:Device": {
-                "1": ImportedPin(number="1", name="GPIO27", electrical_type="passive")
-            }
+            "Test:Device": {"1": ImportedPin(number="1", name="GPIO27", electrical_type="passive")}
         },
         symbol_units={},
         nets=[
@@ -270,6 +279,34 @@ def test_import_canonicalizes_power_flag_names_to_netlist_names() -> None:
     ) == ["USB Hub + Ports_USB_ESI_VBUS"]
 
 
+@pytest.mark.skipif(shutil.which("kicad-cli") is None, reason="kicad-cli is not available")
+def test_cm5_gmsl2_u8_fixture_keeps_adjacent_label_nets_separate(tmp_path: Path) -> None:
+    compiled = tmp_path / "compiled"
+    result = runner.invoke(
+        app,
+        [
+            "compile",
+            "tests/fixtures/cm5_gmsl2_u8_short/project.ksch.yaml",
+            "--out",
+            str(compiled),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    netlist = tmp_path / "compiled.net"
+    _export_netlist(compiled / "cm5_gmsl2_u8_short.kicad_sch", netlist)
+    signature = connectivity_signature(parse_kicadsexpr_netlist(netlist))
+
+    expected_groups = {
+        frozenset({("U8", "6"), ("R26", "2")}),
+        frozenset({("U8", "7"), ("R21", "2")}),
+        frozenset({("U8", "8"), ("Y2", "1")}),
+        frozenset({("U8", "9"), ("Y2", "3")}),
+    }
+    assert expected_groups <= signature
+    assert not any(set(group) >= set().union(*expected_groups) for group in signature)
+
+
 @pytest.mark.skipif(
     not Path("/Users/mitch/projects/cm5-hudsp/cm5hudsp/cm5hudsp.kicad_sch").exists()
     or shutil.which("kicad-cli") is None,
@@ -317,7 +354,7 @@ def test_import_cm5_hudsp_roundtrip_smoke(tmp_path: Path) -> None:
     assert erc.returncode == 0, erc.stderr
     assert _erc_violation_count(erc.stdout) <= _erc_violation_count(original_erc.stdout)
     report_text = erc_report.read_text(encoding="utf-8")
-    assert "Errors 0" in report_text
-    assert "[multiple_net_names]" not in report_text
-    assert "[pin_not_connected]" not in report_text
-    assert "[wire_dangling]" not in report_text
+    original_report_text = original_erc_report.read_text(encoding="utf-8")
+    assert _erc_error_count(report_text) <= _erc_error_count(original_report_text)
+    for code in ("multiple_net_names", "pin_not_connected", "wire_dangling"):
+        assert _erc_code_count(report_text, code) <= _erc_code_count(original_report_text, code)

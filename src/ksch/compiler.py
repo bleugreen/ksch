@@ -10,11 +10,8 @@ from ksch.resolver import ResolvedProject
 def build_placed_project(
     project: ResolvedProject,
     *,
-    strict_geometry: bool = True,
     layout_errors: list[str] | None = None,
 ) -> PlacedProject:
-    del strict_geometry
-
     sheets: list[PlacedSheet] = []
     for sheet_path in sorted(project.source.sheets):
         state = solve_sheet_layout(project, sheet_path)
@@ -41,12 +38,10 @@ def write_project(
     symbol_libraries: dict[str, Path] | None = None,
     footprint_libraries: dict[str, Path] | None = None,
     *,
-    strict_geometry: bool = True,
     layout_errors: list[str] | None = None,
 ) -> PlacedProject:
     placed_project = build_placed_project(
         project,
-        strict_geometry=strict_geometry,
         layout_errors=layout_errors,
     )
     write_placed_project(

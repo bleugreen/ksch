@@ -32,6 +32,7 @@ def _sheet_ir(path: str, source_path: Path, source: SourceDocument) -> SheetIR:
         no_connects=no_connects,
         no_connect_paths=no_connect_paths,
         assertions=source.assertions,
+        blocks=source.blocks,
     )
 
 

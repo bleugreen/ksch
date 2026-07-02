@@ -61,3 +61,11 @@ def test_rejects_no_connect_that_expands_to_connected_duplicate_pin() -> None:
 
     with pytest.raises(KschError, match="J1.VBUS@A4 is connected to \\+5V"):
         resolve_project(project, _context())
+
+
+def test_resolved_project_exposes_sheet_blocks() -> None:
+    project = load_project_ir(Path("tests/fixtures/project/project.ksch.yaml"))
+    resolved = resolve_project(project, _context())
+
+    assert resolved.sheets["/"].blocks == {"USB Input": ("J1",)}
+    assert resolved.sheets["/usb"].blocks == {"USB Hub": ("U2",)}

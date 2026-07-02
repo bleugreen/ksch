@@ -133,9 +133,57 @@ def test_verify_runs_erc_and_netlist_parity(tmp_path: Path) -> None:
 
     assert verify_result.exit_code == 0, verify_result.output
     assert "erc: 0 violation(s)" in verify_result.stdout
+    assert "netlist parity: schema matches generated schematic" in verify_result.stdout
     assert "netlist: matches" in verify_result.stdout
     assert "drift: generated output matches" in verify_result.stdout
     assert "verification passed" in verify_result.stdout
     assert (artifacts / "erc.rpt").exists()
     assert (artifacts / "reference.net").exists()
     assert (artifacts / "generated.net").exists()
+
+
+@pytest.mark.skipif(shutil.which("kicad-cli") is None, reason="kicad-cli is not installed")
+def test_placed_graphical_annotations_export_svg(tmp_path: Path) -> None:
+    from ksch.emit import write_project as write_placed_project
+    from ksch.placed import PlacedGraphicRectangle, PlacedProject, PlacedSheet, PlacedText
+
+    project = PlacedProject(
+        name="graphics",
+        sheets=(
+            PlacedSheet(
+                path="/",
+                filename=Path("graphics.kicad_sch"),
+                uuid="sheet",
+                paper="A4",
+                lib_symbols=(),
+                items=(
+                    PlacedGraphicRectangle(at=(20.0, 20.0), size=(80.0, 40.0), uuid="frame"),
+                    PlacedText(
+                        text="CAN Controller",
+                        at=(22.54, 24.0),
+                        uuid="title",
+                        size=(2.54, 2.54),
+                    ),
+                ),
+                instance_path="/",
+                page="1",
+            ),
+        ),
+    )
+    write_placed_project(project, tmp_path)
+
+    svg_dir = tmp_path / "svg"
+    svg_result = run_kicad_cli(
+        [
+            "sch",
+            "export",
+            "svg",
+            "--output",
+            str(svg_dir),
+            "--exclude-drawing-sheet",
+            str(tmp_path / "graphics.kicad_sch"),
+        ]
+    )
+
+    assert svg_result.returncode == 0, svg_result.stderr
+    assert "CAN Controller" in (svg_dir / "graphics.svg").read_text(encoding="utf-8")

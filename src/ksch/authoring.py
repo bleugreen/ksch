@@ -25,10 +25,7 @@ def parse_symbol_library_specs(
 
 
 def index_symbol_library_paths(libraries: dict[str, Path]) -> dict[str, SymbolLibraryIndex]:
-    return {
-        nickname: index_symbol_library(nickname, path)
-        for nickname, path in libraries.items()
-    }
+    return {nickname: index_symbol_library(nickname, path) for nickname, path in libraries.items()}
 
 
 def index_symbol_libraries(library_specs: list[str]) -> dict[str, SymbolLibraryIndex]:

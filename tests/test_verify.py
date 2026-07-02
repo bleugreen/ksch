@@ -1,51 +1,122 @@
 from pathlib import Path
 
 from ksch.model.endpoint import EndpointKind
+from ksch.model.ir import ProjectIR, SheetIR
 from ksch.resolver import ResolvedEndpoint, ResolvedProject, ResolvedSheet
-from ksch.verify import NetlistNet, compare_connectivity, compare_dirs, connectivity_signature
+from ksch.verify import (
+    NetlistNet,
+    compare_dirs,
+    compare_netlist_to_schema,
+    connectivity_signature,
+    schema_net_mates,
+)
 
 
-def test_compare_connectivity_reports_missing_pin() -> None:
-    project = ResolvedProject(name="demo", source=None)  # type: ignore[arg-type]
-    project.sheets["/"] = ResolvedSheet(
-        path="/",
-        nets={
-            "USB_DP": [
-                ResolvedEndpoint(
-                    text="J1.D+@A6",
-                    kind=EndpointKind.SYMBOL_PIN,
-                    sheet_path="/",
-                    ref="J1",
-                    pin_name="D+",
-                    pin_number="A6",
-                )
-            ]
+def _pin(ref: str, pin_number: str, *, sheet_path: str = "/") -> ResolvedEndpoint:
+    return ResolvedEndpoint(
+        text=f"{ref}.{pin_number}",
+        kind=EndpointKind.SYMBOL_PIN,
+        sheet_path=sheet_path,
+        ref=ref,
+        pin_name=pin_number,
+        pin_number=pin_number,
+    )
+
+
+def _project(*, root_nets: dict[str, list[ResolvedEndpoint]]) -> ResolvedProject:
+    return ResolvedProject(
+        name="demo",
+        source=ProjectIR(
+            name="demo",
+            root_path=Path("project.ksch.yaml"),
+            sheets={"/": SheetIR(path="/", source_path=Path("project.ksch.yaml"))},
+        ),
+        sheets={"/": ResolvedSheet(path="/", nets=root_nets)},
+    )
+
+
+def test_compare_netlist_to_schema_reports_merged_net_mates() -> None:
+    project = _project(
+        root_nets={
+            "USB_DP": [_pin("J1", "A6"), _pin("U1", "1")],
+            "GND": [_pin("J1", "A1"), _pin("U1", "2")],
+        }
+    )
+    exported = {
+        "GND": NetlistNet(
+            name="GND",
+            connections={("J1", "A6"), ("U1", "1"), ("J1", "A1"), ("U1", "2")},
+        )
+    }
+
+    findings = compare_netlist_to_schema(project, exported)
+
+    assert findings == [
+        "J1.A1 net-mates differ; schema net GND mates [U1.2]; "
+        "exported net GND mates [J1.A6, U1.1, U1.2]",
+        "J1.A6 net-mates differ; schema net USB_DP mates [U1.1]; "
+        "exported net GND mates [J1.A1, U1.1, U1.2]",
+        "U1.1 net-mates differ; schema net USB_DP mates [J1.A6]; "
+        "exported net GND mates [J1.A1, J1.A6, U1.2]",
+        "U1.2 net-mates differ; schema net GND mates [J1.A1]; "
+        "exported net GND mates [J1.A1, J1.A6, U1.1]",
+    ]
+
+
+def test_compare_netlist_to_schema_accepts_name_swap_with_same_topology() -> None:
+    project = _project(
+        root_nets={
+            "USB_DP": [_pin("J1", "A6"), _pin("U1", "1")],
+            "GND": [_pin("J1", "A1"), _pin("U1", "2")],
+        }
+    )
+    exported = {
+        "RENAMED_A": NetlistNet(name="RENAMED_A", connections={("J1", "A6"), ("U1", "1")}),
+        "RENAMED_B": NetlistNet(name="RENAMED_B", connections={("J1", "A1"), ("U1", "2")}),
+    }
+
+    assert compare_netlist_to_schema(project, exported) == []
+
+
+def test_schema_net_mates_flattens_sheet_interfaces() -> None:
+    project = ResolvedProject(
+        name="demo",
+        source=ProjectIR(
+            name="demo",
+            root_path=Path("project.ksch.yaml"),
+            sheets={
+                "/": SheetIR(path="/", source_path=Path("project.ksch.yaml")),
+                "/usb": SheetIR(
+                    path="/usb",
+                    source_path=Path("usb.ksch.yaml"),
+                    interface={"VBUS": "power_in"},
+                ),
+            },
+        ),
+        sheets={
+            "/": ResolvedSheet(
+                path="/",
+                nets={
+                    "+5V": [
+                        _pin("J1", "A4"),
+                        ResolvedEndpoint(
+                            text="usb.VBUS",
+                            kind=EndpointKind.SHEET_PORT,
+                            sheet_path="/",
+                            child_sheet="usb",
+                            port="VBUS",
+                        ),
+                    ]
+                },
+            ),
+            "/usb": ResolvedSheet(path="/usb", nets={"VBUS": [_pin("U2", "3", sheet_path="/usb")]}),
         },
     )
-    exported = {"USB_DP": NetlistNet(name="USB_DP", connections=set())}
-    findings = compare_connectivity(project, exported)
-    assert findings == ["USB_DP missing J1.A6"]
 
+    mates, _nets = schema_net_mates(project)
 
-def test_compare_connectivity_accepts_matching_pin() -> None:
-    project = ResolvedProject(name="demo", source=None)  # type: ignore[arg-type]
-    project.sheets["/"] = ResolvedSheet(
-        path="/",
-        nets={
-            "USB_DP": [
-                ResolvedEndpoint(
-                    text="J1.D+@A6",
-                    kind=EndpointKind.SYMBOL_PIN,
-                    sheet_path="/",
-                    ref="J1",
-                    pin_name="D+",
-                    pin_number="A6",
-                )
-            ]
-        },
-    )
-    exported = {"USB_DP": NetlistNet(name="USB_DP", connections={("J1", "A6")})}
-    assert compare_connectivity(project, exported) == []
+    assert mates[("J1", "A4")] == frozenset({("U2", "3")})
+    assert mates[("U2", "3")] == frozenset({("J1", "A4")})
 
 
 def test_connectivity_signature_ignores_single_pin_nets() -> None:

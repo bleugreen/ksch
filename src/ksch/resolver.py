@@ -29,6 +29,7 @@ class ResolvedEndpoint:
 class ResolvedSheet:
     path: str
     nets: dict[str, list[ResolvedEndpoint]] = field(default_factory=dict)
+    blocks: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 @dataclass
@@ -158,7 +159,12 @@ def resolve_project(
 ) -> ResolvedProject:
     resolved = ResolvedProject(name=project.name, source=project, symbol_library=libraries.symbols)
     for sheet_path, sheet in project.sheets.items():
-        resolved_sheet = ResolvedSheet(path=sheet_path)
+        resolved_sheet = ResolvedSheet(
+            path=sheet_path,
+            blocks={
+                block_name: tuple(block.members) for block_name, block in sheet.blocks.items()
+            },
+        )
         endpoint_nets: dict[tuple[str, ...], str] = {}
         if validate_declared_symbols:
             for ref, symbol_decl in sheet.symbols.items():
@@ -176,9 +182,7 @@ def resolve_project(
                     )
                 except (KschError, ValueError) as exc:
                     source_path = _net_endpoint_path(sheet, net_name, index)
-                    raise KschError(
-                        f"{sheet.source_path}: {source_path}: {exc}"
-                    ) from exc
+                    raise KschError(f"{sheet.source_path}: {source_path}: {exc}") from exc
             for resolved_endpoint in resolved_endpoints:
                 endpoint_key = resolved_endpoint_key(resolved_endpoint)
                 existing_net = endpoint_nets.get(endpoint_key)
@@ -209,9 +213,7 @@ def resolve_project(
                     if index < len(sheet.no_connect_paths)
                     else f"no_connects[{index}]"
                 )
-                raise KschError(
-                    f"{sheet.source_path}: {source_path}: {exc}"
-                ) from exc
+                raise KschError(f"{sheet.source_path}: {source_path}: {exc}") from exc
         resolved.sheets[sheet_path] = resolved_sheet
     return resolved
 

@@ -1,0 +1,217 @@
+ksch: 1
+project:
+  name: can-controller
+  title: CAN Controller Reference
+libraries:
+  symbols:
+    project:
+      Can: lib/CanController.kicad_sym
+symbols:
+  U1:
+    lib: Can:CAN_Controller14
+    value: MCP2518FD
+    connects:
+      SDI: CAN_SPI_MOSI
+      SDO: CAN_SPI_MISO
+      nCS: CAN_SPI_CS
+      SCK: CAN_SPI_SCLK
+      VDD: CM5_3V3_OUT
+      VSS: GND
+      TXCAN: CAN_TXD
+      RXCAN: CAN_RXD
+      INT: CAN_INT
+      OSC1: CAN_XTAL1
+      OSC2: CAN_XTAL2
+      CLKO_SOF: nc
+      GPIO0: nc
+      GPIO1: nc
+  Y1:
+    lib: Can:Crystal2
+    value: 40MHz
+    connects:
+      '1': CAN_XTAL1
+      '2': CAN_XTAL2
+  C1:
+    lib: Can:C
+    value: 18pF
+    connects:
+      '1': CAN_XTAL1
+      '2': GND
+  C2:
+    lib: Can:C
+    value: 18pF
+    connects:
+      '1': CAN_XTAL2
+      '2': GND
+  R4:
+    lib: Can:R
+    value: 10k
+    connects:
+      '1': CM5_3V3_OUT
+      '2': CAN_SPI_CS
+  C3:
+    lib: Can:C
+    value: 100nF
+    connects:
+      '1': CM5_3V3_OUT
+      '2': GND
+  C4:
+    lib: Can:C
+    value: 100nF
+    connects:
+      '1': CM5_3V3_OUT
+      '2': GND
+  C5:
+    lib: Can:C
+    value: 100nF
+    connects:
+      '1': CM5_5V_IN
+      '2': GND
+  U2:
+    lib: Can:CAN_Transceiver8
+    value: MCP2562
+    connects:
+      TXD: CAN_TXD
+      RXD: CAN_RXD
+      VDD: CM5_5V_IN
+      VIO: CM5_3V3_OUT
+      STBY: CAN_STBY
+      VSS: GND
+      CANH: CANH
+      CANL: CANL
+  R5:
+    lib: Can:R
+    value: 10k
+    connects:
+      '1': CAN_STBY
+      '2': GND
+  R8:
+    lib: Can:R
+    value: 120R
+    connects:
+      '1': CANH
+      '2': CANL
+  D3:
+    lib: Can:DualTVS3
+    value: PESD2CANFD24V
+    connects:
+      A: CANH
+      B: CANL
+      COM: GND
+  J2:
+    lib: Can:Conn8
+    value: VEHICLE_CAN
+    connects:
+      CANH: CANH
+      GND/all: GND
+      CANL: CANL
+      VBAT_12V_RAW: VBAT_12V_RAW
+      VEH_ACC_12V: VEH_ACC_12V
+      VEH_REV_12V: VEH_REV_12V
+      VEH_ILLUM_12V: VEH_ILLUM_12V
+  R10:
+    lib: Can:R
+    value: 150k
+    connects:
+      '1': VEH_ACC_12V
+      '2': VEH_ACC_SENSE
+  C7:
+    lib: Can:C
+    value: 10nF
+    connects:
+      '1': VEH_ACC_SENSE
+      '2': GND
+  D6:
+    lib: Can:Zener
+    value: 3V3
+    connects:
+      K: VEH_ACC_SENSE
+      A: GND
+  R12:
+    lib: Can:R
+    value: 33k
+    connects:
+      '1': VEH_ACC_SENSE
+      '2': GND
+  R11:
+    lib: Can:R
+    value: 150k
+    connects:
+      '1': VEH_ILLUM_12V
+      '2': VEH_ILLUM_SENSE
+  C8:
+    lib: Can:C
+    value: 10nF
+    connects:
+      '1': VEH_ILLUM_SENSE
+      '2': GND
+  D5:
+    lib: Can:Zener
+    value: 3V3
+    connects:
+      K: VEH_ILLUM_SENSE
+      A: GND
+  R9:
+    lib: Can:R
+    value: 33k
+    connects:
+      '1': VEH_ILLUM_SENSE
+      '2': GND
+  R7:
+    lib: Can:R
+    value: 150k
+    connects:
+      '1': VEH_REV_12V
+      '2': VEH_REV_SENSE
+  C6:
+    lib: Can:C
+    value: 10nF
+    connects:
+      '1': VEH_REV_SENSE
+      '2': GND
+  D4:
+    lib: Can:Zener
+    value: 3V3
+    connects:
+      K: VEH_REV_SENSE
+      A: GND
+  R6:
+    lib: Can:R
+    value: 33k
+    connects:
+      '1': VEH_REV_SENSE
+      '2': GND
+blocks:
+  CAN Controller:
+    members:
+      - U1
+      - Y1
+      - C1
+      - C2
+      - R4
+      - C3
+      - C4
+      - C5
+  CAN Transceiver:
+    members:
+      - U2
+      - D3
+      - R8
+      - R5
+  Vehicle Conn:
+    members:
+      - J2
+  12V Sense:
+    members:
+      - R10
+      - C7
+      - D6
+      - R12
+      - R11
+      - C8
+      - D5
+      - R9
+      - R7
+      - C6
+      - D4
+      - R6

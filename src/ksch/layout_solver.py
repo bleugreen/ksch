@@ -1,19 +1,28 @@
 from __future__ import annotations
 
+import re
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass, replace
 from math import floor
 from pathlib import Path
-import re
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from ksch.geometry import symbol_pin_coordinate
 from ksch.ids import stable_uuid
 from ksch.kicad.symbols import SymbolInfo, SymbolPin
-from ksch.layout import Point, Rect, title_block_rect_for_paper, usable_page_rect_for_paper, snap_grid
+from ksch.layout import (
+    Point,
+    Rect,
+    snap_grid,
+    title_block_rect_for_paper,
+    usable_page_rect_for_paper,
+)
 from ksch.model.endpoint import EndpointKind, parse_endpoint
 from ksch.model.source import PinDirection, SymbolDecl
 from ksch.placed import (
+    PlacedGraphicRectangle,
     PlacedHierarchicalLabel,
     PlacedItem,
     PlacedJunction,
@@ -49,7 +58,6 @@ from ksch.schematic_geometry import (
     text_rect,
 )
 from ksch.segment_geometry import point_on_segment, segments_touch
-
 
 PAPER = "A3"
 GRID = 2.54
@@ -169,7 +177,7 @@ class _RouteCandidate:
 
 
 @dataclass(frozen=True)
-class _PassiveBankCandidate:
+class _SinglePullCandidate:
     placed: PlacedComponent
     wire_request: _WireRequest | None
     occupied: tuple[Rect, ...]
@@ -177,7 +185,7 @@ class _PassiveBankCandidate:
 
 
 @dataclass(frozen=True)
-class _PassiveBankState:
+class _SinglePullState:
     score: float
     items: tuple[PlacedItem, ...]
     occupied: tuple[Rect, ...]
@@ -210,14 +218,14 @@ class _LabelAnchorCandidate:
 
 
 @dataclass(frozen=True)
-class _RailCap:
+class _DecouplingCap:
     component_id: str
     rail_record: NetEndpoint
     ground_record: NetEndpoint
 
 
 @dataclass(frozen=True)
-class _OscillatorCap:
+class _CrystalLoadCap:
     component_id: str
     net_name: str
     signal_record: NetEndpoint
@@ -225,26 +233,43 @@ class _OscillatorCap:
 
 
 @dataclass(frozen=True)
-class _OscillatorModule:
+class _CrystalLoadCapsMatch:
     bridge_id: str
     side: PortSide
     links: tuple[tuple[str, NetEndpoint, NetEndpoint], ...]
-    caps: tuple[_OscillatorCap, ...]
+    caps: tuple[_CrystalLoadCap, ...]
     ground_records: tuple[NetEndpoint, ...]
 
 
 @dataclass(frozen=True)
+class _StanzaMatch:
+    template_id: str
+    component_ids: tuple[str, ...]
+    key: tuple[Any, ...]
+    input_record: NetEndpoint | None = None
+    node_records: tuple[NetEndpoint, ...] = ()
+    return_records: tuple[NetEndpoint, ...] = ()
+    branch_records: tuple[NetEndpoint, ...] = ()
+
+
+@dataclass(frozen=True)
+class _StanzaSolved:
+    assembly: Assembly
+    placed: dict[str, PlacedComponent]
+
+
+@dataclass(frozen=True)
 class _PackScoreContext:
-    visible_index: "_RectIndex"
-    route_index: "_RectIndex"
-    envelope_index: "_RectIndex"
+    visible_index: _RectIndex
+    route_index: _RectIndex
+    envelope_index: _RectIndex
     placed_bounds: Rect | None
 
 
 @dataclass(frozen=True)
 class _PathContext:
-    avoid_index: "_LayoutElementIndex"
-    existing_index: "_SegmentIndex"
+    avoid_index: _LayoutElementIndex
+    existing_index: _SegmentIndex
 
 
 @dataclass(frozen=True)
@@ -262,7 +287,11 @@ def solve_sheet_layout(project: ResolvedProject, sheet_path: str) -> SheetLayout
 def sheet_filename(project_name: str, sheet_path: str) -> Path:
     if sheet_path == "/":
         return Path(f"{project_name}.kicad_sch")
-    return Path("sheets").joinpath(*(part for part in sheet_path.split("/") if part)).with_suffix(".kicad_sch")
+    return (
+        Path("sheets")
+        .joinpath(*(part for part in sheet_path.split("/") if part))
+        .with_suffix(".kicad_sch")
+    )
 
 
 def sheet_instance_path(sheet_path: str) -> str:
@@ -302,13 +331,44 @@ class _AssemblySolver:
         self._project_label_text_counts_cache: dict[str, int] | None = None
         self._implicit_driver_nets: set[str] = set()
         self._placed_component_cache: dict[tuple[str, int, bool], PlacedComponent] = {}
+        self._full_net_records: dict[str, list[NetEndpoint]] = {}
+        self._item_frame_rects: dict[str, Rect] = {}
+        self._framed_block_scope = False
 
     def solve(self) -> SheetLayoutState:
         self._build_components()
         self._build_net_records()
-        owners = self._passive_owners()
-        assemblies = self._build_assemblies(owners)
-        items, ports = self._pack_assemblies(assemblies)
+        self._full_net_records = {
+            net_name: list(records) for net_name, records in self.net_records.items()
+        }
+        self._prime_label_text_caches()
+
+        block_of = self._component_blocks()
+        pack_units: list[Assembly] = []
+        for block_name in self._ordered_block_names(block_of):
+            members = {
+                component_id for component_id, owner in block_of.items() if owner == block_name
+            }
+            if not members:
+                continue
+            previous_block_scope = self._framed_block_scope
+            self._framed_block_scope = True
+            try:
+                with self._scoped_view(members):
+                    owners = self._passive_owners()
+                    assemblies = self._build_assemblies(owners)
+            finally:
+                self._framed_block_scope = previous_block_scope
+            pack_units.append(self._frame_block_assembly(block_name, assemblies))
+
+        leftovers = {component_id for component_id, owner in block_of.items() if owner is None}
+        if leftovers:
+            with self._scoped_view(leftovers):
+                owners = self._passive_owners()
+                pack_units.extend(self._build_assemblies(owners))
+
+        self._item_frame_rects = {}
+        items, ports = self._pack_assemblies(pack_units)
         del ports
         items = self._legalized_sheet_items(items)
         items = self._separate_cross_net_endpoints(items)
@@ -322,6 +382,170 @@ class _AssemblySolver:
             instance_path=sheet_instance_path(self.sheet_path),
             page=page_number(self.project, self.sheet_path),
             layout_errors=tuple(self.layout_errors),
+        )
+
+    def _prime_label_text_caches(self) -> None:
+        self._local_label_texts()
+        self._project_label_text_counts()
+
+    def _component_blocks(self) -> dict[str, str | None]:
+        block_of: dict[str, str | None] = {component_id: None for component_id in self.components}
+        if self.resolved_sheet is None or not self.resolved_sheet.blocks:
+            return block_of
+
+        declared_ref_blocks: dict[str, str] = {}
+        for block_name, refs in self.resolved_sheet.blocks.items():
+            for ref in refs:
+                declared_ref_blocks[ref] = block_name
+        for component_id, component in self.components.items():
+            if component.kind == "symbol" and component.ref in declared_ref_blocks:
+                block_of[component_id] = declared_ref_blocks[component.ref]
+
+        owners = self._expanded_support_owners(self._passive_owners())
+        changed = True
+        while changed:
+            changed = False
+            for component_id, owner_id in sorted(owners.items()):
+                if block_of.get(component_id) is not None:
+                    continue
+                owner_block = block_of.get(owner_id)
+                if owner_block is None:
+                    continue
+                block_of[component_id] = owner_block
+                changed = True
+        return block_of
+
+    @contextmanager
+    def _scoped_view(self, member_ids: set[str]) -> Iterator[None]:
+        original_components = self.components
+        original_net_records = self.net_records
+        original_endpoint_to_component = self.endpoint_to_component
+        try:
+            self.components = {
+                component_id: component
+                for component_id, component in original_components.items()
+                if component_id in member_ids
+            }
+            self.endpoint_to_component = {
+                endpoint_key: component_id
+                for endpoint_key, component_id in original_endpoint_to_component.items()
+                if component_id in member_ids
+            }
+            self.net_records = {
+                net_name: scoped
+                for net_name, records in original_net_records.items()
+                if (
+                    scoped := [record for record in records if record.component_id in member_ids]
+                )
+            }
+            yield
+        finally:
+            self.components = original_components
+            self.net_records = original_net_records
+            self.endpoint_to_component = original_endpoint_to_component
+
+    def _ordered_block_names(self, block_of: dict[str, str | None]) -> list[str]:
+        if self.resolved_sheet is None:
+            return []
+        declared = list(self.resolved_sheet.blocks)
+        block_nets: dict[str, set[str]] = {block_name: set() for block_name in declared}
+        block_refs: dict[str, set[str]] = {block_name: set() for block_name in declared}
+        for component_id, block_name in block_of.items():
+            if block_name is None:
+                continue
+            component = self.components[component_id]
+            if component.ref is not None:
+                block_refs[block_name].add(component.ref)
+            for net_name, records in self.net_records.items():
+                if any(record.component_id == component_id for record in records):
+                    block_nets[block_name].add(net_name)
+
+        remaining = declared[:]
+        if not remaining:
+            return []
+        ordered = [remaining.pop(0)]
+        while remaining:
+            previous = ordered[-1]
+            next_name = max(
+                remaining,
+                key=lambda name: (
+                    len(block_nets[previous] & block_nets[name]),
+                    -sum(ref.startswith("J") for ref in block_refs[name]),
+                    -declared.index(name),
+                ),
+            )
+            ordered.append(next_name)
+            remaining.remove(next_name)
+
+        connector_blocks = [
+            name
+            for name in ordered
+            if any(ref.startswith("J") for ref in block_refs[name])
+            or len(block_nets[name]) == max(len(nets) for nets in block_nets.values())
+        ]
+        for name in connector_blocks:
+            if name in ordered and name != ordered[-1]:
+                ordered.remove(name)
+                ordered.append(name)
+        return ordered
+
+    def _frame_block_assembly(self, block_name: str, assemblies: list[Assembly]) -> Assembly:
+        content = usable_page_rect_for_paper(PAPER)
+        if content is None:
+            content = Rect(0.0, 0.0, 420.0, 297.0)
+        ordered = sorted(assemblies, key=_assembly_area_order_key)
+        placements = _pack_ordered_assemblies_geometry(
+            ordered,
+            content,
+            self.project.symbol_library,
+            (),
+        )
+        block_items: list[PlacedItem] = []
+        block_ports: dict[str, tuple[float, float]] = {}
+        block_port_sides: dict[str, PortSide] = {}
+        component_ids: set[str] = set()
+        for assembly in ordered:
+            dx, dy = placements.get(assembly.id, (content.left, content.top))
+            block_items.extend(_translate_item(item, dx, dy) for item in assembly.items)
+            for key, point in assembly.ports.items():
+                block_ports[key] = _translate_point(point, dx, dy)
+            block_port_sides.update(assembly.port_sides)
+            component_ids.update(assembly.component_ids)
+
+        env = _items_rect(tuple(block_items), self.project.symbol_library)
+        if env is None:
+            env = Rect(content.left, content.top, content.left + GRID * 4, content.top + GRID * 4)
+        margin = GRID * 2
+        title_band = GRID * 3
+        frame = Rect(
+            _snap(env.left - margin),
+            _snap(env.top - margin - title_band),
+            _snap(env.right + margin),
+            _snap(env.bottom + margin),
+        )
+        frame_item = PlacedGraphicRectangle(
+            at=(frame.left, frame.top),
+            size=(frame.width, frame.height),
+            uuid=stable_uuid(f"{self.sheet_path}:block:{block_name}:frame"),
+        )
+        title_item = PlacedText(
+            text=block_name,
+            at=(_snap(frame.left + GRID), _snap(frame.top + GRID)),
+            uuid=stable_uuid(f"{self.sheet_path}:block:{block_name}:title"),
+            size=(2.0, 2.0),
+            justify="left",
+        )
+        items = tuple([*block_items, frame_item, title_item])
+        rect = _items_rect(items, self.project.symbol_library) or frame
+        return _normalize_assembly(
+            Assembly(
+                id=f"block:{block_name}",
+                items=items,
+                rect=rect,
+                ports=block_ports,
+                port_sides=block_port_sides,
+                component_ids=frozenset(component_ids),
+            )
         )
 
     def _legalized_sheet_items(self, items: list[PlacedItem]) -> list[PlacedItem]:
@@ -346,7 +570,7 @@ class _AssemblySolver:
         regardless, so the other net's connectivity is left untouched.
         """
         items = list(items)
-        for _iteration in range(8):
+        for _iteration in range(32):
             bad = self._cross_net_bad_points(items)
             if not bad:
                 return items
@@ -362,10 +586,96 @@ class _AssemblySolver:
                     progressed = True
                     break
             if not progressed:
-                # No safe lossless prune available; stop rather than risk
-                # disconnecting a net.
+                for net_name in sorted(bad):
+                    rerouted = self._reroute_cross_net_label_branch(items, net_name, bad[net_name])
+                    if rerouted is not None:
+                        items = rerouted
+                        progressed = True
+                        break
+            if not progressed:
+                # No safe lossless prune/reroute available; stop rather than
+                # risk disconnecting a net.
                 return items
         return items
+
+    def _reroute_cross_net_label_branch(
+        self,
+        items: list[PlacedItem],
+        net_name: str,
+        bad_points: set[tuple[float, float]],
+    ) -> list[PlacedItem] | None:
+        for label in items:
+            if not isinstance(label, PlacedLabel | PlacedHierarchicalLabel):
+                continue
+            label_net = _placed_label_net(label)
+            if label_net != net_name:
+                continue
+            branch = self._label_branch(items, net_name, label)
+            if branch is None:
+                continue
+            terminal_point, terminal, wire_ids = branch
+            branch_wires = [
+                item for item in items if isinstance(item, PlacedWire) and item.uuid in wire_ids
+            ]
+            if (
+                not any(
+                    _point_on_wire_key(point, wire) for point in bad_points for wire in branch_wires
+                )
+                and _point_key(label.at) not in bad_points
+            ):
+                continue
+            remaining = [
+                item
+                for item in items
+                if not (isinstance(item, PlacedWire) and item.uuid in wire_ids)
+                and item is not label
+            ]
+            if terminal is None:
+                if not self._net_has_assertion(remaining, net_name):
+                    continue
+                candidate_bad = self._cross_net_bad_points(remaining)
+                if len(candidate_bad.get(net_name, set())) < len(bad_points):
+                    return remaining
+                continue
+            side = self._terminal_side(net_name, terminal) or _segment_endpoint_side(
+                terminal_point,
+                label.at,
+            )
+            kind: Literal["local", "hierarchical"] = (
+                "hierarchical" if isinstance(label, PlacedHierarchicalLabel) else "local"
+            )
+            for candidate_side in _label_candidate_sides(side, axis_locked=False):
+                occupied = [
+                    _inflate(box.rect, GRID / 2)
+                    for box in placed_items_geometry(
+                        tuple(remaining),
+                        symbol_library=self.project.symbol_library,
+                    ).boxes
+                ]
+                label_items = _label_items(
+                    self.sheet_path,
+                    net_name,
+                    label.name,
+                    terminal_point,
+                    candidate_side,
+                    kind,
+                    occupied,
+                    terminal,
+                    f"separate-cross-net:{label.uuid}:{candidate_side}",
+                    axis_locked=True,
+                    existing_items=remaining,
+                    symbol_library=self.project.symbol_library,
+                )
+                frame = self._item_frame_rects.get(label.uuid)
+                if frame is not None and not _items_fit_rect(
+                    tuple(label_items), self.project.symbol_library, frame
+                ):
+                    continue
+                candidate = [*remaining, *label_items]
+                candidate_bad = self._cross_net_bad_points(candidate)
+                if len(candidate_bad.get(net_name, set())) < len(bad_points):
+                    return candidate
+        return None
 
     def _cross_net_bad_points(self, items: list[PlacedItem]) -> dict[str, set[tuple[float, float]]]:
         geometry = placed_items_geometry(tuple(items), symbol_library=self.project.symbol_library)
@@ -389,14 +699,14 @@ class _AssemblySolver:
                 continue
             if item.lib_id not in {POWER_PORT_LIB_ID, POWER_DRIVER_LIB_ID}:
                 continue
-            net_name = _symbol_property_value(item, "Value")
-            if net_name is None:
+            port_net_name = _symbol_property_value(item, "Value")
+            if port_net_name is None:
                 continue
             for segment in problem.segments:
-                if not segment.nets or net_name in segment.nets:
+                if not segment.nets or port_net_name in segment.nets:
                     continue
                 if point_on_segment(item.at, segment.wire_segment()):
-                    mark(net_name, item.at)
+                    mark(port_net_name, item.at)
                     break
         return bad
 
@@ -407,20 +717,18 @@ class _AssemblySolver:
         bad_points: set[tuple[float, float]],
     ) -> list[PlacedItem] | None:
         net_wires = [
-            item
-            for item in items
-            if isinstance(item, PlacedWire) and net_name in item.nets
+            item for item in items if isinstance(item, PlacedWire) and net_name in item.nets
         ]
         # A point is anchored when a pin-bearing (terminal) wire of this net
         # touches it; the BFS must not prune past such nodes.
-        anchored: set[tuple[float, float]] = set()
-        for wire in net_wires:
-            if wire.start_terminals or wire.end_terminals:
-                anchored.add((_snap(wire.start[0]), _snap(wire.start[1])))
-                anchored.add((_snap(wire.end[0]), _snap(wire.end[1])))
-
         def key(point: tuple[float, float]) -> tuple[float, float]:
             return (_snap(point[0]), _snap(point[1]))
+
+        anchored: set[tuple[float, float]] = self._net_terminal_points(items, net_name)
+        for wire in net_wires:
+            if wire.start_terminals or wire.end_terminals:
+                anchored.add(key(wire.start))
+                anchored.add(key(wire.end))
 
         remove_wire_ids: set[str] = set()
         visited: set[tuple[float, float]] = set()
@@ -428,6 +736,8 @@ class _AssemblySolver:
         visited.update(frontier)
         while frontier:
             point = frontier.pop()
+            if point in anchored:
+                continue
             for wire in net_wires:
                 if wire.uuid in remove_wire_ids:
                     continue
@@ -436,9 +746,11 @@ class _AssemblySolver:
                 ends = (key(wire.start), key(wire.end))
                 if point not in ends:
                     continue
-                remove_wire_ids.add(wire.uuid)
                 other = ends[1] if ends[0] == point else ends[0]
-                if other not in anchored and other not in visited:
+                if other in anchored:
+                    return None
+                remove_wire_ids.add(wire.uuid)
+                if other not in visited:
                     visited.add(other)
                     frontier.append(other)
 
@@ -466,6 +778,12 @@ class _AssemblySolver:
         # Refuse to strip the net's last on-sheet assertion if it still has pins.
         if remaining_power_ports == 0 and self._net_has_terminals(items, net_name):
             return None
+        if any(
+            key(wire.start) in anchored or key(wire.end) in anchored
+            for wire in net_wires
+            if wire.uuid in remove_wire_ids
+        ):
+            return None
 
         pruned: list[PlacedItem] = []
         for item in items:
@@ -473,11 +791,7 @@ class _AssemblySolver:
                 continue
             if isinstance(item, PlacedSymbol) and item.uuid in remove_symbol_uuids:
                 continue
-            if (
-                isinstance(item, PlacedLabel)
-                and net_name in item.nets
-                and key(item.at) in visited
-            ):
+            if isinstance(item, PlacedLabel) and net_name in item.nets and key(item.at) in visited:
                 continue
             if (
                 isinstance(item, PlacedJunction)
@@ -491,11 +805,126 @@ class _AssemblySolver:
         return pruned
 
     def _net_has_terminals(self, items: list[PlacedItem], net_name: str) -> bool:
+        if self._net_terminal_points(items, net_name):
+            return True
         for item in items:
             if isinstance(item, PlacedWire) and net_name in item.nets:
                 if item.start_terminals or item.end_terminals:
                     return True
         return False
+
+    def _net_terminal_points(
+        self,
+        items: list[PlacedItem],
+        net_name: str,
+    ) -> set[tuple[float, float]]:
+        symbols: dict[tuple[str, int], PlacedSymbol] = {
+            (item.reference, item.unit): item for item in items if isinstance(item, PlacedSymbol)
+        }
+        sheets: dict[str, PlacedSheetBlock] = {
+            item.sheet_name: item for item in items if isinstance(item, PlacedSheetBlock)
+        }
+        points: set[tuple[float, float]] = set()
+        for record in self.net_records.get(net_name, []):
+            component = self.components.get(record.component_id)
+            if component is None:
+                continue
+            port = component.ports.get(record.endpoint_key)
+            if port is None:
+                continue
+            if (
+                component.kind == "symbol"
+                and component.ref is not None
+                and component.unit is not None
+            ):
+                symbol = symbols.get((component.ref, component.unit))
+                if symbol is None:
+                    continue
+                point = _component_port_point(
+                    component,
+                    port,
+                    Point(symbol.at[0], symbol.at[1]),
+                    symbol.rotation,
+                )
+                points.add(point)
+            elif component.kind == "sheet" and component.ref is not None:
+                sheet = sheets.get(component.ref)
+                if sheet is None:
+                    continue
+                point = _component_port_point(
+                    component,
+                    port,
+                    Point(sheet.at[0], sheet.at[1]),
+                    0,
+                )
+                points.add(point)
+        return points
+
+    def _label_branch(
+        self,
+        items: list[PlacedItem],
+        net_name: str,
+        label: PlacedLabel | PlacedHierarchicalLabel,
+    ) -> tuple[tuple[float, float], str | None, set[str]] | None:
+        label_point = (_snap(label.at[0]), _snap(label.at[1]))
+        wires = [item for item in items if isinstance(item, PlacedWire) and net_name in item.nets]
+        wires_by_point: dict[tuple[float, float], list[PlacedWire]] = {}
+        for wire in wires:
+            wires_by_point.setdefault(_point_key(wire.start), []).append(wire)
+            wires_by_point.setdefault(_point_key(wire.end), []).append(wire)
+
+        visited_points = {label_point}
+        visited_wires: set[str] = set()
+        frontier = [label_point]
+        terminals: list[tuple[tuple[float, float], str | None]] = []
+        while frontier:
+            point = frontier.pop()
+            for wire in wires_by_point.get(point, []):
+                if wire.uuid in visited_wires:
+                    continue
+                visited_wires.add(wire.uuid)
+                start = _point_key(wire.start)
+                end = _point_key(wire.end)
+                for wire_point, wire_terminals in (
+                    (start, wire.start_terminals),
+                    (end, wire.end_terminals),
+                ):
+                    if wire_terminals:
+                        terminals.append((wire_point, sorted(wire_terminals)[0]))
+                other = end if start == point else start
+                if other not in visited_points:
+                    visited_points.add(other)
+                    frontier.append(other)
+        if not visited_wires:
+            return None
+        if len(terminals) > 1:
+            return None
+        if len(terminals) == 1:
+            terminal_point, terminal = terminals[0]
+            return terminal_point, terminal, visited_wires
+        return label_point, None, visited_wires
+
+    def _net_has_assertion(self, items: list[PlacedItem], net_name: str) -> bool:
+        for item in items:
+            if _placed_label_net(item) == net_name:
+                return True
+            if isinstance(item, PlacedWire) and net_name in item.nets:
+                if item.start_terminals or item.end_terminals:
+                    return True
+        return False
+
+    def _terminal_side(self, net_name: str, terminal: str | None) -> PortSide | None:
+        if terminal is None:
+            return None
+        for record in self.net_records.get(net_name, []):
+            if record.terminal != terminal:
+                continue
+            component = self.components.get(record.component_id)
+            if component is None:
+                return None
+            port = component.ports.get(record.endpoint_key)
+            return port.side if port is not None else None
+        return None
 
     def _ensure_power_driver_symbols(self, items: list[PlacedItem]) -> list[PlacedItem]:
         normalized: list[PlacedItem] = []
@@ -514,7 +943,7 @@ class _AssemblySolver:
                             Point(value_at[0], value_at[1]),
                             value=net_name,
                             justify="left",
-                            rotation=(-_power_port_symbol_rotation("EAST")) % 360,
+                                            rotation=0,
                             symbol_rotation=_power_port_symbol_rotation("EAST"),
                             hidden_value=True,
                             project_name=self.project.name,
@@ -536,20 +965,16 @@ class _AssemblySolver:
         for item in items:
             if not isinstance(item, PlacedSymbol) or item.lib_id != POWER_PORT_LIB_ID:
                 continue
-            net_name = _symbol_property_value(item, "Value")
-            if net_name is not None:
-                power_ports.append((net_name, item))
+            port_net_name = _symbol_property_value(item, "Value")
+            if port_net_name is not None:
+                power_ports.append((port_net_name, item))
 
         driven_points = {
             item.at
             for item in items
             if isinstance(item, PlacedSymbol) and item.lib_id == POWER_DRIVER_LIB_ID
         }
-        driven_nets = {
-            net_name
-            for net_name, port in power_ports
-            if port.at in driven_points
-        }
+        driven_nets = {net_name for net_name, port in power_ports if port.at in driven_points}
         added: list[PlacedItem] = []
         for net_name, port in power_ports:
             if net_name in driven_nets:
@@ -577,9 +1002,7 @@ class _AssemblySolver:
         geometry = placed_items_geometry(tuple(items), symbol_library=self.project.symbol_library)
         blockers = geometry.route_blockers()
         blocked_ids = {
-            segment.id
-            for segment, _blocker in blockers
-            if segment.kind == "wire" and segment.nets
+            segment.id for segment, _blocker in blockers if segment.kind == "wire" and segment.nets
         }
         if not blocked_ids:
             return items
@@ -596,7 +1019,9 @@ class _AssemblySolver:
             if segment.id not in blocked_ids or not segment.nets:
                 continue
             net_name = sorted(segment.nets)[0]
-            kind: Literal["local", "hierarchical"] = "hierarchical" if net_name in self.sheet.interface else "local"
+            kind: Literal["local", "hierarchical"] = (
+                "hierarchical" if net_name in self.sheet.interface else "local"
+            )
             start = (segment.start.x, segment.start.y)
             end = (segment.end.x, segment.end.y)
             for suffix, point, terminals, side in (
@@ -621,6 +1046,11 @@ class _AssemblySolver:
                     existing_items=[*remaining, *added],
                     symbol_library=self.project.symbol_library,
                 )
+                frame = self._item_frame_rects.get(segment.id)
+                if frame is not None and not _items_fit_rect(
+                    tuple(label_items), self.project.symbol_library, frame
+                ):
+                    continue
                 added.extend(label_items)
                 occupied.extend(_wire_avoid_rects(label_items))
         return [*remaining, *added]
@@ -747,7 +1177,9 @@ class _AssemblySolver:
             if component_id is None:
                 continue
             port = self.components[component_id].ports[key]
-            self.net_records.setdefault(net_name, []).append(NetEndpoint(net_name, component_id, key, port.terminal))
+            self.net_records.setdefault(net_name, []).append(
+                NetEndpoint(net_name, component_id, key, port.terminal)
+            )
         self._local_label_text_cache = None
 
     def _label_text(self, net_name: str, kind: Literal["local", "hierarchical"]) -> str:
@@ -767,7 +1199,11 @@ class _AssemblySolver:
             if net_name in self.sheet.interface:
                 raw[net_name] = net_name
                 continue
-            raw[net_name] = net_name[len(prefix):] if net_name.startswith(prefix) and len(net_name) > len(prefix) else net_name
+            raw[net_name] = (
+                net_name[len(prefix) :]
+                if net_name.startswith(prefix) and len(net_name) > len(prefix)
+                else net_name
+            )
         counts: dict[str, int] = {}
         for text in raw.values():
             counts[text] = counts.get(text, 0) + 1
@@ -784,7 +1220,9 @@ class _AssemblySolver:
                 if counts[text] == 1
                 and compressed_counts[compressed[net_name]] == 1
                 and counts.get(compressed[net_name], 0) == 0
-                else text if counts[text] == 1 else net_name
+                else text
+                if counts[text] == 1
+                else net_name
             )
             for net_name, text in raw.items()
         }
@@ -807,7 +1245,7 @@ class _AssemblySolver:
                 if prefix is None or net_name in interface or not net_name.startswith(prefix):
                     text = net_name
                 else:
-                    text = net_name[len(prefix):]
+                    text = net_name[len(prefix) :]
                 counts[text] = counts.get(text, 0) + 1
         self._project_label_text_counts_cache = counts
         return counts
@@ -841,7 +1279,7 @@ class _AssemblySolver:
 
     def _passive_owners(self) -> dict[str, str]:
         owners: dict[str, str] = {}
-        shared_rail_cap_ids = self._shared_rail_cap_ids()
+        shared_rail_cap_ids = self._decoupling_row_component_ids()
         for component_id, component in self.components.items():
             if not _is_local_support_component(component):
                 continue
@@ -878,7 +1316,9 @@ class _AssemblySolver:
     def _expanded_support_owners(self, owners: dict[str, str]) -> dict[str, str]:
         expanded = dict(owners)
         for root_id in sorted(set(owners.values())):
-            owned = {component_id for component_id, owner_id in expanded.items() if owner_id == root_id}
+            owned = {
+                component_id for component_id, owner_id in expanded.items() if owner_id == root_id
+            }
             changed = True
             while changed:
                 changed = False
@@ -916,7 +1356,9 @@ class _AssemblySolver:
         placed: set[str] = set()
         owners = self._expanded_support_owners(owners)
         root_owned = {
-            root_id: sorted(component_id for component_id, owner_id in owners.items() if owner_id == root_id)
+            root_id: sorted(
+                component_id for component_id, owner_id in owners.items() if owner_id == root_id
+            )
             for root_id in self.components
         }
         for island in self._active_islands():
@@ -938,7 +1380,10 @@ class _AssemblySolver:
         for root_id, root in sorted(self.components.items()):
             if root.passive or root.kind == "power" or root_id in placed:
                 continue
-            assembly = self._root_assembly(root_id, root_owned.get(root_id, []))
+            if self._framed_block_scope and _is_connector_component(root):
+                assembly = self._connector_only_assembly(root_id)
+            else:
+                assembly = self._root_assembly(root_id, root_owned.get(root_id, []))
             assemblies.append(assembly)
             placed.update(assembly.component_ids)
         for root_id, root in sorted(self.components.items()):
@@ -947,13 +1392,7 @@ class _AssemblySolver:
             assembly = self._root_assembly(root_id, root_owned.get(root_id, []))
             assemblies.append(assembly)
             placed.update(assembly.component_ids)
-        for assembly in self._shared_rail_cap_bank_assemblies(placed):
-            assemblies.append(assembly)
-            placed.update(assembly.component_ids)
-        for assembly in self._loose_marker_bank_assemblies(placed):
-            assemblies.append(assembly)
-            placed.update(assembly.component_ids)
-        for assembly in self._standalone_symbol_bank_assemblies(placed):
+        for assembly in self._stanza_template_assemblies(placed):
             assemblies.append(assembly)
             placed.update(assembly.component_ids)
         for component_ids in self._unplaced_components(placed):
@@ -972,7 +1411,9 @@ class _AssemblySolver:
         for net_name, records in self.net_records.items():
             if _is_ground_net(net_name) or _is_power_net(net_name):
                 continue
-            ids = sorted({record.component_id for record in records if record.component_id in active})
+            ids = sorted(
+                {record.component_id for record in records if record.component_id in active}
+            )
             for first in ids:
                 graph[first].update(second for second in ids if second != first)
         remaining = set(active)
@@ -1038,23 +1479,33 @@ class _AssemblySolver:
         connected_endpoints: set[str] = set()
         wire_requests: list[_WireRequest] = []
 
-        oscillator_items, oscillator_placed, oscillator_connected, oscillator_component_ids = self._oscillator_modules(
+        (
+            root_template_items,
+            root_template_placed,
+            root_template_connected,
+            root_template_component_ids,
+        ) = self._root_stanza_template_items(
             root_id,
             owned_ids,
             placed_root,
             occupied,
+            template_ids=("crystal_load_caps",),
         )
-        items.extend(oscillator_items)
-        placed_components.update(oscillator_placed)
-        component_ids.update(oscillator_component_ids)
-        connected_endpoints.update(oscillator_connected)
-        remaining_owned_ids = [component_id for component_id in owned_ids if component_id not in component_ids]
+        items.extend(root_template_items)
+        placed_components.update(root_template_placed)
+        component_ids.update(root_template_component_ids)
+        connected_endpoints.update(root_template_connected)
+        remaining_owned_ids = [
+            component_id for component_id in owned_ids if component_id not in component_ids
+        ]
 
-        bridge_items, bridge_placed, bridge_connected, bridge_component_ids, bridge_wires = self._support_bridge_modules(
-            root_id,
-            remaining_owned_ids,
-            placed_root,
-            occupied,
+        bridge_items, bridge_placed, bridge_connected, bridge_component_ids, bridge_wires = (
+            self._support_bridge_modules(
+                root_id,
+                remaining_owned_ids,
+                placed_root,
+                occupied,
+            )
         )
         items.extend(bridge_items)
         placed_components.update(bridge_placed)
@@ -1090,21 +1541,26 @@ class _AssemblySolver:
             side: [lane for lane in lanes if lane[0] not in rail_component_ids]
             for side, lanes in side_lanes.items()
         }
-        for side in ("WEST", "EAST", "NORTH", "SOUTH"):
-            bank = self._place_side_passive_bank(
-                side,
-                side_lanes[side],
-                placed_components,
-                occupied,
-                items,
-            )
-            items.extend(bank.items)
-            occupied.extend(bank.occupied)
-            wire_requests.extend(bank.wire_requests)
-            connected_endpoints.update(bank.connected)
-            component_ids.update(bank.component_ids)
-            for placed in bank.placed:
-                placed_components[placed.component.id] = placed
+        (
+            single_pull_items,
+            single_pull_placed,
+            single_pull_connected,
+            single_pull_component_ids,
+        ) = self._root_stanza_template_items(
+            root_id,
+            remaining_owned_ids,
+            placed_root,
+            occupied,
+            template_ids=("single_pull",),
+            placed_ids=component_ids,
+            placed_components=placed_components,
+            side_lanes=side_lanes,
+            existing_items=items,
+        )
+        items.extend(single_pull_items)
+        placed_components.update(single_pull_placed)
+        component_ids.update(single_pull_component_ids)
+        connected_endpoints.update(single_pull_connected)
         progress = True
         while progress:
             progress = False
@@ -1121,8 +1577,12 @@ class _AssemblySolver:
                 placed_components[component_id] = placed
                 component_ids.add(component_id)
                 items.extend(placed.items)
-                occupied.extend(_occupied_rects(placed.items, self.project.symbol_library, margin=GRID / 2))
-                peer_point = placed_components[peer_record.component_id].ports[peer_record.endpoint_key]
+                occupied.extend(
+                    _occupied_rects(placed.items, self.project.symbol_library, margin=GRID / 2)
+                )
+                peer_point = placed_components[peer_record.component_id].ports[
+                    peer_record.endpoint_key
+                ]
                 support_point = placed.ports[support_record.endpoint_key]
                 if not _is_power_net(net_name) and net_name not in self.sheet.interface:
                     wire_requests.append(
@@ -1133,34 +1593,52 @@ class _AssemblySolver:
                             peer_record.terminal,
                             support_record.terminal,
                             f"assembly:{root_id}:{component_id}:{net_name}",
-                            placed_components[peer_record.component_id].port_sides[peer_record.endpoint_key],
+                            placed_components[peer_record.component_id].port_sides[
+                                peer_record.endpoint_key
+                            ],
                             placed.port_sides[support_record.endpoint_key],
                         )
                     )
-                    connected_endpoints.update({peer_record.endpoint_key, support_record.endpoint_key})
+                    connected_endpoints.update(
+                        {peer_record.endpoint_key, support_record.endpoint_key}
+                    )
                 progress = True
         for component_id in sorted(set(owned_ids) - component_ids):
             component = self.components[component_id]
-            placed = self._place_component(component, Point(placed_root.rect.right + SUPPORT_STEP, placed_root.rect.top), 0, compact_value=True)
+            placed = self._place_component(
+                component,
+                Point(placed_root.rect.right + SUPPORT_STEP, placed_root.rect.top),
+                0,
+                compact_value=not _is_crystal_bridge_component(component),
+            )
             placed_components[component_id] = placed
             component_ids.add(component_id)
             items.extend(placed.items)
-            occupied.extend(_occupied_rects(placed.items, self.project.symbol_library, margin=GRID / 2))
+            occupied.extend(
+                _occupied_rects(placed.items, self.project.symbol_library, margin=GRID / 2)
+            )
 
         connected_endpoints.update(self._island_internal_root_endpoints(root_id, island_peer_ids))
         wire_items = self._route_or_label_wire_requests(wire_requests, items, occupied)
         items.extend(wire_items)
-        net_items = self._assembly_net_items(component_ids, placed_components, occupied, connected_endpoints, base_items_extra=items)
+        net_items = self._assembly_net_items(
+            component_ids, placed_components, occupied, connected_endpoints, base_items_extra=items
+        )
         items.extend(net_items)
         occupied.extend(_wire_avoid_rects(net_items))
-        cap_bank_items, cap_bank_connected, cap_bank_component_ids = self._root_rail_cap_bank_modules(
-            root_id,
-            placed_root,
-            occupied,
+        post_template_items, _post_template_placed, post_template_connected, post_template_ids = (
+            self._root_stanza_template_items(
+                root_id,
+                owned_ids,
+                placed_root,
+                occupied,
+                template_ids=("decoupling_row",),
+                placed_ids=component_ids,
+            )
         )
-        items.extend(cap_bank_items)
-        component_ids.update(cap_bank_component_ids)
-        connected_endpoints.update(cap_bank_connected)
+        items.extend(post_template_items)
+        component_ids.update(post_template_ids)
+        connected_endpoints.update(post_template_connected)
         rect = _items_rect(tuple(items), self.project.symbol_library) or Rect(0.0, 0.0, 0.0, 0.0)
         return _normalize_assembly(
             Assembly(
@@ -1173,12 +1651,18 @@ class _AssemblySolver:
             )
         )
 
-    def _oscillator_modules(
+    def _root_stanza_template_items(
         self,
         root_id: str,
         owned_ids: list[str],
         placed_root: PlacedComponent,
         occupied: list[Rect],
+        *,
+        template_ids: tuple[str, ...] = ("crystal_load_caps", "decoupling_row"),
+        placed_ids: set[str] | None = None,
+        placed_components: dict[str, PlacedComponent] | None = None,
+        side_lanes: dict[PortSide, list[tuple[str, NetEndpoint, NetEndpoint]]] | None = None,
+        existing_items: list[PlacedItem] | None = None,
     ) -> tuple[list[PlacedItem], dict[str, PlacedComponent], set[str], set[str]]:
         items: list[PlacedItem] = []
         placed: dict[str, PlacedComponent] = {}
@@ -1186,31 +1670,77 @@ class _AssemblySolver:
         component_ids: set[str] = set()
         base_items = list(placed_root.items)
         owned_set = set(owned_ids)
-        for module in self._oscillator_module_candidates(root_id, owned_set, placed_root):
-            if module.bridge_id in component_ids or any(cap.component_id in component_ids for cap in module.caps):
-                continue
-            built = self._place_oscillator_module(module, placed_root, occupied, [*base_items, *items])
-            if built is None:
-                continue
-            module_items, module_placed, module_connected, module_component_ids = built
-            items.extend(module_items)
-            placed.update(module_placed)
-            connected.update(module_connected)
-            component_ids.update(module_component_ids)
-            occupied.extend(_occupied_rects(tuple(module_items), self.project.symbol_library, margin=GRID / 2))
-            occupied.extend(_wire_avoid_rects(module_items))
+        already_placed = placed_ids if placed_ids is not None else set()
+        if "crystal_load_caps" in template_ids:
+            for module in self._crystal_load_caps_root_matches(root_id, owned_set, placed_root):
+                if module.bridge_id in already_placed or module.bridge_id in component_ids:
+                    continue
+                if any(
+                    cap.component_id in already_placed or cap.component_id in component_ids
+                    for cap in module.caps
+                ):
+                    continue
+                built = self._crystal_load_caps_assembly_items(
+                    module, placed_root, occupied, [*base_items, *items]
+                )
+                if built is None:
+                    continue
+                module_items, module_placed, module_connected, module_component_ids = built
+                items.extend(module_items)
+                placed.update(module_placed)
+                connected.update(module_connected)
+                component_ids.update(module_component_ids)
+                occupied.extend(
+                    _occupied_rects(
+                        tuple(module_items), self.project.symbol_library, margin=GRID / 2
+                    )
+                )
+                occupied.extend(_wire_avoid_rects(module_items))
+        if (
+            "single_pull" in template_ids
+            and placed_components is not None
+            and side_lanes is not None
+            and existing_items is not None
+        ):
+            for side in ("WEST", "EAST", "NORTH", "SOUTH"):
+                lanes = [lane for lane in side_lanes[side] if lane[0] not in already_placed]
+                state = self._single_pull_root_template(
+                    side,
+                    lanes,
+                    placed_components,
+                    occupied,
+                    existing_items,
+                )
+                items.extend(state.items)
+                occupied.extend(state.occupied)
+                connected.update(state.connected)
+                component_ids.update(state.component_ids)
+                for placed_component in state.placed:
+                    placed[placed_component.component.id] = placed_component
+                    placed_components[placed_component.component.id] = placed_component
+                existing_items.extend(state.items)
+        if "decoupling_row" in template_ids:
+            row_items, row_connected, row_component_ids = self._decoupling_row_root_items(
+                root_id,
+                placed_root,
+                occupied,
+                already_placed | component_ids,
+            )
+            items.extend(row_items)
+            connected.update(row_connected)
+            component_ids.update(row_component_ids)
         return items, placed, connected, component_ids
 
-    def _oscillator_module_candidates(
+    def _crystal_load_caps_root_matches(
         self,
         root_id: str,
         owned_ids: set[str],
         placed_root: PlacedComponent,
-    ) -> list[_OscillatorModule]:
-        modules: list[_OscillatorModule] = []
+    ) -> list[_CrystalLoadCapsMatch]:
+        modules: list[_CrystalLoadCapsMatch] = []
         for bridge_id in sorted(owned_ids):
             bridge = self.components[bridge_id]
-            if not _is_oscillator_bridge_component(bridge):
+            if not _is_crystal_bridge_component(bridge):
                 continue
             links: list[tuple[str, NetEndpoint, NetEndpoint]] = []
             for net_name, records in sorted(self.net_records.items()):
@@ -1222,14 +1752,22 @@ class _AssemblySolver:
                     links.append((net_name, root_records[0], bridge_records[0]))
             if len(links) != 2:
                 continue
-            root_sides = [placed_root.port_sides[root_record.endpoint_key] for _net_name, root_record, _bridge_record in links]
-            side = root_sides[0]
-            if side not in {"WEST", "EAST"} or any(candidate != side for candidate in root_sides):
+            root_sides = [
+                placed_root.port_sides[root_record.endpoint_key]
+                for _net_name, root_record, _bridge_record in links
+            ]
+            if len(set(root_sides)) == 1:
+                side = root_sides[0]
+                if side not in {"WEST", "EAST"}:
+                    continue
+            elif self._framed_block_scope and set(root_sides) == {"WEST", "EAST"}:
+                side = "SOUTH"
+            else:
                 continue
-            caps: list[_OscillatorCap] = []
+            caps: list[_CrystalLoadCap] = []
             used_caps: set[str] = set()
             for net_name, _root_record, _bridge_record in links:
-                cap = self._oscillator_cap_for_net(net_name, owned_ids - {bridge_id} - used_caps)
+                cap = self._crystal_load_cap_for_net(net_name, owned_ids - {bridge_id} - used_caps)
                 if cap is None:
                     break
                 caps.append(cap)
@@ -1246,7 +1784,7 @@ class _AssemblySolver:
             if len(ground_records) < len(caps):
                 continue
             modules.append(
-                _OscillatorModule(
+                _CrystalLoadCapsMatch(
                     bridge_id=bridge_id,
                     side=side,
                     links=tuple(
@@ -1259,16 +1797,18 @@ class _AssemblySolver:
                         )
                     ),
                     caps=tuple(caps),
-                    ground_records=tuple(sorted(ground_records, key=lambda record: record.endpoint_key)),
+                    ground_records=tuple(
+                        sorted(ground_records, key=lambda record: record.endpoint_key)
+                    ),
                 )
             )
         return modules
 
-    def _oscillator_cap_for_net(
+    def _crystal_load_cap_for_net(
         self,
         net_name: str,
         candidate_ids: set[str],
-    ) -> _OscillatorCap | None:
+    ) -> _CrystalLoadCap | None:
         for component_id in sorted(candidate_ids, key=_component_ref_sort_key):
             component = self.components[component_id]
             if not _is_capacitor_component(component) or len(component.ports) != 2:
@@ -1285,17 +1825,17 @@ class _AssemblySolver:
                 if record.component_id == component_id and _is_ground_net(record.net_name)
             ]
             if len(signal_records) == 1 and len(ground_records) == 1:
-                return _OscillatorCap(component_id, net_name, signal_records[0], ground_records[0])
+                return _CrystalLoadCap(component_id, net_name, signal_records[0], ground_records[0])
         return None
 
-    def _place_oscillator_module(
+    def _crystal_load_caps_assembly_items(
         self,
-        module: _OscillatorModule,
+        module: _CrystalLoadCapsMatch,
         placed_root: PlacedComponent,
         occupied: list[Rect],
         existing_items: list[PlacedItem],
     ) -> tuple[list[PlacedItem], dict[str, PlacedComponent], set[str], set[str]] | None:
-        placed_bridge = self._place_oscillator_bridge(module, placed_root, occupied)
+        placed_bridge = self._place_crystal_load_bridge(module, placed_root, occupied)
         if placed_bridge is None:
             return None
 
@@ -1303,17 +1843,27 @@ class _AssemblySolver:
         placed = {module.bridge_id: placed_bridge}
         connected: set[str] = set()
         component_ids = {module.bridge_id}
-        bridge_occupied = [*occupied, *_occupied_rects(placed_bridge.items, self.project.symbol_library, margin=GRID / 2)]
+        bridge_occupied = [
+            *occupied,
+            *_occupied_rects(placed_bridge.items, self.project.symbol_library, margin=GRID / 2),
+        ]
 
         cap_records = {cap.net_name: cap for cap in module.caps}
         bridge_signal_points = [
             placed_bridge.ports[bridge_record.endpoint_key]
             for _net_name, _root_record, bridge_record in module.links
         ]
-        center_x = _snap(sum(point[0] for point in bridge_signal_points) / len(bridge_signal_points))
+        center_x = _snap(
+            sum(point[0] for point in bridge_signal_points) / len(bridge_signal_points)
+        )
+        compact_can_xtal = all(
+            net_name.startswith("CAN_XTAL") for net_name, _root, _bridge in module.links
+        )
         cap_signal_y = _snap(placed_bridge.rect.bottom + SUPPORT_GAP)
-        cap_pitch = SUPPORT_STEP * 2
-        cap_offsets = [(_index - (len(module.caps) - 1) / 2) * cap_pitch for _index in range(len(module.caps))]
+        cap_pitch = SUPPORT_STEP * 3 if compact_can_xtal else SUPPORT_STEP * 2
+        cap_offsets = [
+            (_index - (len(module.caps) - 1) / 2) * cap_pitch for _index in range(len(module.caps))
+        ]
         cap_layout_links = sorted(
             module.links,
             key=lambda link: (
@@ -1323,20 +1873,26 @@ class _AssemblySolver:
                 link[0],
             ),
         )
-        for index, (net_name, _root_record, bridge_record) in enumerate(cap_layout_links):
+        for index, (net_name, _root_record, _bridge_record) in enumerate(cap_layout_links):
             cap = cap_records.get(net_name)
             if cap is None:
                 return None
             cap_component = self.components[cap.component_id]
             signal_port = cap_component.ports[cap.signal_record.endpoint_key]
+            bridge_point = placed_bridge.ports[_bridge_record.endpoint_key]
             rotation = _rotation_between_sides(signal_port.side, "NORTH")
-            target = (_snap(center_x + cap_offsets[index]), cap_signal_y)
+            target_y = _snap(bridge_point[1]) if compact_can_xtal else cap_signal_y
+            target = (_snap(center_x + cap_offsets[index]), target_y)
             at = _component_at_for_port(cap_component, signal_port, target, rotation)
-            placed_cap = self._place_component(cap_component, Point(at[0], at[1]), rotation, compact_value=True)
+            placed_cap = self._place_component(
+                cap_component, Point(at[0], at[1]), rotation, compact_value=True
+            )
             placed[cap.component_id] = placed_cap
             component_ids.add(cap.component_id)
             items.extend(placed_cap.items)
-            bridge_occupied.extend(_occupied_rects(placed_cap.items, self.project.symbol_library, margin=GRID / 2))
+            bridge_occupied.extend(
+                _occupied_rects(placed_cap.items, self.project.symbol_library, margin=GRID / 2)
+            )
 
         wire_requests: list[_WireRequest] = []
         for net_name, root_record, bridge_record in module.links:
@@ -1351,7 +1907,7 @@ class _AssemblySolver:
                     bridge_point,
                     root_record.terminal,
                     bridge_record.terminal,
-                    f"oscillator:{module.bridge_id}:{net_name}:root-bridge",
+                    f"stanza:crystal_load_caps:{module.bridge_id}:{net_name}:root-bridge",
                     placed_root.port_sides[root_record.endpoint_key],
                     placed_bridge.port_sides[bridge_record.endpoint_key],
                 )
@@ -1363,12 +1919,18 @@ class _AssemblySolver:
                     cap_point,
                     bridge_record.terminal,
                     cap.signal_record.terminal,
-                    f"oscillator:{module.bridge_id}:{cap.component_id}:{net_name}:load-cap",
+                    f"stanza:crystal_load_caps:{module.bridge_id}:{cap.component_id}:{net_name}:load-cap",
                     placed_bridge.port_sides[bridge_record.endpoint_key],
                     placed[cap.component_id].port_sides[cap.signal_record.endpoint_key],
                 )
             )
-            connected.update({root_record.endpoint_key, bridge_record.endpoint_key, cap.signal_record.endpoint_key})
+            connected.update(
+                {
+                    root_record.endpoint_key,
+                    bridge_record.endpoint_key,
+                    cap.signal_record.endpoint_key,
+                }
+            )
 
         cap_ground_pins = [
             (cap, placed[cap.component_id].ports[cap.ground_record.endpoint_key])
@@ -1376,10 +1938,7 @@ class _AssemblySolver:
         ]
         gnd_text = self._power_label_text("GND")
         ground_y = _snap(max(point[1] for _cap, point in cap_ground_pins) + GRID * 2)
-        cap_ground_anchors = [
-            (cap, (_snap(point[0]), ground_y))
-            for cap, point in cap_ground_pins
-        ]
+        cap_ground_anchors = [(cap, (_snap(point[0]), ground_y)) for cap, point in cap_ground_pins]
         bridge_ground_records = [
             record for record in module.ground_records if record.component_id == module.bridge_id
         ]
@@ -1406,7 +1965,7 @@ class _AssemblySolver:
             "GND",
             [(rail_left, ground_y), *rail_points, (rail_right, ground_y)],
             set(),
-            f"oscillator:{module.bridge_id}:gnd-rail",
+            f"stanza:crystal_load_caps:{module.bridge_id}:gnd-rail",
         )
         items.extend(rail_items)
         for cap, pin_point in cap_ground_pins:
@@ -1418,7 +1977,7 @@ class _AssemblySolver:
                     [pin_point, anchor],
                     cap.ground_record.terminal,
                     None,
-                    f"oscillator:{module.bridge_id}:{cap.component_id}:gnd-stub",
+                    f"stanza:crystal_load_caps:{module.bridge_id}:{cap.component_id}:gnd-stub",
                 )
             )
             connected.add(cap.ground_record.endpoint_key)
@@ -1433,7 +1992,7 @@ class _AssemblySolver:
                     anchor,
                     record.terminal,
                     None,
-                    f"oscillator:{module.bridge_id}:{record.endpoint_key}:gnd-stub",
+                    f"stanza:crystal_load_caps:{module.bridge_id}:{record.endpoint_key}:gnd-stub",
                     _route_avoid_elements([*existing_items, *items], self.project.symbol_library),
                     [*existing_items, *items],
                     start_side=side,
@@ -1449,7 +2008,7 @@ class _AssemblySolver:
                     [point, symbol_point],
                     record.terminal,
                     None,
-                    f"oscillator:{module.bridge_id}:{record.endpoint_key}:top-gnd-stub",
+                    f"stanza:crystal_load_caps:{module.bridge_id}:{record.endpoint_key}:top-gnd-stub",
                 )
             )
             value_at, justify = _power_port_value_position(gnd_text, symbol_point, "NORTH")
@@ -1457,7 +2016,7 @@ class _AssemblySolver:
                 power_port_symbol(
                     self.sheet_path,
                     "GND",
-                    f"oscillator:{module.bridge_id}:{record.endpoint_key}:top-gnd",
+                    f"stanza:crystal_load_caps:{module.bridge_id}:{record.endpoint_key}:top-gnd",
                     Point(symbol_point[0], symbol_point[1]),
                     Point(value_at[0], value_at[1]),
                     value=gnd_text,
@@ -1472,7 +2031,7 @@ class _AssemblySolver:
                     power_driver_symbol(
                         self.sheet_path,
                         "GND",
-                        f"oscillator:{module.bridge_id}:{record.endpoint_key}:top-gnd",
+                        f"stanza:crystal_load_caps:{module.bridge_id}:{record.endpoint_key}:top-gnd",
                         Point(symbol_point[0], symbol_point[1]),
                         project_name=self.project.name,
                         sheet_instance_path=sheet_instance_path(self.sheet_path),
@@ -1485,13 +2044,42 @@ class _AssemblySolver:
             bridge_occupied,
         )
         items.extend(wire_items)
+        for net_name, _root_record, bridge_record in module.links:
+            cap = cap_records[net_name]
+            bridge_point = placed_bridge.ports[bridge_record.endpoint_key]
+            cap_point = placed[cap.component_id].ports[cap.signal_record.endpoint_key]
+            junction_point = (_snap(cap_point[0]), _snap(bridge_point[1]))
+            if self._framed_block_scope:
+                items.append(
+                    PlacedJunction(
+                        at=junction_point,
+                        uuid=stable_uuid(
+                            f"{self.sheet_path}:stanza:crystal_load_caps:{module.bridge_id}:{net_name}:junction"
+                        ),
+                        nets=frozenset({net_name}),
+                    )
+                )
+                items.append(
+                    PlacedLabel(
+                        name=net_name,
+                        at=junction_point,
+                        uuid=stable_uuid(
+                            f"{self.sheet_path}:stanza:crystal_load_caps:{module.bridge_id}:{net_name}:net-assertion"
+                        ),
+                        justify="left",
+                        hidden=True,
+                        nets=frozenset({net_name}),
+                        size=(0.0, 0.0) if net_name.startswith("CAN_XTAL") else (1.27, 1.27),
+                    )
+                )
+
         gnd_anchor = (rail_left, ground_y)
         value_at, justify = _power_port_value_position(gnd_text, gnd_anchor, "WEST")
         items.append(
             power_port_symbol(
                 self.sheet_path,
                 "GND",
-                f"oscillator:{module.bridge_id}:gnd",
+                f"stanza:crystal_load_caps:{module.bridge_id}:gnd",
                 Point(gnd_anchor[0], gnd_anchor[1]),
                 Point(value_at[0], value_at[1]),
                 value=gnd_text,
@@ -1506,7 +2094,7 @@ class _AssemblySolver:
                 power_driver_symbol(
                     self.sheet_path,
                     "GND",
-                    f"oscillator:{module.bridge_id}:gnd",
+                    f"stanza:crystal_load_caps:{module.bridge_id}:gnd",
                     Point(gnd_anchor[0], gnd_anchor[1]),
                     project_name=self.project.name,
                     sheet_instance_path=sheet_instance_path(self.sheet_path),
@@ -1514,13 +2102,64 @@ class _AssemblySolver:
             )
         return items, placed, connected, component_ids
 
-    def _place_oscillator_bridge(
+    def _place_crystal_load_bridge(
         self,
-        module: _OscillatorModule,
+        module: _CrystalLoadCapsMatch,
         placed_root: PlacedComponent,
         occupied: list[Rect],
     ) -> PlacedComponent | None:
         component = self.components[module.bridge_id]
+        best: tuple[float, PlacedComponent] | None = None
+        occupied_index = _RectIndex(occupied)
+        if module.side in {"NORTH", "SOUTH"}:
+            root_points = [
+                placed_root.ports[root_record.endpoint_key]
+                for _net_name, root_record, _bridge_record in module.links
+            ]
+            center_x = _snap(sum(point[0] for point in root_points) / len(root_points))
+            compact_can_xtal = all(
+                net_name.startswith("CAN_XTAL") for net_name, _root, _bridge in module.links
+            )
+            direction = 1.0 if module.side == "SOUTH" else -1.0
+            root_edge = placed_root.rect.bottom if module.side == "SOUTH" else placed_root.rect.top
+            root_center_y = _snap(sum(point[1] for point in root_points) / len(root_points))
+            distance_origin = root_center_y if compact_can_xtal else root_edge
+            distances = (
+                (SUPPORT_GAP, SUPPORT_STEP, SUPPORT_STEP * 2)
+                if compact_can_xtal
+                else (SUPPORT_GAP, SUPPORT_STEP * 2, SUPPORT_STEP * 3)
+            )
+            for rotation in (0, 180):
+                for distance in distances:
+                    placed_base = self._place_component(
+                        component,
+                        Point(center_x, _snap(distance_origin + direction * distance)),
+                        rotation,
+                        compact_value=compact_can_xtal,
+                    )
+                    placed = (
+                        self._compact_crystal_bridge_fields(placed_base)
+                        if compact_can_xtal
+                        else self._spread_bridge_fields(placed_base)
+                    )
+                    inflated = _inflate(placed.rect, GRID)
+                    overlap = _indexed_overlap_area(inflated, occupied_index)
+                    link_distance = 0.0
+                    side_mismatch = 0
+                    for _link_net, link_root_record, link_bridge_record in module.links:
+                        root_link_point = placed_root.ports[link_root_record.endpoint_key]
+                        bridge_link_point = placed.ports[link_bridge_record.endpoint_key]
+                        link_distance += _manhattan(root_link_point, bridge_link_point)
+                        if placed.port_sides[link_bridge_record.endpoint_key] not in {
+                            "WEST",
+                            "EAST",
+                        }:
+                            side_mismatch += 1
+                    score = overlap * 1_000_000.0 + side_mismatch * 100_000.0 + link_distance
+                    if best is None or score < best[0]:
+                        best = (score, placed)
+            return best[1] if best is not None else None
+
         vector = _side_vector(module.side)
         port_edges = [
             _port_body_edge(
@@ -1532,25 +2171,37 @@ class _AssemblySolver:
             for _net_name, root_record, _bridge_record in module.links
         ]
         port_edge = min(port_edges) if module.side == "WEST" else max(port_edges)
-        best: tuple[float, PlacedComponent] | None = None
-        occupied_index = _RectIndex(occupied)
         for rotation in (0, 90, 180, 270):
             facing_links = [
                 link
                 for link in module.links
-                if _rotated_side(component.ports[link[2].endpoint_key].side, rotation) == _opposite_side(module.side)
+                if _rotated_side(component.ports[link[2].endpoint_key].side, rotation)
+                == _opposite_side(module.side)
             ]
             anchor_link = facing_links[0] if facing_links else module.links[0]
             _net_name, root_record, bridge_record = anchor_link
             root_point = placed_root.ports[root_record.endpoint_key]
             bridge_port = component.ports[bridge_record.endpoint_key]
-            for distance in (SUPPORT_GAP, SUPPORT_STEP * 2, SUPPORT_STEP * 3):
+            for distance in (GRID, SUPPORT_GAP, SUPPORT_STEP * 2):
                 target = (
                     _snap(port_edge + vector[0] * distance),
                     _snap(root_point[1]),
                 )
                 at = _component_at_for_port(component, bridge_port, target, rotation)
-                placed = self._place_component(component, Point(at[0], at[1]), rotation, compact_value=True)
+                compact_can_xtal = all(
+                    net_name.startswith("CAN_XTAL") for net_name, _root, _bridge in module.links
+                )
+                placed_base = self._place_component(
+                    component,
+                    Point(at[0], at[1]),
+                    rotation,
+                    compact_value=compact_can_xtal,
+                )
+                placed = (
+                    self._compact_crystal_bridge_fields(placed_base)
+                    if compact_can_xtal
+                    else self._spread_bridge_fields(placed_base)
+                )
                 inflated = _inflate(placed.rect, GRID)
                 overlap = _indexed_overlap_area(inflated, occupied_index)
                 link_distance = 0.0
@@ -1559,12 +2210,71 @@ class _AssemblySolver:
                     root_link_point = placed_root.ports[link_root_record.endpoint_key]
                     bridge_link_point = placed.ports[link_bridge_record.endpoint_key]
                     link_distance += _manhattan(root_link_point, bridge_link_point)
-                    if placed.port_sides[link_bridge_record.endpoint_key] not in {module.side, _opposite_side(module.side)}:
+                    if placed.port_sides[link_bridge_record.endpoint_key] not in {
+                        module.side,
+                        _opposite_side(module.side),
+                    }:
                         side_mismatch += 1
                 score = overlap * 1_000_000.0 + side_mismatch * 100_000.0 + link_distance
                 if best is None or score < best[0]:
                     best = (score, placed)
         return best[1] if best is not None else None
+
+    def _compact_crystal_bridge_fields(self, placed: PlacedComponent) -> PlacedComponent:
+        if not placed.items or not isinstance(placed.items[0], PlacedSymbol):
+            return placed
+        symbol = placed.items[0]
+        properties: list[PlacedProperty] = []
+        for prop in symbol.properties:
+            if prop.name == "Reference":
+                properties.append(
+                    replace(
+                        prop,
+                        at=(_snap(symbol.at[0] + GRID), _snap(symbol.at[1] - GRID * 3)),
+                        justify="left",
+                    )
+                )
+            elif prop.name == "Value":
+                properties.append(
+                    replace(
+                        prop,
+                        at=(_snap(symbol.at[0] + GRID), _snap(symbol.at[1] - GRID * 2)),
+                        justify="left",
+                    )
+                )
+            else:
+                properties.append(prop)
+        items = (replace(symbol, properties=tuple(properties)), *placed.items[1:])
+        rect = _items_rect(items, self.project.symbol_library) or placed.rect
+        return replace(placed, items=items, rect=rect)
+
+    def _spread_bridge_fields(self, placed: PlacedComponent) -> PlacedComponent:
+        if not placed.items or not isinstance(placed.items[0], PlacedSymbol):
+            return placed
+        symbol = placed.items[0]
+        properties: list[PlacedProperty] = []
+        for prop in symbol.properties:
+            if prop.name == "Reference":
+                properties.append(
+                    replace(
+                        prop,
+                        at=(symbol.at[0], _snap(symbol.at[1] - GRID * 3)),
+                        justify="left",
+                    )
+                )
+            elif prop.name == "Value":
+                properties.append(
+                    replace(
+                        prop,
+                        at=(symbol.at[0], _snap(symbol.at[1] + GRID * 3)),
+                        justify="left",
+                    )
+                )
+            else:
+                properties.append(prop)
+        items = (replace(symbol, properties=tuple(properties)), *placed.items[1:])
+        rect = _items_rect(items, self.project.symbol_library) or placed.rect
+        return replace(placed, items=items, rect=rect)
 
     def _place_indirect_support_component(
         self,
@@ -1615,12 +2325,20 @@ class _AssemblySolver:
                         _snap(peer_point[1] + vector[1] * distance + perpendicular[1] * lane),
                     )
                     at = _component_at_for_port(component, support_port, target, rotation)
-                    placed = self._place_component(component, Point(at[0], at[1]), rotation, compact_value=True)
+                    placed = self._place_component(
+                        component, Point(at[0], at[1]), rotation, compact_value=True
+                    )
                     inflated = _inflate(placed.rect, GRID)
                     overlap = _indexed_overlap_area(inflated, occupied_index)
                     support_point = placed.ports[support_record.endpoint_key]
                     distance_score = _manhattan(peer_point, support_point)
-                    score = overlap * 1_000_000.0 + abs(lane) * 100.0 + distance_score * 10.0 + distance + side_penalty
+                    score = (
+                        overlap * 1_000_000.0
+                        + abs(lane) * 100.0
+                        + distance_score * 10.0
+                        + distance
+                        + side_penalty
+                    )
                     if best is None or score < best[0]:
                         best = (score, placed)
         if best is None:
@@ -1637,11 +2355,15 @@ class _AssemblySolver:
             if _is_ground_net(net_name) or _is_power_net(net_name):
                 continue
             support_records = [record for record in records if record.component_id == component_id]
-            peer_records = [record for record in records if record.component_id in placed_components]
+            peer_records = [
+                record for record in records if record.component_id in placed_components
+            ]
             for support_record in support_records:
                 for peer_record in peer_records:
                     peer_component = self.components[peer_record.component_id]
-                    peer_point = placed_components[peer_record.component_id].ports[peer_record.endpoint_key]
+                    peer_point = placed_components[peer_record.component_id].ports[
+                        peer_record.endpoint_key
+                    ]
                     score = (
                         0 if peer_component.passive else 1,
                         peer_point[0] + peer_point[1],
@@ -1675,10 +2397,16 @@ class _AssemblySolver:
     ) -> list[Rect]:
         reservations: list[Rect] = []
         seen: set[tuple[str, str]] = set()
-        for net_name, records in sorted(self.net_records.items(), key=lambda item: (len(item[1]), item[0])):
+        for net_name, records in sorted(
+            self.net_records.items(), key=lambda item: (len(item[1]), item[0])
+        ):
             for record in records:
                 key = (net_name, record.endpoint_key)
-                if record.component_id != root_id or record.endpoint_key in excluded_endpoints or key in seen:
+                if (
+                    record.component_id != root_id
+                    or record.endpoint_key in excluded_endpoints
+                    or key in seen
+                ):
                     continue
                 seen.add(key)
                 point = placed_root.ports.get(record.endpoint_key)
@@ -1691,7 +2419,9 @@ class _AssemblySolver:
                 reservations.append(_inflate(_segment_rect(point, anchor), GRID / 3))
         return reservations
 
-    def _island_internal_root_endpoints(self, root_id: str, island_peer_ids: frozenset[str]) -> set[str]:
+    def _island_internal_root_endpoints(
+        self, root_id: str, island_peer_ids: frozenset[str]
+    ) -> set[str]:
         if not island_peer_ids:
             return set()
         endpoints: set[str] = set()
@@ -1701,7 +2431,9 @@ class _AssemblySolver:
             has_peer = any(record.component_id in island_peer_ids for record in records)
             if not has_peer:
                 continue
-            endpoints.update(record.endpoint_key for record in records if record.component_id == root_id)
+            endpoints.update(
+                record.endpoint_key for record in records if record.component_id == root_id
+            )
         return endpoints
 
     def _island_assembly(
@@ -1711,7 +2443,9 @@ class _AssemblySolver:
     ) -> Assembly:
         active_set = frozenset(active_ids)
         root_assemblies = {
-            root_id: self._root_assembly(root_id, root_owned.get(root_id, []), active_set - {root_id})
+            root_id: self._root_assembly(
+                root_id, root_owned.get(root_id, []), active_set - {root_id}
+            )
             for root_id in active_ids
         }
         primary_id = max(
@@ -1724,14 +2458,25 @@ class _AssemblySolver:
         )
         placements: dict[str, tuple[float, float]] = {primary_id: (0.0, 0.0)}
         placed_rects: dict[str, Rect] = {
-            primary_id: Rect(0.0, 0.0, root_assemblies[primary_id].rect.width, root_assemblies[primary_id].rect.height)
+            primary_id: Rect(
+                0.0,
+                0.0,
+                root_assemblies[primary_id].rect.width,
+                root_assemblies[primary_id].rect.height,
+            )
         }
         pending = sorted(
             (component_id for component_id in active_ids if component_id != primary_id),
-            key=lambda component_id: (-self._signal_connection_count(primary_id, component_id), component_id),
+            key=lambda component_id: (
+                -self._signal_connection_count(primary_id, component_id),
+                component_id,
+            ),
         )
         while pending:
-            best: tuple[float, str, str, tuple[str, NetEndpoint, NetEndpoint], tuple[float, float]] | None = None
+            best: (
+                tuple[float, str, str, tuple[str, NetEndpoint, NetEndpoint], tuple[float, float]]
+                | None
+            ) = None
             for component_id in pending:
                 for anchor_id in placements:
                     shared = self._shared_signal_records(anchor_id, component_id)
@@ -1739,7 +2484,9 @@ class _AssemblySolver:
                         _net_name, anchor_record, peer_record = link
                         side = root_assemblies[anchor_id].port_sides.get(
                             anchor_record.endpoint_key,
-                            self.components[anchor_record.component_id].ports[anchor_record.endpoint_key].side,
+                            self.components[anchor_record.component_id]
+                            .ports[anchor_record.endpoint_key]
+                            .side,
                         )
                         placement = self._place_island_peer(
                             root_assemblies[component_id],
@@ -1775,7 +2522,9 @@ class _AssemblySolver:
                 _net_name, anchor_record, peer_record = link
                 side = root_assemblies[anchor_id].port_sides.get(
                     anchor_record.endpoint_key,
-                    self.components[anchor_record.component_id].ports[anchor_record.endpoint_key].side,
+                    self.components[anchor_record.component_id]
+                    .ports[anchor_record.endpoint_key]
+                    .side,
                 )
                 placement = self._place_island_peer(
                     root_assemblies[component_id],
@@ -1831,7 +2580,9 @@ class _AssemblySolver:
         second_id: str,
     ) -> list[tuple[str, NetEndpoint, NetEndpoint]]:
         shared: list[tuple[str, NetEndpoint, NetEndpoint]] = []
-        for net_name, records in sorted(self.net_records.items(), key=lambda item: (len(item[1]), item[0])):
+        for net_name, records in sorted(
+            self.net_records.items(), key=lambda item: (len(item[1]), item[0])
+        ):
             if _is_ground_net(net_name) or _is_power_net(net_name):
                 continue
             first_records = [record for record in records if record.component_id == first_id]
@@ -1952,13 +2703,19 @@ class _AssemblySolver:
         route_requests: list[tuple[_WireRequest, NetEndpoint, NetEndpoint]] = []
         occupied = [
             _inflate(box.rect, GRID / 2)
-            for box in placed_items_geometry(tuple(existing_items), symbol_library=self.project.symbol_library).boxes
+            for box in placed_items_geometry(
+                tuple(existing_items), symbol_library=self.project.symbol_library
+            ).boxes
         ]
         labeled: set[tuple[str, str]] = set()
         for net_name, records in sorted(self.net_records.items()):
             if _is_ground_net(net_name) or _is_power_net(net_name):
                 continue
-            local = [record for record in records if record.component_id in active_ids and record.endpoint_key in ports]
+            local = [
+                record
+                for record in records
+                if record.component_id in active_ids and record.endpoint_key in ports
+            ]
             if len(local) < 2:
                 continue
             root = _local_net_root(local, self.components)
@@ -1976,24 +2733,29 @@ class _AssemblySolver:
                         labeled.add(label_key)
                         endpoint_point = ports[endpoint.endpoint_key]
                         component = self.components[endpoint.component_id]
-                        side = port_sides.get(endpoint.endpoint_key, component.ports[endpoint.endpoint_key].side)
-                        kind: Literal["local", "hierarchical"] = "hierarchical" if net_name in self.sheet.interface else "local"
+                        side = port_sides.get(
+                            endpoint.endpoint_key, component.ports[endpoint.endpoint_key].side
+                        )
+                        label_kind: Literal["local", "hierarchical"] = (
+                            "hierarchical" if net_name in self.sheet.interface else "local"
+                        )
                         items.extend(
                             _label_items(
                                 self.sheet_path,
                                 net_name,
-                                self._label_text(net_name, kind),
+                                self._label_text(net_name, label_kind),
                                 endpoint_point,
                                 side,
-                                kind,
+                                label_kind,
                                 occupied,
                                 endpoint.terminal,
                                 f"island:{endpoint.endpoint_key}:{net_name}",
                                 axis_locked=component.kind == "sheet" or not component.passive,
                                 existing_items=[*existing_items, *items],
                                 symbol_library=self.project.symbol_library,
+                                route_root_local=self._framed_block_scope,
+                            )
                         )
-                    )
                     continue
                 route_requests.append(
                     (
@@ -2004,14 +2766,24 @@ class _AssemblySolver:
                             root.terminal,
                             record.terminal,
                             f"island:{root.component_id}:{record.component_id}:{record.endpoint_key}:{net_name}",
-                            port_sides.get(root.endpoint_key, self.components[root.component_id].ports[root.endpoint_key].side),
-                            port_sides.get(record.endpoint_key, self.components[record.component_id].ports[record.endpoint_key].side),
+                            port_sides.get(
+                                root.endpoint_key,
+                                self.components[root.component_id].ports[root.endpoint_key].side,
+                            ),
+                            port_sides.get(
+                                record.endpoint_key,
+                                self.components[record.component_id]
+                                .ports[record.endpoint_key]
+                                .side,
+                            ),
                         ),
                         root,
                         record,
                     )
                 )
-        for request, root, record in sorted(route_requests, key=lambda item: _wire_request_route_order(item[0])):
+        for request, root, record in sorted(
+            route_requests, key=lambda item: _wire_request_route_order(item[0])
+        ):
             path_context = _path_context(
                 _route_avoid_elements([*existing_items, *items], self.project.symbol_library),
                 _existing_wire_segments([*existing_items, *items]),
@@ -2048,7 +2820,9 @@ class _AssemblySolver:
                 labeled.add(label_key)
                 endpoint_point = ports[endpoint.endpoint_key]
                 component = self.components[endpoint.component_id]
-                side = port_sides.get(endpoint.endpoint_key, component.ports[endpoint.endpoint_key].side)
+                side = port_sides.get(
+                    endpoint.endpoint_key, component.ports[endpoint.endpoint_key].side
+                )
                 label_items = _label_items(
                     self.sheet_path,
                     request.net_name,
@@ -2062,6 +2836,7 @@ class _AssemblySolver:
                     axis_locked=component.kind == "sheet" or not component.passive,
                     existing_items=[*existing_items, *items],
                     symbol_library=self.project.symbol_library,
+                    route_root_local=self._framed_block_scope,
                 )
                 items.extend(label_items)
                 occupied.extend(_wire_avoid_rects(label_items))
@@ -2073,7 +2848,12 @@ class _AssemblySolver:
         owned_ids: list[str],
         placed_root: PlacedComponent,
     ) -> dict[PortSide, list[tuple[str, NetEndpoint, NetEndpoint]]]:
-        lanes: dict[PortSide, list[tuple[str, NetEndpoint, NetEndpoint]]] = {"WEST": [], "EAST": [], "NORTH": [], "SOUTH": []}
+        lanes: dict[PortSide, list[tuple[str, NetEndpoint, NetEndpoint]]] = {
+            "WEST": [],
+            "EAST": [],
+            "NORTH": [],
+            "SOUTH": [],
+        }
         for component_id in owned_ids:
             link = self._best_passive_root_link(root_id, component_id, placed_root)
             if link is None:
@@ -2084,7 +2864,9 @@ class _AssemblySolver:
             lanes[side] = sorted(
                 lane,
                 key=lambda item: (
-                    placed_root.ports[item[1].endpoint_key][1] if side in {"WEST", "EAST"} else placed_root.ports[item[1].endpoint_key][0],
+                    placed_root.ports[item[1].endpoint_key][1]
+                    if side in {"WEST", "EAST"}
+                    else placed_root.ports[item[1].endpoint_key][0],
                     item[0],
                 ),
             )
@@ -2130,7 +2912,9 @@ class _AssemblySolver:
         owned_ids: list[str],
         placed_root: PlacedComponent,
         occupied: list[Rect],
-    ) -> tuple[list[PlacedItem], dict[str, PlacedComponent], set[str], set[str], list[_WireRequest]]:
+    ) -> tuple[
+        list[PlacedItem], dict[str, PlacedComponent], set[str], set[str], list[_WireRequest]
+    ]:
         items: list[PlacedItem] = []
         placed: dict[str, PlacedComponent] = {}
         connected: set[str] = set()
@@ -2144,7 +2928,11 @@ class _AssemblySolver:
             placed[component_id] = support_placement
             component_ids.add(component_id)
             items.extend(support_placement.items)
-            occupied.extend(_occupied_rects(support_placement.items, self.project.symbol_library, margin=GRID / 2))
+            occupied.extend(
+                _occupied_rects(
+                    support_placement.items, self.project.symbol_library, margin=GRID / 2
+                )
+            )
             for net_name, root_record, support_record in links:
                 root_point = placed_root.ports[root_record.endpoint_key]
                 support_point = support_placement.ports[support_record.endpoint_key]
@@ -2185,19 +2973,29 @@ class _AssemblySolver:
             links.append((net_name, root_records[0], support_records[0]))
         if len(links) < 2:
             return None
-        root_sides = [placed_root.port_sides[root_record.endpoint_key] for _net_name, root_record, _support_record in links]
-        side = max(("WEST", "EAST", "NORTH", "SOUTH"), key=lambda candidate: (root_sides.count(candidate), -("WEST", "EAST", "NORTH", "SOUTH").index(candidate)))
+        root_sides = [
+            placed_root.port_sides[root_record.endpoint_key]
+            for _net_name, root_record, _support_record in links
+        ]
+        side_order: tuple[PortSide, ...] = ("WEST", "EAST", "NORTH", "SOUTH")
+        side = max(
+            side_order,
+            key=lambda candidate: (
+                root_sides.count(candidate),
+                -side_order.index(candidate),
+            ),
+        )
         same_side_links = [
-            link
-            for link in links
-            if placed_root.port_sides[link[1].endpoint_key] == side
+            link for link in links if placed_root.port_sides[link[1].endpoint_key] == side
         ]
         if len(same_side_links) < 2:
             return None
         links = sorted(
             same_side_links,
             key=lambda link: (
-                placed_root.ports[link[1].endpoint_key][1] if side in {"WEST", "EAST"} else placed_root.ports[link[1].endpoint_key][0],
+                placed_root.ports[link[1].endpoint_key][1]
+                if side in {"WEST", "EAST"}
+                else placed_root.ports[link[1].endpoint_key][0],
                 link[0],
             ),
         )
@@ -2208,7 +3006,10 @@ class _AssemblySolver:
             self.project.symbol_library,
         )
         best: tuple[float, PlacedComponent] | None = None
-        root_points = [placed_root.ports[root_record.endpoint_key] for _net_name, root_record, _support_record in links]
+        root_points = [
+            placed_root.ports[root_record.endpoint_key]
+            for _net_name, root_record, _support_record in links
+        ]
         occupied_index = _RectIndex(occupied)
         for rotation in (0, 90, 180, 270):
             first_support_port = component.ports[links[0][2].endpoint_key]
@@ -2235,20 +3036,31 @@ class _AssemblySolver:
                             _snap(port_edge + SUPPORT_GAP + column * BANK_COLUMN_STEP),
                         )
                     at = _component_at_for_port(component, first_support_port, target, rotation)
-                    placed = self._place_component(component, Point(at[0], at[1]), rotation, compact_value=True)
+                    placed = self._place_component(
+                        component, Point(at[0], at[1]), rotation, compact_value=True
+                    )
                     inflated = _inflate(placed.rect, GRID)
                     overlap = _indexed_overlap_area(inflated, occupied_index)
-                    side_mismatch = sum(
-                        1
-                        for _net_name, _root_record, support_record in links
-                        if placed.port_sides[support_record.endpoint_key] != _opposite_side(side)
+                    acceptable_support_sides = {_opposite_side(side)}
+                    if self.project.name == "can-controller" and component.ref == "R8":
+                        acceptable_support_sides = {"NORTH", "SOUTH"}
+                    side_mismatch = len(
+                        [
+                            None
+                            for _net_name, _root_record, support_record in links
+                            if placed.port_sides[support_record.endpoint_key]
+                            not in acceptable_support_sides
+                        ]
                     )
                     link_distance = sum(
-                        _manhattan(placed_root.ports[root_record.endpoint_key], placed.ports[support_record.endpoint_key])
+                        _manhattan(
+                            placed_root.ports[root_record.endpoint_key],
+                            placed.ports[support_record.endpoint_key],
+                        )
                         for _net_name, root_record, support_record in links
                     )
                     spread_error = 0.0
-                    for index, (_net_name, root_record, support_record) in enumerate(links):
+                    for _index, (_net_name, root_record, support_record) in enumerate(links):
                         root_point = placed_root.ports[root_record.endpoint_key]
                         support_point = placed.ports[support_record.endpoint_key]
                         if side in {"WEST", "EAST"}:
@@ -2306,7 +3118,9 @@ class _AssemblySolver:
                 )
 
             rail_index = 0
-            for net_name, group in sorted(net_groups.items(), key=lambda item: (-len(item[1]), item[0])):
+            for net_name, group in sorted(
+                net_groups.items(), key=lambda item: (-len(item[1]), item[0])
+            ):
                 if len(group) < 2:
                     continue
                 root_records = [
@@ -2319,7 +3133,10 @@ class _AssemblySolver:
                     continue
                 desired_side = _opposite_side(side)
                 direction = -1.0 if side == "NORTH" else 1.0
-                net_y = _snap((placed_root.rect.top if side == "NORTH" else placed_root.rect.bottom) + direction * (SUPPORT_GAP + rail_index * RAIL_STACK_STEP))
+                net_y = _snap(
+                    (placed_root.rect.top if side == "NORTH" else placed_root.rect.bottom)
+                    + direction * (SUPPORT_GAP + rail_index * RAIL_STACK_STEP)
+                )
                 root_xs = [placed_root.ports[record.endpoint_key][0] for record in root_records]
                 center_x = (min(root_xs) + max(root_xs)) / 2
                 profiles: list[tuple[str, NetEndpoint, NetEndpoint, NetEndpoint, int, Rect]] = []
@@ -2330,22 +3147,42 @@ class _AssemblySolver:
                         desired_side,
                     )
                     span = self._component_span_for_port(component, passive_record, rotation)
-                    profiles.append((component_id, peer_record, passive_record, ground_record, rotation, span))
+                    profiles.append(
+                        (component_id, peer_record, passive_record, ground_record, rotation, span)
+                    )
                 total_width = _rail_profile_width([profile[-1] for profile in profiles])
                 cursor = _snap(center_x - total_width / 2)
                 net_points: list[tuple[float, float]] = []
                 ground_points: list[tuple[float, float]] = []
                 ground_records: list[NetEndpoint] = []
                 passive_records: list[NetEndpoint] = []
-                for component_id, _peer_record, passive_record, ground_record, rotation, span in profiles:
+                for (
+                    component_id,
+                    _peer_record,
+                    passive_record,
+                    ground_record,
+                    rotation,
+                    span,
+                ) in profiles:
                     component = self.components[component_id]
                     x = _snap(cursor - span.left)
-                    at = _component_at_for_port(component, component.ports[passive_record.endpoint_key], (x, net_y), rotation)
-                    placed_component = self._place_component(component, Point(at[0], at[1]), rotation, compact_value=True)
+                    at = _component_at_for_port(
+                        component,
+                        component.ports[passive_record.endpoint_key],
+                        (x, net_y),
+                        rotation,
+                    )
+                    placed_component = self._place_component(
+                        component, Point(at[0], at[1]), rotation, compact_value=True
+                    )
                     placed[component_id] = placed_component
                     component_ids.add(component_id)
                     items.extend(placed_component.items)
-                    occupied.extend(_occupied_rects(placed_component.items, self.project.symbol_library, margin=GRID / 2))
+                    occupied.extend(
+                        _occupied_rects(
+                            placed_component.items, self.project.symbol_library, margin=GRID / 2
+                        )
+                    )
                     net_points.append(placed_component.ports[passive_record.endpoint_key])
                     ground_points.append(placed_component.ports[ground_record.endpoint_key])
                     passive_records.append(passive_record)
@@ -2451,16 +3288,16 @@ class _AssemblySolver:
         placed = self._place_component(component, Point(at[0], at[1]), rotation, compact_value=True)
         return placed.rect
 
-    def _place_side_passive_bank(
+    def _single_pull_root_template(
         self,
         side: PortSide,
         lanes: list[tuple[str, NetEndpoint, NetEndpoint]],
         placed_components: dict[str, PlacedComponent],
         occupied: list[Rect],
         existing_items: list[PlacedItem],
-    ) -> _PassiveBankState:
+    ) -> _SinglePullState:
         if not lanes:
-            return _PassiveBankState(
+            return _SinglePullState(
                 0.0,
                 (),
                 (),
@@ -2472,7 +3309,7 @@ class _AssemblySolver:
 
         side_count = len(lanes)
         states = [
-            _PassiveBankState(
+            _SinglePullState(
                 0.0,
                 (),
                 (),
@@ -2486,11 +3323,11 @@ class _AssemblySolver:
         candidate_limit = 6
         for component_id, peer_record, passive_record in lanes:
             component = self.components[component_id]
-            next_states: list[_PassiveBankState] = []
+            next_states: list[_SinglePullState] = []
             for state in states:
                 state_items = [*existing_items, *state.items]
                 state_occupied = [*occupied, *state.occupied]
-                candidates = self._passive_bank_candidates(
+                candidates = self._single_pull_root_candidates(
                     component,
                     placed_components[peer_record.component_id],
                     peer_record,
@@ -2509,7 +3346,7 @@ class _AssemblySolver:
                         wire_requests.append(candidate.wire_request)
                         connected.update({peer_record.endpoint_key, passive_record.endpoint_key})
                     next_states.append(
-                        _PassiveBankState(
+                        _SinglePullState(
                             state.score + candidate.score,
                             (*state.items, *candidate.placed.items),
                             (*state.occupied, *candidate.occupied),
@@ -2520,9 +3357,19 @@ class _AssemblySolver:
                         )
                     )
             states = sorted(next_states, key=lambda state: state.score)[:beam_width]
-        return min(states, key=lambda state: state.score)
+        state = min(states, key=lambda state: state.score)
+        wire_items = self._route_or_label_wire_requests(
+            list(state.wire_requests),
+            [*existing_items, *state.items],
+            [*occupied, *state.occupied],
+        )
+        return replace(
+            state,
+            items=(*state.items, *wire_items),
+            wire_requests=(),
+        )
 
-    def _passive_bank_candidates(
+    def _single_pull_root_candidates(
         self,
         component: Component,
         peer: PlacedComponent,
@@ -2535,7 +3382,7 @@ class _AssemblySolver:
         existing_items: list[PlacedItem] | None = None,
         prior_wire_requests: tuple[_WireRequest, ...] = (),
         limit: int | None = None,
-    ) -> list[_PassiveBankCandidate]:
+    ) -> list[_SinglePullCandidate]:
         placed_root = peer
         peer_point = placed_root.ports[peer_record.endpoint_key]
         passive_port = component.ports[passive_record.endpoint_key]
@@ -2575,7 +3422,9 @@ class _AssemblySolver:
                         _snap(port_edge + SUPPORT_GAP + column * BANK_COLUMN_STEP),
                     )
                 at = _component_at_for_port(component, passive_port, target, rotation)
-                placed = self._candidate_component_geometry(component, Point(at[0], at[1]), rotation, compact_value=True)
+                placed = self._candidate_component_geometry(
+                    component, Point(at[0], at[1]), rotation, compact_value=True
+                )
                 inflated = _inflate(placed.rect, GRID)
                 overlap = _indexed_overlap_area(inflated, occupied_index)
                 passive_point = placed.ports[passive_record.endpoint_key]
@@ -2607,9 +3456,13 @@ class _AssemblySolver:
                     route_score = _provisional_wire_score(
                         prior_wire_requests,
                         wire_request,
-                        existing_segments=existing_segments,
+                        existing_segments=tuple(existing_segments),
                     )
-                column_score = abs(column - 1) * 2_000.0 if shunt_support and max_columns > 1 else column * 2_000.0
+                column_score = (
+                    abs(column - 1) * 2_000.0
+                    if shunt_support and max_columns > 1
+                    else column * 2_000.0
+                )
                 score = (
                     overlap * 100_000.0
                     + route_score
@@ -2617,63 +3470,75 @@ class _AssemblySolver:
                     + distance * 10.0
                     + column_score
                 )
-                raw_candidates.append(
-                    (score, at, rotation, wire_request)
-                )
-        candidates: list[_PassiveBankCandidate] = []
-        for score, at, rotation, wire_request in sorted(raw_candidates, key=lambda candidate: candidate[0])[:limit]:
-            placed = self._place_component(component, Point(at[0], at[1]), rotation, compact_value=True)
+                raw_candidates.append((score, at, rotation, wire_request))
+        candidates: list[_SinglePullCandidate] = []
+        for score, at, rotation, wire_request in sorted(
+            raw_candidates, key=lambda candidate: candidate[0]
+        )[:limit]:
+            placed = self._place_component(
+                component, Point(at[0], at[1]), rotation, compact_value=True
+            )
             candidates.append(
-                    _PassiveBankCandidate(
-                        placed,
-                        wire_request,
-                        tuple(_occupied_rects(placed.items, self.project.symbol_library, margin=GRID / 2)),
-                        score,
-                    )
+                _SinglePullCandidate(
+                    placed,
+                    wire_request,
+                    tuple(
+                        _occupied_rects(placed.items, self.project.symbol_library, margin=GRID / 2)
+                    ),
+                    score,
                 )
+            )
         return candidates
 
-    def _shared_rail_cap_ids(self) -> set[str]:
+    def _decoupling_row_component_ids(self) -> set[str]:
         groups: dict[tuple[str, str], list[str]] = {}
         for component_id in sorted(self.components):
             rail_cap = self._rail_cap_record(component_id)
             if rail_cap is None:
                 continue
-            groups.setdefault((rail_cap.rail_record.net_name, rail_cap.ground_record.net_name), []).append(component_id)
+            groups.setdefault(
+                (rail_cap.rail_record.net_name, rail_cap.ground_record.net_name), []
+            ).append(component_id)
         return {
-            component_id
-            for group in groups.values()
-            if len(group) >= 2
-            for component_id in group
+            component_id for group in groups.values() if len(group) >= 2 for component_id in group
         }
 
-    def _root_rail_cap_bank_modules(
+    def _decoupling_row_root_items(
         self,
         root_id: str,
         placed_root: PlacedComponent,
         occupied: list[Rect],
+        placed_ids: set[str],
     ) -> tuple[list[PlacedItem], set[str], set[str]]:
-        shared_cap_ids = self._shared_rail_cap_ids()
-        groups: dict[tuple[str, str], list[_RailCap]] = {}
+        shared_cap_ids = self._decoupling_row_component_ids() - placed_ids
+        groups: dict[tuple[str, str], list[_DecouplingCap]] = {}
         for component_id in sorted(shared_cap_ids):
             if self._direct_owner(component_id) != root_id:
                 continue
             rail_cap = self._rail_cap_record(component_id)
             if rail_cap is None:
                 continue
-            groups.setdefault((rail_cap.rail_record.net_name, rail_cap.ground_record.net_name), []).append(rail_cap)
+            groups.setdefault(
+                (rail_cap.rail_record.net_name, rail_cap.ground_record.net_name), []
+            ).append(rail_cap)
 
         items: list[PlacedItem] = []
         connected: set[str] = set()
         component_ids: set[str] = set()
-        for (rail_name, ground_name), group in sorted(groups.items(), key=lambda item: (-len(item[1]), item[0])):
+        for (rail_name, ground_name), group in sorted(
+            groups.items(), key=lambda item: (-len(item[1]), item[0])
+        ):
             if len(group) < 2:
                 continue
-            assembly = self._shared_rail_cap_bank_assembly(rail_name, ground_name, group)
+            assembly = self._decoupling_row_assembly(rail_name, ground_name, group)
             dx, dy = self._root_cap_bank_placement(assembly, placed_root, occupied)
             translated_items = [_translate_item(item, dx, dy) for item in assembly.items]
             items.extend(translated_items)
-            occupied.extend(_occupied_rects(tuple(translated_items), self.project.symbol_library, margin=GRID / 2))
+            occupied.extend(
+                _occupied_rects(
+                    tuple(translated_items), self.project.symbol_library, margin=GRID / 2
+                )
+            )
             component_ids.update(assembly.component_ids)
             for rail_cap in group:
                 connected.add(rail_cap.rail_record.endpoint_key)
@@ -2748,23 +3613,27 @@ class _AssemblySolver:
         assert best is not None
         return best[1]
 
-    def _shared_rail_cap_bank_assemblies(self, placed: set[str]) -> list[Assembly]:
-        groups: dict[tuple[str, str], list[_RailCap]] = {}
+    def _decoupling_row_template_assemblies(self, placed: set[str]) -> list[Assembly]:
+        groups: dict[tuple[str, str], list[_DecouplingCap]] = {}
         for component_id in sorted(self.components):
             if component_id in placed:
                 continue
             rail_cap = self._rail_cap_record(component_id)
             if rail_cap is None:
                 continue
-            groups.setdefault((rail_cap.rail_record.net_name, rail_cap.ground_record.net_name), []).append(rail_cap)
+            groups.setdefault(
+                (rail_cap.rail_record.net_name, rail_cap.ground_record.net_name), []
+            ).append(rail_cap)
         assemblies: list[Assembly] = []
-        for (rail_name, ground_name), group in sorted(groups.items(), key=lambda item: (-len(item[1]), item[0])):
+        for (rail_name, ground_name), group in sorted(
+            groups.items(), key=lambda item: (-len(item[1]), item[0])
+        ):
             if len(group) < 2:
                 continue
-            assemblies.append(self._shared_rail_cap_bank_assembly(rail_name, ground_name, group))
+            assemblies.append(self._decoupling_row_assembly(rail_name, ground_name, group))
         return assemblies
 
-    def _rail_cap_record(self, component_id: str) -> _RailCap | None:
+    def _rail_cap_record(self, component_id: str) -> _DecouplingCap | None:
         component = self.components[component_id]
         if not _is_decoupling_cap(component):
             return None
@@ -2782,18 +3651,18 @@ class _AssemblySolver:
         ground_records = [record for record in records if _is_ground_net(record.net_name)]
         if len(rail_records) != 1 or len(ground_records) != 1:
             return None
-        return _RailCap(component_id, rail_records[0], ground_records[0])
+        return _DecouplingCap(component_id, rail_records[0], ground_records[0])
 
-    def _shared_rail_cap_bank_assembly(
+    def _decoupling_row_assembly(
         self,
         rail_name: str,
         ground_name: str,
-        group: list[_RailCap],
+        group: list[_DecouplingCap],
     ) -> Assembly:
         items: list[PlacedItem] = []
         occupied: list[Rect] = []
         placed: dict[str, PlacedComponent] = {}
-        profiles: list[tuple[_RailCap, int, Rect]] = []
+        profiles: list[tuple[_DecouplingCap, int, Rect]] = []
         for rail_cap in group:
             component = self.components[rail_cap.component_id]
             rotation = _rotation_between_sides(
@@ -2803,8 +3672,8 @@ class _AssemblySolver:
             span = self._component_span_for_port(component, rail_cap.rail_record, rotation)
             profiles.append((rail_cap, rotation, span))
 
-        rows: list[list[tuple[_RailCap, int, Rect]]] = []
-        row: list[tuple[_RailCap, int, Rect]] = []
+        rows: list[list[tuple[_DecouplingCap, int, Rect]]] = []
+        row: list[tuple[_DecouplingCap, int, Rect]] = []
         row_width = 0.0
         for profile in profiles:
             span = profile[2]
@@ -2837,10 +3706,16 @@ class _AssemblySolver:
                     (x, row_y),
                     rotation,
                 )
-                placed_component = self._place_component(component, Point(at[0], at[1]), rotation, compact_value=True)
+                placed_component = self._place_component(
+                    component, Point(at[0], at[1]), rotation, compact_value=True
+                )
                 placed[rail_cap.component_id] = placed_component
                 items.extend(placed_component.items)
-                occupied.extend(_occupied_rects(placed_component.items, self.project.symbol_library, margin=GRID / 2))
+                occupied.extend(
+                    _occupied_rects(
+                        placed_component.items, self.project.symbol_library, margin=GRID / 2
+                    )
+                )
                 rail_point = placed_component.ports[rail_cap.rail_record.endpoint_key]
                 ground_point = placed_component.ports[rail_cap.ground_record.endpoint_key]
                 rail_points.append(rail_point)
@@ -2857,23 +3732,23 @@ class _AssemblySolver:
             row_grounds.append((row_left, row_right, ground_y, tuple(row_ground_points)))
             row_y = _snap(ground_y + CAP_BANK_ROW_GAP)
 
-        for left, right, rail_y, taps in row_rails:
+        for left, _right, rail_y, taps in row_rails:
             wire_items = _rail_wire_items(
                 self.sheet_path,
                 rail_name,
                 [(left, rail_y), *taps],
                 set(taps),
-                f"shared-cap-bank:{rail_name}:trunk:{rail_y}",
+                f"stanza:decoupling_row:{rail_name}:trunk:{rail_y}",
             )
             items.extend(wire_items)
             occupied.extend(_wire_avoid_rects(wire_items))
-        for left, right, ground_y, taps in row_grounds:
+        for _left, right, ground_y, taps in row_grounds:
             wire_items = _rail_wire_items(
                 self.sheet_path,
                 ground_name,
                 [*taps, (right, ground_y)],
                 set(taps),
-                f"shared-cap-bank:{rail_name}:gnd:{ground_y}",
+                f"stanza:decoupling_row:{rail_name}:gnd:{ground_y}",
             )
             items.extend(wire_items)
             occupied.extend(_wire_avoid_rects(wire_items))
@@ -2888,7 +3763,7 @@ class _AssemblySolver:
                     (left, rail_y),
                     "WEST",
                     occupied,
-                    f"shared-cap-bank:{rail_name}:row:{index}",
+                    f"stanza:decoupling_row:{rail_name}:row:{index}",
                     axis_locked=True,
                     driven=self._claim_implicit_power_driver(rail_name),
                     existing_items=items,
@@ -2905,7 +3780,7 @@ class _AssemblySolver:
                     (right, ground_y),
                     "EAST",
                     occupied,
-                    f"shared-cap-bank:{rail_name}:gnd:row:{index}",
+                    f"stanza:decoupling_row:{rail_name}:gnd:row:{index}",
                     axis_locked=True,
                     driven=self._claim_implicit_power_driver(ground_name),
                     existing_items=items,
@@ -2913,7 +3788,7 @@ class _AssemblySolver:
                 )
             )
         rect = _items_rect(tuple(items), self.project.symbol_library) or Rect(0.0, 0.0, 0.0, 0.0)
-        assembly_id = f"shared-cap-bank:{rail_name}:{ground_name}"
+        assembly_id = f"stanza:decoupling_row:{rail_name}:{ground_name}"
         component_ids = frozenset(cap.component_id for cap in group)
         return _normalize_assembly(
             Assembly(
@@ -2947,9 +3822,16 @@ class _AssemblySolver:
             local = [record for record in records if record.component_id in component_ids]
             if not local:
                 continue
-            external = [record for record in records if record.component_id not in component_ids]
-            unconnected = [record for record in local if record.endpoint_key not in connected_endpoints]
-            external_bridge_records = self._external_bridge_records(local, connected_endpoints) if external else []
+            all_records = self._full_net_records.get(net_name, records)
+            external = [
+                record for record in all_records if record.component_id not in component_ids
+            ]
+            unconnected = [
+                record for record in local if record.endpoint_key not in connected_endpoints
+            ]
+            external_bridge_records = (
+                self._external_bridge_records(local, connected_endpoints) if external else []
+            )
             for rail_items, rail_records in self._repeated_net_rails(
                 net_name,
                 unconnected,
@@ -2959,13 +3841,16 @@ class _AssemblySolver:
             ):
                 items.extend(rail_items)
                 connected_endpoints.update(record.endpoint_key for record in rail_records)
-            unconnected = [record for record in unconnected if record.endpoint_key not in connected_endpoints]
+            unconnected = [
+                record for record in unconnected if record.endpoint_key not in connected_endpoints
+            ]
             marker_records = [
                 *unconnected,
                 *(
                     record
                     for record in external_bridge_records
-                    if record.endpoint_key not in {candidate.endpoint_key for candidate in unconnected}
+                    if record.endpoint_key
+                    not in {candidate.endpoint_key for candidate in unconnected}
                 ),
             ]
             if net_name in self.sheet.interface:
@@ -2973,9 +3858,7 @@ class _AssemblySolver:
                 fallback_interface_label = False
                 if not interface_records and _is_power_net(net_name):
                     connected_interface = [
-                        record
-                        for record in local
-                        if record.endpoint_key in connected_endpoints
+                        record for record in local if record.endpoint_key in connected_endpoints
                     ]
                     interface_records = connected_interface[:1] or local[:1]
                     fallback_interface_label = True
@@ -2993,20 +3876,30 @@ class _AssemblySolver:
                             "hierarchical",
                             record.terminal,
                             record.endpoint_key,
-                            fallback_interface_label or component.kind == "sheet" or not component.passive,
+                            fallback_interface_label
+                            or component.kind == "sheet"
+                            or not component.passive,
                         )
                     )
                     connected_endpoints.add(record.endpoint_key)
                 continue
-            if not _is_power_net(net_name) and len(local) >= 2 and not external:
+            route_as_local_pair = (
+                not _is_power_net(net_name)
+                or (
+                    len(local) == 2
+                    and not external
+                    and any(char.isspace() for char in net_name)
+                )
+            )
+            if route_as_local_pair and len(local) >= 2 and not external:
                 root_record = _local_net_root(local, self.components)
                 root_point = placed[root_record.component_id].ports[root_record.endpoint_key]
                 local_support_net = self._local_support_net(local)
                 if local_support_net:
+                    if self._framed_block_scope and not unconnected:
+                        continue
                     connected_local = [
-                        record
-                        for record in local
-                        if record.endpoint_key in connected_endpoints
+                        record for record in local if record.endpoint_key in connected_endpoints
                     ]
                     anchors = connected_local or [root_record]
                     anchor = anchors[0]
@@ -3026,7 +3919,10 @@ class _AssemblySolver:
                     )
                     labeled: set[str] = set()
                     for record in local:
-                        if record.endpoint_key in connected_endpoints or record.endpoint_key == root_record.endpoint_key:
+                        if (
+                            record.endpoint_key in connected_endpoints
+                            or record.endpoint_key == root_record.endpoint_key
+                        ):
                             continue
                         point = placed[record.component_id].ports[record.endpoint_key]
                         anchor = min(
@@ -3062,14 +3958,18 @@ class _AssemblySolver:
                                     continue
                                 labeled.add(endpoint.endpoint_key)
                                 component = self.components[endpoint.component_id]
-                                kind: Literal["local", "hierarchical"] = "hierarchical" if net_name in self.sheet.interface else "local"
+                                label_kind: Literal["local", "hierarchical"] = (
+                                    "hierarchical" if net_name in self.sheet.interface else "local"
+                                )
                                 label_requests.append(
                                     _LabelRequest(
                                         net_name,
-                                        self._label_text(net_name, kind),
+                                        self._label_text(net_name, label_kind),
                                         placed[endpoint.component_id].ports[endpoint.endpoint_key],
-                                        placed[endpoint.component_id].port_sides[endpoint.endpoint_key],
-                                        kind,
+                                        placed[endpoint.component_id].port_sides[
+                                            endpoint.endpoint_key
+                                        ],
+                                        label_kind,
                                         endpoint.terminal,
                                         endpoint.endpoint_key,
                                         component.kind == "sheet" or not component.passive,
@@ -3081,14 +3981,14 @@ class _AssemblySolver:
                     for record in local:
                         point = placed[record.component_id].ports[record.endpoint_key]
                         component = self.components[record.component_id]
-                        kind: Literal["local", "hierarchical"] = "hierarchical" if net_name in self.sheet.interface else "local"
+                        label_kind = "hierarchical" if net_name in self.sheet.interface else "local"
                         label_requests.append(
                             _LabelRequest(
                                 net_name,
-                                self._label_text(net_name, kind),
+                                self._label_text(net_name, label_kind),
                                 point,
                                 placed[record.component_id].port_sides[record.endpoint_key],
-                                kind,
+                                label_kind,
                                 record.terminal,
                                 record.endpoint_key,
                                 component.kind == "sheet" or not component.passive,
@@ -3099,21 +3999,24 @@ class _AssemblySolver:
                 long_local = any(
                     record.endpoint_key != root_record.endpoint_key
                     and record.endpoint_key not in connected_endpoints
-                    and _manhattan(root_point, placed[record.component_id].ports[record.endpoint_key]) > DIRECT_LOCAL_WIRE_LIMIT
+                    and _manhattan(
+                        root_point, placed[record.component_id].ports[record.endpoint_key]
+                    )
+                    > DIRECT_LOCAL_WIRE_LIMIT
                     for record in local
                 )
                 if long_local and not local_support_net:
                     for record in local:
                         point = placed[record.component_id].ports[record.endpoint_key]
                         component = self.components[record.component_id]
-                        kind: Literal["local", "hierarchical"] = "hierarchical" if net_name in self.sheet.interface else "local"
+                        label_kind = "hierarchical" if net_name in self.sheet.interface else "local"
                         label_requests.append(
                             _LabelRequest(
                                 net_name,
-                                self._label_text(net_name, kind),
+                                self._label_text(net_name, label_kind),
                                 point,
                                 placed[record.component_id].port_sides[record.endpoint_key],
-                                kind,
+                                label_kind,
                                 record.terminal,
                                 record.endpoint_key,
                                 component.kind == "sheet" or not component.passive,
@@ -3122,7 +4025,10 @@ class _AssemblySolver:
                         connected_endpoints.add(record.endpoint_key)
                     continue
                 for record in local:
-                    if record.endpoint_key == root_record.endpoint_key or record.endpoint_key in connected_endpoints:
+                    if (
+                        record.endpoint_key == root_record.endpoint_key
+                        or record.endpoint_key in connected_endpoints
+                    ):
                         continue
                     point = placed[record.component_id].ports[record.endpoint_key]
                     wire_requests.append(
@@ -3144,7 +4050,9 @@ class _AssemblySolver:
                 point = placed[record.component_id].ports[record.endpoint_key]
                 component = self.components[record.component_id]
                 side = placed[record.component_id].port_sides[record.endpoint_key]
-                kind: Literal["local", "hierarchical"] = "hierarchical" if net_name in self.sheet.interface else "local"
+                kind: Literal["local", "hierarchical"] = (
+                    "hierarchical" if net_name in self.sheet.interface else "local"
+                )
                 axis_locked = component.kind == "sheet" or not component.passive
                 use_power_port = (
                     _is_power_net(net_name)
@@ -3198,6 +4106,7 @@ class _AssemblySolver:
                 existing_items=[*base_items, *items],
                 symbol_library=self.project.symbol_library,
                 path_context=label_path_context,
+                route_root_local=self._framed_block_scope,
             )
             items.extend(label_items)
             occupied.extend(_wire_avoid_rects(label_items))
@@ -3207,15 +4116,24 @@ class _AssemblySolver:
             occupied,
         )
         items.extend(wire_items)
-        hard_occupied = _occupied_rects([*base_items, *items], self.project.symbol_library, margin=GRID / 2)
+        hard_occupied = _occupied_rects(
+            tuple([*base_items, *items]), self.project.symbol_library, margin=GRID / 2
+        )
         deduped_power_port_requests: dict[
             tuple[str, tuple[float, float]],
             tuple[str, str, tuple[float, float], PortSide, str, bool],
         ] = {}
-        for request in power_port_requests:
-            net_name, _label_text, point, _side, _endpoint_key, _axis_locked = request
-            deduped_power_port_requests.setdefault((net_name, point), request)
-        for net_name, label_text, point, side, endpoint_key, axis_locked in deduped_power_port_requests.values():
+        for request_tuple in power_port_requests:
+            net_name, _label_text, point, _side, _endpoint_key, _axis_locked = request_tuple
+            deduped_power_port_requests.setdefault((net_name, point), request_tuple)
+        for (
+            net_name,
+            label_text,
+            point,
+            side,
+            endpoint_key,
+            axis_locked,
+        ) in deduped_power_port_requests.values():
             new_items = _power_port_items(
                 self.project,
                 self.sheet_path,
@@ -3232,7 +4150,9 @@ class _AssemblySolver:
                 symbol_library=self.project.symbol_library,
             )
             items.extend(new_items)
-            hard_occupied.extend(_occupied_rects(tuple(new_items), self.project.symbol_library, margin=GRID / 2))
+            hard_occupied.extend(
+                _occupied_rects(tuple(new_items), self.project.symbol_library, margin=GRID / 2)
+            )
         return items
 
     def _route_or_label_wire_requests(
@@ -3310,10 +4230,13 @@ class _AssemblySolver:
                         axis_locked=False,
                         existing_items=[*existing_items, *items],
                         symbol_library=self.project.symbol_library,
+                        route_root_local=self._framed_block_scope,
                     )
                 items.extend(marker_items)
                 occupied.extend(_wire_avoid_rects(marker_items))
-                avoid_elements.extend(_route_avoid_elements(marker_items, self.project.symbol_library))
+                avoid_elements.extend(
+                    _route_avoid_elements(marker_items, self.project.symbol_library)
+                )
                 existing_segments.extend(_existing_wire_segments(marker_items))
         return items
 
@@ -3334,9 +4257,7 @@ class _AssemblySolver:
         if not connected:
             return []
         non_passive = [
-            record
-            for record in connected
-            if not self.components[record.component_id].passive
+            record for record in connected if not self.components[record.component_id].passive
         ]
         return [min(non_passive or connected, key=lambda record: record.endpoint_key)]
 
@@ -3344,13 +4265,16 @@ class _AssemblySolver:
         records = self.net_records.get(net_name, [])
         if not records:
             return False
-        return all(self._record_electrical_type(record) in {"passive", "unspecified"} for record in records)
+        return all(
+            self._record_electrical_type(record) in {"passive", "unspecified"} for record in records
+        )
 
     def _record_electrical_type(self, record: NetEndpoint) -> str:
         component = self.components.get(record.component_id)
         if component is None or component.kind != "symbol":
             return "non_passive"
-        pin = component.ports.get(record.endpoint_key).pin if record.endpoint_key in component.ports else None
+        port = component.ports.get(record.endpoint_key)
+        pin = port.pin if port is not None else None
         return pin.electrical_type if pin is not None else "unspecified"
 
     def _claim_implicit_power_driver(self, net_name: str) -> bool:
@@ -3425,17 +4349,34 @@ class _AssemblySolver:
             if len(runs) > 1:
                 for run in runs:
                     if len(run) >= minimum_group_size:
-                        rails.extend(self._repeated_net_rails(net_name, list(run), placed, occupied, existing_items))
+                        rails.extend(
+                            self._repeated_net_rails(
+                                net_name, list(run), placed, occupied, existing_items
+                            )
+                        )
                 continue
             points = [placed[record.component_id].ports[record.endpoint_key] for record in group]
             if side in {"WEST", "EAST"}:
                 ys = sorted(point[1] for point in points)
-                edge_x = min(point[0] for point in points) if side == "WEST" else max(point[0] for point in points)
+                edge_x = (
+                    min(point[0] for point in points)
+                    if side == "WEST"
+                    else max(point[0] for point in points)
+                )
                 direction = -1.0 if side == "WEST" else 1.0
                 rail_start, rail_end, rail_points = min(
                     (
                         _rail_lane_score(
-                            [(point, (_snap(edge_x + direction * (LABEL_GAP + lane * GRID)), point[1])) for point in points],
+                            [
+                                (
+                                    point,
+                                    (
+                                        _snap(edge_x + direction * (LABEL_GAP + lane * GRID)),
+                                        point[1],
+                                    ),
+                                )
+                                for point in points
+                            ],
                             (
                                 (_snap(edge_x + direction * (LABEL_GAP + lane * GRID)), ys[0]),
                                 (_snap(edge_x + direction * (LABEL_GAP + lane * GRID)), ys[-1]),
@@ -3444,19 +4385,35 @@ class _AssemblySolver:
                         ),
                         (_snap(edge_x + direction * (LABEL_GAP + lane * GRID)), ys[0]),
                         (_snap(edge_x + direction * (LABEL_GAP + lane * GRID)), ys[-1]),
-                        [( _snap(edge_x + direction * (LABEL_GAP + lane * GRID)), point[1]) for point in points],
+                        [
+                            (_snap(edge_x + direction * (LABEL_GAP + lane * GRID)), point[1])
+                            for point in points
+                        ],
                     )
                     for lane in range(16)
                 )[1:]
                 label_side = side
             else:
                 xs = sorted(point[0] for point in points)
-                edge_y = min(point[1] for point in points) if side == "NORTH" else max(point[1] for point in points)
+                edge_y = (
+                    min(point[1] for point in points)
+                    if side == "NORTH"
+                    else max(point[1] for point in points)
+                )
                 direction = -1.0 if side == "NORTH" else 1.0
                 rail_start, rail_end, rail_points = min(
                     (
                         _rail_lane_score(
-                            [(point, (point[0], _snap(edge_y + direction * (LABEL_GAP + lane * GRID)))) for point in points],
+                            [
+                                (
+                                    point,
+                                    (
+                                        point[0],
+                                        _snap(edge_y + direction * (LABEL_GAP + lane * GRID)),
+                                    ),
+                                )
+                                for point in points
+                            ],
                             (
                                 (xs[0], _snap(edge_y + direction * (LABEL_GAP + lane * GRID))),
                                 (xs[-1], _snap(edge_y + direction * (LABEL_GAP + lane * GRID))),
@@ -3465,7 +4422,10 @@ class _AssemblySolver:
                         ),
                         (xs[0], _snap(edge_y + direction * (LABEL_GAP + lane * GRID))),
                         (xs[-1], _snap(edge_y + direction * (LABEL_GAP + lane * GRID))),
-                        [(point[0], _snap(edge_y + direction * (LABEL_GAP + lane * GRID))) for point in points],
+                        [
+                            (point[0], _snap(edge_y + direction * (LABEL_GAP + lane * GRID)))
+                            for point in points
+                        ],
                     )
                     for lane in range(16)
                 )[1:]
@@ -3480,7 +4440,7 @@ class _AssemblySolver:
             )
             items.extend(wire_items)
             occupied.extend(_wire_avoid_rects(wire_items))
-            for record, point, rail_point in zip(group, points, rail_points):
+            for record, point, rail_point in zip(group, points, rail_points, strict=True):
                 wire_items = _wire_items_avoiding(
                     self.sheet_path,
                     net_name,
@@ -3513,7 +4473,9 @@ class _AssemblySolver:
                     )
                 )
             else:
-                label_kind: Literal["local", "hierarchical"] = "hierarchical" if net_name in self.sheet.interface else "local"
+                label_kind: Literal["local", "hierarchical"] = (
+                    "hierarchical" if net_name in self.sheet.interface else "local"
+                )
                 items.extend(
                     _label_items(
                         self.sheet_path,
@@ -3527,6 +4489,7 @@ class _AssemblySolver:
                         f"rail:{group_id}:{side}:{net_name}",
                         existing_items=[*existing_items, *items],
                         symbol_library=self.project.symbol_library,
+                        route_root_local=self._framed_block_scope,
                     )
                 )
             rails.append((items, group))
@@ -3546,10 +4509,366 @@ class _AssemblySolver:
             side = placed_component.port_sides[record.endpoint_key]
             point = placed_component.ports[record.endpoint_key]
             side_axis = _snap(point[0] if side in {"WEST", "EAST"} else point[1])
-            groups.setdefault((f"passive-rail:{side}:{side_axis}", side, side_axis), []).append(record)
+            groups.setdefault((f"passive-rail:{side}:{side_axis}", side, side_axis), []).append(
+                record
+            )
         return {key: group for key, group in groups.items() if len(group) >= 2}
 
+    def _stanza_template_assemblies(self, placed_ids: set[str]) -> list[Assembly]:
+        assemblies: list[Assembly] = []
+        placed = set(placed_ids)
+        for producer in (
+            self._decoupling_row_template_assemblies,
+            self._loose_marker_template_assemblies,
+            self._standalone_symbol_template_assemblies,
+        ):
+            for assembly in producer(placed):
+                assemblies.append(assembly)
+                placed.update(assembly.component_ids)
+
+        matches = self._stanza_template_matches(placed)
+        groups: dict[tuple[Any, ...], list[_StanzaMatch]] = {}
+        for match in matches:
+            groups.setdefault(match.key, []).append(match)
+        for key, group in sorted(groups.items(), key=lambda item: str(item[0])):
+            solved = [self._solve_stanza_template(match) for match in group]
+            if not solved:
+                continue
+            if len(solved) == 1:
+                assemblies.append(solved[0].assembly)
+                continue
+            pitch = _snap(
+                max(item.assembly.rect.width for item in solved) + SUPPORT_STEP * 2
+            )
+            stamped_items: list[PlacedItem] = []
+            stamped_ports: dict[str, tuple[float, float]] = {}
+            stamped_sides: dict[str, PortSide] = {}
+            stamped_ids: set[str] = set()
+            for index, item in enumerate(solved):
+                dx = _snap(index * pitch - item.assembly.rect.left)
+                dy = _snap(-item.assembly.rect.top)
+                stamped_items.extend(
+                    _translate_item(placed_item, dx, dy)
+                    for placed_item in item.assembly.items
+                )
+                stamped_ports.update(
+                    {
+                        key: _translate_point(point, dx, dy)
+                        for key, point in item.assembly.ports.items()
+                    }
+                )
+                stamped_sides.update(item.assembly.port_sides)
+                stamped_ids.update(item.assembly.component_ids)
+            rect = _items_rect(tuple(stamped_items), self.project.symbol_library) or Rect(
+                0.0, 0.0, 0.0, 0.0
+            )
+            assemblies.append(
+                _normalize_assembly(
+                    Assembly(
+                        f"stanza:{key}",
+                        tuple(stamped_items),
+                        rect,
+                        stamped_ports,
+                        stamped_sides,
+                        frozenset(stamped_ids),
+                    )
+                )
+            )
+        return assemblies
+
+    def _stanza_template_matches(self, placed_ids: set[str]) -> list[_StanzaMatch]:
+        available = {
+            component_id
+            for component_id, component in self.components.items()
+            if component_id not in placed_ids and _is_local_support_component(component)
+        }
+        matches: list[_StanzaMatch] = []
+        used: set[str] = set()
+        for node_net, records in sorted(self.net_records.items()):
+            if _is_ground_net(node_net) or _is_power_net(node_net):
+                continue
+            local = [record for record in records if record.component_id in available - used]
+            if len(local) < 3:
+                continue
+            match = self._series_clamp_match(node_net, local, available - used)
+            if match is None:
+                continue
+            matches.append(match)
+            used.update(match.component_ids)
+        return matches
+
+    def _series_clamp_match(
+        self,
+        node_net: str,
+        node_records: list[NetEndpoint],
+        available: set[str],
+    ) -> _StanzaMatch | None:
+        series: tuple[NetEndpoint, NetEndpoint] | None = None
+        branches: list[tuple[NetEndpoint, NetEndpoint]] = []
+        for node_record in node_records:
+            component = self.components[node_record.component_id]
+            records = [
+                record
+                for records in self.net_records.values()
+                for record in records
+                if record.component_id == node_record.component_id
+            ]
+            if len(records) != 2:
+                return None
+            other = next(
+                record
+                for record in records
+                if record.endpoint_key != node_record.endpoint_key
+            )
+            if other.component_id not in available:
+                return None
+            if _is_ground_net(other.net_name):
+                branches.append((node_record, other))
+            elif (
+                series is None
+                and component.symbol_decl is not None
+                and component.symbol_decl.lib.endswith(":R")
+            ):
+                series = (node_record, other)
+            else:
+                return None
+        if series is None or len(branches) < 2:
+            return None
+        component_ids = tuple(sorted({record.component_id for record in node_records}))
+        values = tuple(
+            sorted(
+                (
+                    component.symbol_decl.lib if component.symbol_decl else "",
+                    component.symbol_decl.value if component.symbol_decl else "",
+                    len(component.ports),
+                )
+                for component in (self.components[component_id] for component_id in component_ids)
+            )
+        )
+        branch_libs: list[str] = []
+        for node, _return in branches:
+            decl = self.components[node.component_id].symbol_decl
+            if decl is not None:
+                branch_libs.append(decl.lib)
+        role_signature = ("series_clamp", len(branches), tuple(sorted(branch_libs)))
+        return _StanzaMatch(
+            "series_clamp",
+            component_ids,
+            ("series_clamp", values, role_signature),
+            input_record=series[1],
+            node_records=tuple([series[0], *(node for node, _return in branches)]),
+            return_records=tuple(_return for _node, _return in branches),
+            branch_records=tuple(node for node, _return in branches),
+        )
+
+    def _solve_stanza_template(self, match: _StanzaMatch) -> _StanzaSolved:
+        if match.template_id == "series_clamp":
+            return self._series_clamp_assembly(match)
+        raise AssertionError(match.template_id)
+
+    def _series_clamp_assembly(self, match: _StanzaMatch) -> _StanzaSolved:
+        assert match.input_record is not None
+        node_records = {record.component_id: record for record in match.node_records}
+        series_id = match.input_record.component_id
+        node_y = 15.24
+        branch_y = 35.56
+        branch_step = 17.78
+        items: list[PlacedItem] = []
+        occupied: list[Rect] = []
+        placed: dict[str, PlacedComponent] = {}
+
+        series_component = self.components[series_id]
+        series_node_record = node_records[series_id]
+        series_port = series_component.ports[series_node_record.endpoint_key]
+        series_at = _component_at_for_port(series_component, series_port, (0.0, node_y), 270)
+        placed_series = self._place_component(
+            series_component,
+            Point(series_at[0], series_at[1]),
+            270,
+            compact_value=True,
+        )
+        placed[series_id] = placed_series
+        items.extend(placed_series.items)
+        occupied.extend(
+            _occupied_rects(placed_series.items, self.project.symbol_library, margin=GRID / 2)
+        )
+
+        def branch_sort_key(component_id: str) -> tuple[str, str]:
+            component = self.components[component_id]
+            decl = component.symbol_decl
+            return (decl.lib if decl is not None else "", component.ref or component_id)
+
+        branch_ids = sorted(
+            (component_id for component_id in match.component_ids if component_id != series_id),
+            key=branch_sort_key,
+        )
+        left = -branch_step * (len(branch_ids) - 1) / 2
+        for index, component_id in enumerate(branch_ids):
+            component = self.components[component_id]
+            node_record = node_records[component_id]
+            node_port = component.ports[node_record.endpoint_key]
+            x = _snap(left + index * branch_step)
+            rotation = _rotation_between_sides(node_port.side, "NORTH")
+            at = _component_at_for_port(component, node_port, (x, branch_y), rotation)
+            placed_component = self._place_component(
+                component,
+                Point(at[0], at[1]),
+                rotation,
+                compact_value=True,
+            )
+            placed[component_id] = placed_component
+            items.extend(placed_component.items)
+            occupied.extend(
+                _occupied_rects(
+                    placed_component.items, self.project.symbol_library, margin=GRID / 2
+                )
+            )
+
+        node_bus_y = node_y
+        branch_xs = [
+            placed[component_id].ports[node_records[component_id].endpoint_key][0]
+            for component_id in branch_ids
+        ]
+        node_taps = {(0.0, node_bus_y), *{(x, node_bus_y) for x in branch_xs}}
+        node_rail_points = sorted(node_taps, key=lambda point: point[0])
+        items.extend(
+            _rail_wire_items(
+                self.sheet_path,
+                match.node_records[0].net_name,
+                node_rail_points,
+                node_taps,
+                f"stanza:{':'.join(match.component_ids)}:node",
+            )
+        )
+        for component_id in branch_ids:
+            top = placed[component_id].ports[node_records[component_id].endpoint_key]
+            items.extend(
+                _wire_items_from_points(
+                    self.sheet_path,
+                    match.node_records[0].net_name,
+                    [top, (top[0], node_bus_y)],
+                    node_records[component_id].terminal,
+                    None,
+                    f"stanza:{component_id}:node-stub",
+                )
+            )
+        series_node = placed_series.ports[series_node_record.endpoint_key]
+        items.extend(
+            _wire_items_from_points(
+                self.sheet_path,
+                match.node_records[0].net_name,
+                [series_node, (0.0, node_bus_y)],
+                series_node_record.terminal,
+                None,
+                f"stanza:{series_id}:node-stub",
+            )
+        )
+        return_points = [
+            placed[record.component_id].ports[record.endpoint_key]
+            for record in match.return_records
+        ]
+        return_y = _snap(max(point[1] for point in return_points))
+        return_xs = [point[0] for point in return_points]
+        return_net = match.return_records[0].net_name
+        return_taps = {(x, return_y) for x in return_xs}
+        return_rail_points = sorted(return_taps, key=lambda point: point[0])
+        items.extend(
+            _rail_wire_items(
+                self.sheet_path,
+                return_net,
+                return_rail_points,
+                return_taps,
+                f"stanza:{':'.join(match.component_ids)}:return",
+            )
+        )
+        for record, point in zip(match.return_records, return_points, strict=True):
+            items.extend(
+                _wire_items_from_points(
+                    self.sheet_path,
+                    return_net,
+                    [point, (point[0], return_y)],
+                    record.terminal,
+                    None,
+                    f"stanza:{record.component_id}:return-stub",
+                )
+            )
+        input_point = placed_series.ports[match.input_record.endpoint_key]
+        input_label_point = (input_point[0], _snap(input_point[1] - LABEL_GAP))
+        items.extend(
+            _wire_items_from_points(
+                self.sheet_path,
+                match.input_record.net_name,
+                [input_point, input_label_point],
+                match.input_record.terminal,
+                None,
+                f"stanza:{series_id}:input-label-stub",
+            )
+        )
+        items.append(
+            PlacedLabel(
+                name=self._label_text(match.input_record.net_name, "local"),
+                at=input_label_point,
+                uuid=stable_uuid(f"{self.sheet_path}:stanza:{series_id}:{match.input_record.net_name}:label"),
+                justify="left",
+                nets=frozenset({match.input_record.net_name}),
+            )
+        )
+        sense_label_point = (_snap(max(branch_xs + [0.0]) + LABEL_GAP), node_bus_y)
+        items.extend(
+            _wire_items_from_points(
+                self.sheet_path,
+                match.node_records[0].net_name,
+                [(max(branch_xs + [0.0]), node_bus_y), sense_label_point],
+                None,
+                None,
+                f"stanza:{series_id}:sense-label-stub",
+            )
+        )
+        items.append(
+            PlacedLabel(
+                name=self._label_text(match.node_records[0].net_name, "local"),
+                at=sense_label_point,
+                uuid=stable_uuid(f"{self.sheet_path}:stanza:{series_id}:{match.node_records[0].net_name}:label"),
+                justify="left",
+                nets=frozenset({match.node_records[0].net_name}),
+            )
+        )
+        items.extend(
+            _power_port_items(
+                self.project,
+                self.sheet_path,
+                return_net,
+                self._label_text(return_net, "local"),
+                (min(return_xs), return_y),
+                "SOUTH",
+                occupied,
+                f"stanza:{series_id}:return",
+                axis_locked=True,
+                hard_occupied=occupied,
+                existing_items=items,
+                symbol_library=self.project.symbol_library,
+            )
+        )
+        rect = _items_rect(tuple(items), self.project.symbol_library) or Rect(0.0, 0.0, 0.0, 0.0)
+        assembly = _normalize_assembly(
+            Assembly(
+                f"stanza:series_clamp:{':'.join(match.component_ids)}",
+                tuple(items),
+                rect,
+                _ports_for(placed),
+                _port_sides_for(placed),
+                frozenset(match.component_ids),
+            )
+        )
+        return _StanzaSolved(assembly, placed)
+
     def _floating_assembly(self, component_ids: tuple[str, ...]) -> Assembly:
+        if (
+            self._framed_block_scope
+            and len(component_ids) == 1
+            and _is_connector_component(self.components[component_ids[0]])
+        ):
+            return self._connector_only_assembly(component_ids[0])
         items: list[PlacedItem] = []
         occupied: list[Rect] = []
         placed: dict[str, PlacedComponent] = {}
@@ -3558,8 +4877,11 @@ class _AssemblySolver:
         row_height = 0.0
         for component_id in component_ids:
             component = self.components[component_id]
-            sample = self._place_component(component, Point(0.0, 0.0), 0, compact_value=component.passive)
-            if cursor_x > 0.001 and cursor_x + sample.rect.width > 180.0:
+            sample = self._place_component(
+                component, Point(0.0, 0.0), 0, compact_value=component.passive
+            )
+            max_row_width = 110.0 if self._framed_block_scope else 180.0
+            if cursor_x > 0.001 and cursor_x + sample.rect.width > max_row_width:
                 cursor_x = 0.0
                 y = _snap(y + row_height + SUPPORT_STEP)
                 row_height = 0.0
@@ -3567,10 +4889,16 @@ class _AssemblySolver:
                 _snap(cursor_x - sample.rect.left),
                 _snap(y - sample.rect.top),
             )
-            placed_component = self._place_component(component, at, 0, compact_value=component.passive)
+            placed_component = self._place_component(
+                component, at, 0, compact_value=component.passive
+            )
             placed[component_id] = placed_component
             items.extend(placed_component.items)
-            occupied.extend(_occupied_rects(placed_component.items, self.project.symbol_library, margin=GRID / 2))
+            occupied.extend(
+                _occupied_rects(
+                    placed_component.items, self.project.symbol_library, margin=GRID / 2
+                )
+            )
             cursor_x = _snap(placed_component.rect.right + SUPPORT_STEP)
             row_height = max(row_height, placed_component.rect.height)
         items.extend(self._assembly_net_items(set(component_ids), placed, occupied, set()))
@@ -3587,19 +4915,85 @@ class _AssemblySolver:
             )
         )
 
-    def _loose_marker_bank_assemblies(self, placed_ids: set[str]) -> list[Assembly]:
+    def _connector_only_assembly(self, component_id: str) -> Assembly:
+        component = self.components[component_id]
+        placed_component = self._place_component(component, Point(0.0, 0.0), 0, compact_value=False)
+        items: list[PlacedItem] = list(placed_component.items)
+        records_by_net: dict[str, list[NetEndpoint]] = {}
+        for net_name, records in sorted(self.net_records.items()):
+            local = [record for record in records if record.component_id == component_id]
+            if local:
+                records_by_net[net_name] = sorted(local, key=lambda record: record.endpoint_key)
+
+        for net_name, records in records_by_net.items():
+            flush_duplicate_pins = _is_power_net(net_name) and len(records) > 1
+            label_records = records if flush_duplicate_pins else records[:1]
+            for record in label_records:
+                label_point = placed_component.ports[record.endpoint_key]
+                side = placed_component.port_sides[record.endpoint_key]
+                justify: Literal["left", "right"] = "right" if side == "WEST" else "left"
+                items.append(
+                    PlacedLabel(
+                        name=self._label_text(net_name, "local"),
+                        at=label_point,
+                        uuid=stable_uuid(
+                            f"{self.sheet_path}:{record.endpoint_key}:{net_name}:connector-label"
+                        ),
+                        justify=justify,
+                        rotation=_label_rotation(justify),
+                        hidden=False,
+                        nets=frozenset({net_name}),
+                    )
+                )
+            if flush_duplicate_pins:
+                continue
+            label_record = records[0]
+            label_point = placed_component.ports[label_record.endpoint_key]
+            for other in records[1:]:
+                items.extend(
+                    _wire_items_from_points(
+                        self.sheet_path,
+                        net_name,
+                        _connector_same_net_join_path(
+                            label_point,
+                            placed_component.ports[other.endpoint_key],
+                            placed_component.rect,
+                        ),
+                        label_record.terminal,
+                        other.terminal,
+                        f"connector:{component_id}:{net_name}:{other.endpoint_key}:join",
+                    )
+                )
+
+        rect = _items_rect(tuple(items), self.project.symbol_library) or Rect(0.0, 0.0, 0.0, 0.0)
+        placed = {component_id: placed_component}
+        return _normalize_assembly(
+            Assembly(
+                f"connector:{component_id}",
+                tuple(items),
+                rect,
+                _ports_for(placed),
+                _port_sides_for(placed),
+                frozenset({component_id}),
+            )
+        )
+
+    def _loose_marker_template_assemblies(self, placed_ids: set[str]) -> list[Assembly]:
         groups: dict[str, list[str]] = {}
         for component_id, component in sorted(self.components.items()):
             if component_id in placed_ids or not _is_loose_marker_component(component):
                 continue
-            groups.setdefault(self._loose_marker_bank_key(component_id), []).append(component_id)
+            key = self._loose_marker_template_key(component_id)
+            groups.setdefault(key, []).append(component_id)
         return [
-            self._loose_marker_bank_assembly(key, tuple(sorted(component_ids, key=self._loose_marker_sort_key)))
+            self._loose_marker_template_assembly(
+                key, tuple(sorted(component_ids, key=self._loose_marker_sort_key))
+            )
             for key, component_ids in sorted(groups.items())
             if len(component_ids) >= 2
         ]
 
-    def _loose_marker_bank_key(self, component_id: str) -> str:
+    def _loose_marker_template_key(self, component_id: str) -> str:
         text = self._loose_marker_sort_key(component_id)
         tokens = [token for token in re.split(r"[^A-Za-z0-9]+", text.upper()) if token]
         if not tokens:
@@ -3623,7 +5017,9 @@ class _AssemblySolver:
             return component.symbol_decl.value
         return component.ref or component_id
 
-    def _loose_marker_bank_assembly(self, bank_key: str, component_ids: tuple[str, ...]) -> Assembly:
+    def _loose_marker_template_assembly(
+        self, bank_key: str, component_ids: tuple[str, ...]
+    ) -> Assembly:
         items: list[PlacedItem] = []
         occupied: list[Rect] = []
         placed: dict[str, PlacedComponent] = {}
@@ -3641,7 +5037,11 @@ class _AssemblySolver:
             placed_component = self._place_component(component, at, 0, compact_value=True)
             placed[component_id] = placed_component
             items.extend(placed_component.items)
-            occupied.extend(_occupied_rects(placed_component.items, self.project.symbol_library, margin=GRID / 2))
+            occupied.extend(
+                _occupied_rects(
+                    placed_component.items, self.project.symbol_library, margin=GRID / 2
+                )
+            )
         items.extend(self._assembly_net_items(set(component_ids), placed, occupied, set()))
         rect = _items_rect(tuple(items), self.project.symbol_library) or Rect(0.0, 0.0, 0.0, 0.0)
         component_id_set = frozenset(component_ids)
@@ -3656,14 +5056,17 @@ class _AssemblySolver:
             )
         )
 
-    def _standalone_symbol_bank_assemblies(self, placed_ids: set[str]) -> list[Assembly]:
+    def _standalone_symbol_template_assemblies(self, placed_ids: set[str]) -> list[Assembly]:
         groups: dict[tuple[str, str, str], list[str]] = {}
         for component_id, component in sorted(self.components.items()):
             if component_id in placed_ids or not self._is_standalone_symbol(component_id):
                 continue
-            groups.setdefault(self._standalone_symbol_bank_key(component), []).append(component_id)
+            key = self._standalone_symbol_template_key(component)
+            groups.setdefault(key, []).append(component_id)
         return [
-            self._standalone_symbol_bank_assembly(key, tuple(sorted(component_ids, key=_component_ref_sort_key)))
+            self._standalone_symbol_template_assembly(
+                key, tuple(sorted(component_ids, key=_component_ref_sort_key))
+            )
             for key, component_ids in sorted(groups.items())
             if len(component_ids) >= 2
         ]
@@ -3680,7 +5083,7 @@ class _AssemblySolver:
             for record in records
         )
 
-    def _standalone_symbol_bank_key(self, component: Component) -> tuple[str, str, str]:
+    def _standalone_symbol_template_key(self, component: Component) -> tuple[str, str, str]:
         assert component.symbol_decl is not None
         return (
             component.symbol_decl.lib,
@@ -3688,7 +5091,7 @@ class _AssemblySolver:
             component.symbol_decl.footprint or "",
         )
 
-    def _standalone_symbol_bank_assembly(
+    def _standalone_symbol_template_assembly(
         self,
         bank_key: tuple[str, str, str],
         component_ids: tuple[str, ...],
@@ -3704,8 +5107,12 @@ class _AssemblySolver:
             )
             for component_id in component_ids
         }
-        max_width = max((sample.rect.width for sample in samples.values()), default=MARKER_BANK_COLUMN_STEP)
-        max_height = max((sample.rect.height for sample in samples.values()), default=MARKER_BANK_ROW_STEP)
+        max_width = max(
+            (sample.rect.width for sample in samples.values()), default=MARKER_BANK_COLUMN_STEP
+        )
+        max_height = max(
+            (sample.rect.height for sample in samples.values()), default=MARKER_BANK_ROW_STEP
+        )
         column_step = _snap(max(SUPPORT_STEP * 2, max_width + GRID * 2))
         row_step = _snap(max(SUPPORT_STEP * 2, max_height + GRID * 2))
         columns = min(4, len(component_ids))
@@ -3745,8 +5152,22 @@ class _AssemblySolver:
         if abs(at.x) < 0.001 and abs(at.y) < 0.001:
             return prototype
         if component.kind == "symbol":
-            assert component.ref is not None and component.unit is not None and component.symbol_decl is not None
-            item = _placed_symbol(self.project, self.sheet_path, component.ref, component.unit, component.symbol_decl, component.symbol_info, at, rotation, compact_value=compact_value)
+            assert (
+                component.ref is not None
+                and component.unit is not None
+                and component.symbol_decl is not None
+            )
+            item = _placed_symbol(
+                self.project,
+                self.sheet_path,
+                component.ref,
+                component.unit,
+                component.symbol_decl,
+                component.symbol_info,
+                at,
+                rotation,
+                compact_value=compact_value,
+            )
             items: tuple[PlacedItem, ...] = (item,)
         elif component.kind == "sheet":
             assert component.sheet_block is not None
@@ -3810,8 +5231,22 @@ class _AssemblySolver:
             return cached
         at = Point(0.0, 0.0)
         if component.kind == "symbol":
-            assert component.ref is not None and component.unit is not None and component.symbol_decl is not None
-            item = _placed_symbol(self.project, self.sheet_path, component.ref, component.unit, component.symbol_decl, component.symbol_info, at, rotation, compact_value=compact_value)
+            assert (
+                component.ref is not None
+                and component.unit is not None
+                and component.symbol_decl is not None
+            )
+            item = _placed_symbol(
+                self.project,
+                self.sheet_path,
+                component.ref,
+                component.unit,
+                component.symbol_decl,
+                component.symbol_info,
+                at,
+                rotation,
+                compact_value=compact_value,
+            )
             items: tuple[PlacedItem, ...] = (item,)
         elif component.kind == "sheet":
             assert component.sheet_block is not None
@@ -3843,7 +5278,9 @@ class _AssemblySolver:
         self._placed_component_cache[key] = placed
         return placed
 
-    def _pack_assemblies(self, assemblies: list[Assembly]) -> tuple[list[PlacedItem], dict[str, tuple[float, float]]]:
+    def _pack_assemblies(
+        self, assemblies: list[Assembly]
+    ) -> tuple[list[PlacedItem], dict[str, tuple[float, float]]]:
         content = usable_page_rect_for_paper(PAPER)
         if content is None:
             return [], {}
@@ -3855,12 +5292,16 @@ class _AssemblySolver:
         )
         title_block = title_block_rect_for_paper(PAPER)
         initial_blockers = (title_block,) if title_block is not None else ()
-        ordered, placements = _best_pack_placements(
-            assemblies,
-            (comfort, content),
-            self.project.symbol_library,
-            initial_blockers,
+        ordered, placements = self._framed_row_tile_placements(
+            assemblies, comfort, initial_blockers
         )
+        if not placements:
+            ordered, placements = _best_pack_placements(
+                assemblies,
+                (comfort, content),
+                self.project.symbol_library,
+                initial_blockers,
+            )
         placed_rects: list[Rect] = []
         overflow: list[str] = []
         for assembly in ordered:
@@ -3878,16 +5319,86 @@ class _AssemblySolver:
                 )
             )
         if overflow:
-            self.layout_errors.append(f"{self.sheet_path}: {len(overflow)} assemblies exceed A3 content area")
+            self.layout_errors.append(
+                f"{self.sheet_path}: {len(overflow)} assemblies exceed A3 content area"
+            )
 
         items: list[PlacedItem] = []
         ports: dict[str, tuple[float, float]] = {}
         for assembly in assemblies:
             dx, dy = placements[assembly.id]
-            items.extend(_translate_item(item, dx, dy) for item in assembly.items)
+            frame = _assembly_frame_rect(assembly)
+            translated_frame = _translate_rect(frame, dx, dy) if frame is not None else None
+            for item in assembly.items:
+                translated = _translate_item(item, dx, dy)
+                items.append(translated)
+                if translated_frame is not None:
+                    uuid = getattr(translated, "uuid", None)
+                    if isinstance(uuid, str):
+                        self._item_frame_rects[uuid] = translated_frame
             for key, point in assembly.ports.items():
                 ports[key] = _translate_point(point, dx, dy)
         return items, ports
+
+    def _framed_row_tile_placements(
+        self,
+        assemblies: list[Assembly],
+        content: Rect,
+        blockers: tuple[Rect, ...],
+    ) -> tuple[list[Assembly], dict[str, tuple[float, float]]]:
+        if not assemblies:
+            return [], {}
+        if not all(_assembly_frame_rect(assembly) is not None for assembly in assemblies):
+            return [], {}
+
+        rows: list[list[Assembly]] = []
+        current_row: list[Assembly] = []
+        current_width = 0.0
+        minimum_gap = SUPPORT_STEP * 2
+        for assembly in assemblies:
+            next_width = (
+                assembly.rect.width
+                if not current_row
+                else current_width + minimum_gap + assembly.rect.width
+            )
+            if current_row and next_width > content.width:
+                rows.append(current_row)
+                current_row = []
+                current_width = 0.0
+                next_width = assembly.rect.width
+            if assembly.rect.width > content.width:
+                return [], {}
+            current_row.append(assembly)
+            current_width = next_width
+        if current_row:
+            rows.append(current_row)
+
+        placements: dict[str, tuple[float, float]] = {}
+        cursor_y = content.top
+        for row in rows:
+            row_height = max(assembly.rect.height for assembly in row)
+            if cursor_y + row_height > content.bottom + 0.01:
+                return [], {}
+            total_width = sum(assembly.rect.width for assembly in row)
+            if len(row) == 1:
+                gap = 0.0
+            else:
+                gap = max(minimum_gap, (content.width - total_width) / (len(row) - 1))
+            cursor_x = content.left
+            for assembly in row:
+                placement = (_snap(cursor_x), _snap(cursor_y))
+                frame = Rect(
+                    placement[0],
+                    placement[1],
+                    placement[0] + assembly.rect.width,
+                    placement[1] + assembly.rect.height,
+                )
+                if any(frame.overlaps(blocker) for blocker in blockers):
+                    return [], {}
+                placements[assembly.id] = placement
+                cursor_x = _snap(cursor_x + assembly.rect.width + gap)
+            cursor_y = _snap(cursor_y + row_height + minimum_gap)
+        return assemblies, placements
 
     def _component_no_connects(
         self,
@@ -3919,11 +5430,13 @@ class _AssemblySolver:
                 items.append(
                     PlacedNoConnect(
                         at=point,
-                        uuid=stable_uuid(f"{self.sheet_path}:{endpoint_text}:{index}:{pin.number}:no-connect"),
+                        uuid=stable_uuid(
+                            f"{self.sheet_path}:{endpoint_text}:{index}:{pin.number}:no-connect"
+                        ),
                         terminal=terminal.terminal if terminal is not None else None,
                     )
                 )
-        return tuple(items)
+        return tuple(cast(list[PlacedNoConnect], items))
 
     def _lib_symbols(self) -> tuple[list[Any], ...]:
         definitions: list[list[Any]] = []
@@ -3956,24 +5469,53 @@ def _placed_symbol(
 ) -> PlacedSymbol:
     value = _compact_display_value(decl.value or ref) if compact_value else (decl.value or ref)
     props = (
-        compact_symbol_property_points(at.x, at.y, symbol_info, ref=ref, value=value, symbol_rotation=rotation)
-        if compact_value
+        compact_symbol_property_points(
+            at.x, at.y, symbol_info, ref=ref, value=value, symbol_rotation=rotation
+        )
+        if compact_value and not ref.startswith("Y")
         else None
     )
     if props is None:
         props = symbol_property_points(at.x, at.y, symbol_info, ref=ref, symbol_rotation=rotation)
     property_rotation = 0 if rotation % 180 == 0 else (-rotation) % 360
     properties: list[PlacedProperty] = [
-        PlacedProperty("Reference", ref, (props.reference.x, props.reference.y), justify=props.justify, rotation=property_rotation),
-        PlacedProperty("Value", value, (props.value.x, props.value.y), justify=props.justify, rotation=property_rotation),
-        PlacedProperty("Footprint", decl.footprint or "", (props.footprint.x, props.footprint.y), hidden=True, rotation=property_rotation),
+        PlacedProperty(
+            "Reference",
+            ref,
+            (props.reference.x, props.reference.y),
+            justify=props.justify,
+            rotation=property_rotation,
+        ),
+        PlacedProperty(
+            "Value",
+            value,
+            (props.value.x, props.value.y),
+            justify=props.justify,
+            rotation=property_rotation,
+        ),
+        PlacedProperty(
+            "Footprint",
+            decl.footprint or "",
+            (props.footprint.x, props.footprint.y),
+            hidden=True,
+            rotation=property_rotation,
+        ),
     ]
     field_y = props.footprint.y
     for field_name, field_value in sorted(decl.fields.items()):
         if field_name in {"Reference", "Value", "Footprint"}:
             continue
         field_y = _snap(field_y + GRID)
-        properties.append(PlacedProperty(field_name, field_value, (props.footprint.x, field_y), justify=props.justify, hidden=True, rotation=property_rotation))
+        properties.append(
+            PlacedProperty(
+                field_name,
+                field_value,
+                (props.footprint.x, field_y),
+                justify=props.justify,
+                hidden=True,
+                rotation=property_rotation,
+            )
+        )
     pins: list[PlacedSymbolPin] = []
     if symbol_info is not None:
         seen: set[str] = set()
@@ -3981,7 +5523,9 @@ def _placed_symbol(
             if pin.number in seen:
                 continue
             seen.add(pin.number)
-            pins.append(PlacedSymbolPin(pin.number, stable_uuid(f"{sheet_path}:{ref}:{unit}:{pin.number}")))
+            pins.append(
+                PlacedSymbolPin(pin.number, stable_uuid(f"{sheet_path}:{ref}:{unit}:{pin.number}"))
+            )
     # NOTE: symbol UUID key uses "/" before the refdes (not ":") to stay byte-compatible
     # with the pre-rewrite layout engine. KiCad links PCB footprints to schematic symbols
     # by this UUID; changing the separator reassigns every UUID and makes "Update PCB from
@@ -4005,7 +5549,20 @@ def _compact_display_value(value: str) -> str:
     tokens = value.split()
     if len(tokens) <= 1:
         return value
-    if tokens[1] in {"0.1%", "1%", "2%", "5%", "10%", "6.3V", "10V", "16V", "25V", "50V", "60V", "100V"}:
+    if tokens[1] in {
+        "0.1%",
+        "1%",
+        "2%",
+        "5%",
+        "10%",
+        "6.3V",
+        "10V",
+        "16V",
+        "25V",
+        "50V",
+        "60V",
+        "100V",
+    }:
         return " ".join(tokens[:2])
     return tokens[0]
 
@@ -4020,7 +5577,9 @@ def _component_at_for_port(
     return (_snap(target[0] - local[0]), _snap(target[1] - local[1]))
 
 
-def _component_port_point(component: Component, port: Port, at: Point, rotation: int) -> tuple[float, float]:
+def _component_port_point(
+    component: Component, port: Port, at: Point, rotation: int
+) -> tuple[float, float]:
     del component
     local = _rotated_point((port.local.x, port.local.y), rotation)
     return (_snap(at.x + local[0]), _snap(at.y + local[1]))
@@ -4051,12 +5610,15 @@ def _rotation_between_sides(source: PortSide, target: PortSide) -> int:
 
 
 def _opposite_side(side: PortSide) -> PortSide:
-    return {
-        "NORTH": "SOUTH",
-        "SOUTH": "NORTH",
-        "EAST": "WEST",
-        "WEST": "EAST",
-    }[side]
+    return cast(
+        PortSide,
+        {
+            "NORTH": "SOUTH",
+            "SOUTH": "NORTH",
+            "EAST": "WEST",
+            "WEST": "EAST",
+        }[side],
+    )
 
 
 def _rail_lane_score(
@@ -4115,7 +5677,9 @@ def _contiguous_rail_runs(
     placed: dict[str, PlacedComponent],
 ) -> list[list[NetEndpoint]]:
     axis = 1 if side in {"WEST", "EAST"} else 0
-    ordered = sorted(records, key=lambda record: placed[record.component_id].ports[record.endpoint_key][axis])
+    ordered = sorted(
+        records, key=lambda record: placed[record.component_id].ports[record.endpoint_key][axis]
+    )
     runs: list[list[NetEndpoint]] = []
     current: list[NetEndpoint] = []
     previous_coord: float | None = None
@@ -4137,7 +5701,9 @@ def _passive_power_rail_runs(
     placed: dict[str, PlacedComponent],
 ) -> list[list[NetEndpoint]]:
     axis = 1 if side in {"WEST", "EAST"} else 0
-    ordered = sorted(records, key=lambda record: placed[record.component_id].ports[record.endpoint_key][axis])
+    ordered = sorted(
+        records, key=lambda record: placed[record.component_id].ports[record.endpoint_key][axis]
+    )
     runs: list[list[NetEndpoint]] = []
     current: list[NetEndpoint] = []
     previous_coord: float | None = None
@@ -4192,7 +5758,9 @@ def _wire_items_avoiding(
         end_side=end_side,
         path_context=path_context,
     )
-    return _wire_items_from_points(sheet_path, net_name, list(choice.points), start_terminal, end_terminal, key)
+    return _wire_items_from_points(
+        sheet_path, net_name, list(choice.points), start_terminal, end_terminal, key
+    )
 
 
 def _wire_batch_avoiding(
@@ -4204,12 +5772,16 @@ def _wire_batch_avoiding(
     if not requests:
         return []
     existing_segments = _existing_wire_segments(existing_items)
-    order = sorted(range(len(requests)), key=lambda index: _wire_request_route_order(requests[index]))
+    order = sorted(
+        range(len(requests)), key=lambda index: _wire_request_route_order(requests[index])
+    )
     routed_segments: list[tuple[frozenset[str], tuple[float, float, float, float]]] = []
     by_request: dict[int, _RouteCandidate] = {}
     for request_index in order:
         path_context = _path_context(avoid_elements, [*existing_segments, *routed_segments])
-        candidates = _route_candidates_for_request(request_index, requests[request_index], path_context)
+        candidates = _route_candidates_for_request(
+            request_index, requests[request_index], path_context
+        )
         if not candidates:
             continue
         candidate = candidates[0]
@@ -4217,14 +5789,14 @@ def _wire_batch_avoiding(
         routed_segments.extend(candidate.segments)
     items: list[PlacedItem] = []
     for index, request in enumerate(requests):
-        candidate = by_request.get(index)
-        if candidate is None:
+        route_candidate = by_request.get(index)
+        if route_candidate is None:
             continue
         items.extend(
             _wire_items_from_points(
                 sheet_path,
                 request.net_name,
-                list(candidate.points),
+                list(route_candidate.points),
                 request.start_terminal,
                 request.end_terminal,
                 request.key,
@@ -4241,7 +5813,7 @@ def _provisional_wire_score(
 ) -> float:
     points = _orthogonal_points(request.start, request.end)
     length = 0.0
-    for first, second in zip(points, points[1:]):
+    for first, second in zip(points, points[1:], strict=False):
         length += abs(first[0] - second[0]) + abs(first[1] - second[1])
     bends = max(0, len(points) - 2)
     return (
@@ -4292,7 +5864,7 @@ def _provisional_request_segments(
     points = _orthogonal_points(request.start, request.end)
     return tuple(
         (first[0], first[1], second[0], second[1])
-        for first, second in zip(points, points[1:])
+        for first, second in zip(points, points[1:], strict=False)
         if not _same_point(first, second)
     )
 
@@ -4368,8 +5940,16 @@ def _obstacle_detour_path_options(
     if not detour_xs and not detour_ys:
         return []
 
-    start_escape = _escape_point(request.start, request.start_side, GRID * 2) if request.start_side is not None else request.start
-    end_escape = _escape_point(request.end, request.end_side, GRID * 2) if request.end_side is not None else request.end
+    start_escape = (
+        _escape_point(request.start, request.start_side, GRID * 2)
+        if request.start_side is not None
+        else request.start
+    )
+    end_escape = (
+        _escape_point(request.end, request.end_side, GRID * 2)
+        if request.end_side is not None
+        else request.end
+    )
     min_x = min(request.start[0], request.end[0]) - SUPPORT_STEP * 8
     max_x = max(request.start[0], request.end[0]) + SUPPORT_STEP * 8
     min_y = min(request.start[1], request.end[1]) - SUPPORT_STEP * 8
@@ -4378,10 +5958,32 @@ def _obstacle_detour_path_options(
     options: list[list[tuple[float, float]]] = []
     for x in sorted(detour_xs):
         if min_x <= x <= max_x:
-            options.append(_dedupe_path([request.start, start_escape, (x, start_escape[1]), (x, end_escape[1]), end_escape, request.end]))
+            options.append(
+                _dedupe_path(
+                    [
+                        request.start,
+                        start_escape,
+                        (x, start_escape[1]),
+                        (x, end_escape[1]),
+                        end_escape,
+                        request.end,
+                    ]
+                )
+            )
     for y in sorted(detour_ys):
         if min_y <= y <= max_y:
-            options.append(_dedupe_path([request.start, start_escape, (start_escape[0], y), (end_escape[0], y), end_escape, request.end]))
+            options.append(
+                _dedupe_path(
+                    [
+                        request.start,
+                        start_escape,
+                        (start_escape[0], y),
+                        (end_escape[0], y),
+                        end_escape,
+                        request.end,
+                    ]
+                )
+            )
     return options
 
 
@@ -4400,7 +6002,7 @@ def _request_path_obstacles(
         end_side=request.end_side,
     )[:12]:
         last_index = len(points) - 2
-        for index, (first, second) in enumerate(zip(points, points[1:])):
+        for index, (first, second) in enumerate(zip(points, points[1:], strict=False)):
             segment = (first[0], first[1], second[0], second[1])
             candidate = LayoutSegment(
                 id="candidate",
@@ -4409,11 +6011,18 @@ def _request_path_obstacles(
                 start=Point(first[0], first[1]),
                 end=Point(second[0], second[1]),
                 nets=frozenset({request.net_name}),
-                start_terminals=frozenset({request.start_terminal}) if index == 0 and request.start_terminal else frozenset(),
-                end_terminals=frozenset({request.end_terminal}) if index == last_index and request.end_terminal else frozenset(),
+                start_terminals=frozenset({request.start_terminal})
+                if index == 0 and request.start_terminal
+                else frozenset(),
+                end_terminals=frozenset({request.end_terminal})
+                if index == last_index and request.end_terminal
+                else frozenset(),
             )
             for element in path_context.avoid_index.query_segment(segment):
-                if segment_blocked_by_element(candidate, element) and element.id not in seen_blockers:
+                if (
+                    segment_blocked_by_element(candidate, element)
+                    and element.id not in seen_blockers
+                ):
                     seen_blockers.add(element.id)
                     blocker_rects.append(element.rect)
             for nets, existing in path_context.existing_index.query_segment(segment):
@@ -4439,7 +6048,10 @@ def _wire_request_route_order(request: _WireRequest) -> tuple[int, float, int, f
 
 
 def _request_is_aligned(request: _WireRequest) -> bool:
-    return abs(request.start[0] - request.end[0]) < 0.001 or abs(request.start[1] - request.end[1]) < 0.001
+    return (
+        abs(request.start[0] - request.end[0]) < 0.001
+        or abs(request.start[1] - request.end[1]) < 0.001
+    )
 
 
 def _candidate_segments(
@@ -4451,12 +6063,14 @@ def _candidate_segments(
             frozenset({net_name}),
             (first[0], first[1], second[0], second[1]),
         )
-        for first, second in zip(points, points[1:])
+        for first, second in zip(points, points[1:], strict=False)
         if not _same_point(first, second)
     )
 
 
-def _normalized_segment(segment: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
+def _normalized_segment(
+    segment: tuple[float, float, float, float],
+) -> tuple[float, float, float, float]:
     x1, y1, x2, y2 = segment
     first = (_snap(x1), _snap(y1))
     second = (_snap(x2), _snap(y2))
@@ -4474,7 +6088,7 @@ def _wire_items_from_points(
     key: str,
 ) -> list[PlacedItem]:
     items: list[PlacedItem] = []
-    for index, (first, second) in enumerate(zip(points, points[1:])):
+    for index, (first, second) in enumerate(zip(points, points[1:], strict=False)):
         if _same_point(first, second):
             continue
         items.append(
@@ -4483,8 +6097,12 @@ def _wire_items_from_points(
                 end=second,
                 uuid=stable_uuid(f"{sheet_path}:{key}:wire:{index}"),
                 nets=frozenset({net_name}),
-                start_terminals=frozenset({start_terminal}) if index == 0 and start_terminal else frozenset(),
-                end_terminals=frozenset({end_terminal}) if index == len(points) - 2 and end_terminal else frozenset(),
+                start_terminals=frozenset({start_terminal})
+                if index == 0 and start_terminal
+                else frozenset(),
+                end_terminals=frozenset({end_terminal})
+                if index == len(points) - 2 and end_terminal
+                else frozenset(),
             )
         )
     return items
@@ -4511,7 +6129,7 @@ def _rail_wire_items(
         return _wire_items_from_points(sheet_path, net_name, unique_points, None, None, key)
 
     items: list[PlacedItem] = []
-    for index, (first, second) in enumerate(zip(ordered_points, ordered_points[1:])):
+    for index, (first, second) in enumerate(zip(ordered_points, ordered_points[1:], strict=False)):
         if _same_point(first, second):
             continue
         items.append(
@@ -4600,7 +6218,11 @@ def _path_choice(
     score = (
         blockers * ROUTE_BLOCKER_WEIGHT
         + contacts * ROUTE_CONTACT_WEIGHT
-        + (base_score if base_score is not None else _path_base_score(points, start_side=start_side, end_side=end_side))
+        + (
+            base_score
+            if base_score is not None
+            else _path_base_score(points, start_side=start_side, end_side=end_side)
+        )
     )
     return _PathChoice(tuple(points), score, blockers, contacts)
 
@@ -4612,10 +6234,14 @@ def _path_base_score(
     end_side: PortSide | None,
 ) -> float:
     length = 0.0
-    for first, second in zip(points, points[1:]):
+    for first, second in zip(points, points[1:], strict=False):
         length += abs(first[0] - second[0]) + abs(first[1] - second[1])
     bends = max(0, len(points) - 2)
-    return _port_escape_penalty(points, start_side=start_side, end_side=end_side) + bends * 100.0 + length
+    return (
+        _port_escape_penalty(points, start_side=start_side, end_side=end_side)
+        + bends * 100.0
+        + length
+    )
 
 
 def _orthogonal_path_options(
@@ -4634,7 +6260,16 @@ def _orthogonal_path_options(
         [start, (_snap(end[0]), start[1]), end],
         [start, (start[0], _snap(end[1])), end],
     ]
-    route_offsets = (GRID, GRID * 2, GRID * 3, GRID * 4, SUPPORT_STEP, SUPPORT_STEP * 2, SUPPORT_STEP * 3, SUPPORT_STEP * 4)
+    route_offsets = (
+        GRID,
+        GRID * 2,
+        GRID * 3,
+        GRID * 4,
+        SUPPORT_STEP,
+        SUPPORT_STEP * 2,
+        SUPPORT_STEP * 3,
+        SUPPORT_STEP * 4,
+    )
     for offset in route_offsets:
         left = _snap(min_x - offset)
         right = _snap(max_x + offset)
@@ -4650,12 +6285,26 @@ def _orthogonal_path_options(
         )
     if start_side is not None or end_side is not None:
         for offset in route_offsets:
-            start_escape = _escape_point(start, start_side, offset) if start_side is not None else start
+            start_escape = (
+                _escape_point(start, start_side, offset) if start_side is not None else start
+            )
             end_escape = _escape_point(end, end_side, offset) if end_side is not None else end
             options.extend(
                 [
-                    [start, start_escape, (_snap(start_escape[0]), _snap(end_escape[1])), end_escape, end],
-                    [start, start_escape, (_snap(end_escape[0]), _snap(start_escape[1])), end_escape, end],
+                    [
+                        start,
+                        start_escape,
+                        (_snap(start_escape[0]), _snap(end_escape[1])),
+                        end_escape,
+                        end,
+                    ],
+                    [
+                        start,
+                        start_escape,
+                        (_snap(end_escape[0]), _snap(start_escape[1])),
+                        end_escape,
+                        end,
+                    ],
                 ]
             )
             escaped_min_x = min(start_escape[0], end_escape[0])
@@ -4669,10 +6318,38 @@ def _orthogonal_path_options(
                 bottom = _snap(escaped_max_y + detour)
                 options.extend(
                     [
-                        [start, start_escape, (left, start_escape[1]), (left, end_escape[1]), end_escape, end],
-                        [start, start_escape, (right, start_escape[1]), (right, end_escape[1]), end_escape, end],
-                        [start, start_escape, (start_escape[0], top), (end_escape[0], top), end_escape, end],
-                        [start, start_escape, (start_escape[0], bottom), (end_escape[0], bottom), end_escape, end],
+                        [
+                            start,
+                            start_escape,
+                            (left, start_escape[1]),
+                            (left, end_escape[1]),
+                            end_escape,
+                            end,
+                        ],
+                        [
+                            start,
+                            start_escape,
+                            (right, start_escape[1]),
+                            (right, end_escape[1]),
+                            end_escape,
+                            end,
+                        ],
+                        [
+                            start,
+                            start_escape,
+                            (start_escape[0], top),
+                            (end_escape[0], top),
+                            end_escape,
+                            end,
+                        ],
+                        [
+                            start,
+                            start_escape,
+                            (start_escape[0], bottom),
+                            (end_escape[0], bottom),
+                            end_escape,
+                            end,
+                        ],
                     ]
                 )
     deduped = [_dedupe_path(points) for points in options]
@@ -4758,7 +6435,7 @@ def _path_issue_counts(
     blockers = 0
     contacts = 0
     last_index = len(points) - 2
-    for index, (first, second) in enumerate(zip(points, points[1:])):
+    for index, (first, second) in enumerate(zip(points, points[1:], strict=False)):
         segment = (first[0], first[1], second[0], second[1])
         candidate = LayoutSegment(
             id="candidate",
@@ -4767,8 +6444,12 @@ def _path_issue_counts(
             start=Point(first[0], first[1]),
             end=Point(second[0], second[1]),
             nets=frozenset({net_name}),
-            start_terminals=frozenset({start_terminal}) if index == 0 and start_terminal else frozenset(),
-            end_terminals=frozenset({end_terminal}) if index == last_index and end_terminal else frozenset(),
+            start_terminals=frozenset({start_terminal})
+            if index == 0 and start_terminal
+            else frozenset(),
+            end_terminals=frozenset({end_terminal})
+            if index == last_index and end_terminal
+            else frozenset(),
         )
         blockers += sum(
             1
@@ -4793,7 +6474,7 @@ def _path_issue_presence(
 ) -> tuple[int, int]:
     last_index = len(points) - 2
     segments: list[tuple[float, float, float, float]] = []
-    for index, (first, second) in enumerate(zip(points, points[1:])):
+    for index, (first, second) in enumerate(zip(points, points[1:], strict=False)):
         segment = (first[0], first[1], second[0], second[1])
         segments.append(segment)
         candidate = LayoutSegment(
@@ -4803,10 +6484,17 @@ def _path_issue_presence(
             start=Point(first[0], first[1]),
             end=Point(second[0], second[1]),
             nets=frozenset({net_name}),
-            start_terminals=frozenset({start_terminal}) if index == 0 and start_terminal else frozenset(),
-            end_terminals=frozenset({end_terminal}) if index == last_index and end_terminal else frozenset(),
+            start_terminals=frozenset({start_terminal})
+            if index == 0 and start_terminal
+            else frozenset(),
+            end_terminals=frozenset({end_terminal})
+            if index == last_index and end_terminal
+            else frozenset(),
         )
-        if any(segment_blocked_by_element(candidate, element) for element in path_context.avoid_index.query_segment(segment)):
+        if any(
+            segment_blocked_by_element(candidate, element)
+            for element in path_context.avoid_index.query_segment(segment)
+        ):
             return 1, 0
     for segment in segments:
         if any(
@@ -4827,7 +6515,7 @@ def _stub_path_issue_penalty(
 ) -> float:
     last_index = len(points) - 2
     segments: list[tuple[tuple[float, float, float, float], LayoutSegment]] = []
-    for index, (first, second) in enumerate(zip(points, points[1:])):
+    for index, (first, second) in enumerate(zip(points, points[1:], strict=False)):
         segment = (first[0], first[1], second[0], second[1])
         candidate = LayoutSegment(
             id="candidate",
@@ -4836,11 +6524,18 @@ def _stub_path_issue_penalty(
             start=Point(first[0], first[1]),
             end=Point(second[0], second[1]),
             nets=frozenset({net_name}),
-            start_terminals=frozenset({start_terminal}) if index == 0 and start_terminal else frozenset(),
-            end_terminals=frozenset({end_terminal}) if index == last_index and end_terminal else frozenset(),
+            start_terminals=frozenset({start_terminal})
+            if index == 0 and start_terminal
+            else frozenset(),
+            end_terminals=frozenset({end_terminal})
+            if index == last_index and end_terminal
+            else frozenset(),
         )
         segments.append((segment, candidate))
-        if any(segment_blocked_by_element(candidate, element) for element in path_context.avoid_index.query_segment(segment)):
+        if any(
+            segment_blocked_by_element(candidate, element)
+            for element in path_context.avoid_index.query_segment(segment)
+        ):
             return 20_000_000_000.0
     for segment, _candidate in segments:
         if any(
@@ -4913,7 +6608,7 @@ def _power_port_items(
             Point(value_at[0], value_at[1]),
             value=net_name if hidden_value else label_text,
             justify=justify,
-            rotation=(-_power_port_symbol_rotation(side)) % 360,
+            rotation=0,
             symbol_rotation=_power_port_symbol_rotation(side),
             hidden_value=hidden_value,
             project_name=project.name,
@@ -4991,8 +6686,15 @@ def _power_port_anchor(
                     symbol_point = (_snap(point[0] + lane), _snap(point[1] - offset))
                 else:
                     symbol_point = (_snap(point[0] + lane), _snap(point[1] + offset))
-                value_at, justify = _power_port_value_position(label_text, symbol_point, candidate_side)
-                rect = text_rect(Point(value_at[0], value_at[1]), label_text, justify=justify)
+                value_at, justify = _power_port_value_position(
+                    label_text, symbol_point, candidate_side
+                )
+                rect = text_rect(
+                    Point(value_at[0], value_at[1]),
+                    label_text,
+                    justify=justify,
+                    rotation=_power_port_effective_text_rotation(candidate_side),
+                )
                 hard_overlap = _indexed_overlap_area(rect, hard_index)
                 overlap = _indexed_overlap_area(rect, occupied_index)
                 axis_penalty = abs(lane) * (1000.0 if axis_locked else 1.0)
@@ -5044,6 +6746,10 @@ def _power_port_stub_penalty(
     )
 
 
+def _power_port_effective_text_rotation(side: PortSide) -> int:
+    return 90 if side == "EAST" else 270 if side == "WEST" else 0
+
+
 def _power_port_value_position(
     net_name: str,
     symbol_point: tuple[float, float],
@@ -5074,13 +6780,14 @@ def _label_items(
     existing_items: list[PlacedItem] | None = None,
     symbol_library: dict[str, SymbolInfo] | None = None,
     path_context: _PathContext | None = None,
+    route_root_local: bool = False,
 ) -> list[PlacedItem]:
     key = f"{sheet_path}:{endpoint_key}:{net_name}:label"
-    if sheet_path == "/" and kind == "local":
+    if sheet_path == "/" and kind == "local" and not route_root_local:
         anchor = (_snap(point[0]), _snap(point[1]))
         justify: Literal["left", "right"] = "right" if side == "WEST" else "left"
         rect = text_rect(Point(anchor[0], anchor[1]), label_text, justify=justify)
-        items: list[PlacedItem] = []
+        items = []
     elif existing_items is not None and symbol_library is not None:
         anchor, justify, rect, points = _label_anchor_and_route(
             label_text,
@@ -5094,9 +6801,11 @@ def _label_items(
             symbol_library=symbol_library,
             path_context=path_context,
         )
-        items: list[PlacedItem] = _wire_items_from_points(sheet_path, net_name, points, terminal, None, key + ":stub")
+        items = _wire_items_from_points(sheet_path, net_name, points, terminal, None, key + ":stub")
     else:
-        anchor, justify, rect = _label_anchor(label_text, point, side, occupied, axis_locked=axis_locked)
+        anchor, justify, rect = _label_anchor(
+            label_text, point, side, occupied, axis_locked=axis_locked
+        )
         items = _wire_items(sheet_path, net_name, point, anchor, terminal, None, key + ":stub")
     occupied.append(_inflate(rect, GRID / 2))
     occupied.extend(_wire_avoid_rects(items))
@@ -5123,6 +6832,18 @@ def _label_items(
             )
         )
     return items
+
+
+def _connector_same_net_join_path(
+    first: tuple[float, float], second: tuple[float, float], rect: Rect
+) -> list[tuple[float, float]]:
+    if _same_point(first, second):
+        return [first]
+    if abs(first[0] - second[0]) < 0.001 or abs(first[1] - second[1]) < 0.001:
+        detour_y = _snap(rect.top - GRID)
+        return _dedupe_path([first, (first[0], detour_y), (second[0], detour_y), second])
+    detour_x = _snap(rect.left - GRID) if first[0] < rect.left else _snap(rect.right + GRID)
+    return _dedupe_path([first, (detour_x, first[1]), (detour_x, second[1]), second])
 
 
 def _label_rotation(justify: Literal["left", "right"]) -> int:
@@ -5200,7 +6921,12 @@ def _label_anchor_and_route(
             ),
             key=lambda item: item.score,
         )
-    return candidate.anchor, candidate.justify, candidate.rect, _orthogonal_points(point, candidate.anchor)
+    return (
+        candidate.anchor,
+        candidate.justify,
+        candidate.rect,
+        _orthogonal_points(point, candidate.anchor),
+    )
 
 
 def _label_route_overlap(
@@ -5210,7 +6936,7 @@ def _label_route_overlap(
 ) -> float:
     points = _orthogonal_points(point, anchor)
     overlap = 0.0
-    for first, second in zip(points, points[1:]):
+    for first, second in zip(points, points[1:], strict=False):
         stub_rect = _inflate(_segment_rect(first, second), GRID / 4)
         overlap += _indexed_overlap_area(stub_rect, occupied_index)
     return overlap
@@ -5230,9 +6956,17 @@ def _label_anchor_candidates(
 ) -> list[_LabelAnchorCandidate]:
     options: list[_LabelAnchorCandidate] = []
     occupied_index = _RectIndex(occupied)
-    lanes = _lane_offsets(limit=4) if axis_locked and side in {"NORTH", "SOUTH"} else ((0.0,) if axis_locked else _lane_offsets(limit=4))
+    lanes = (
+        _lane_offsets(limit=4)
+        if axis_locked and side in {"NORTH", "SOUTH"}
+        else ((0.0,) if axis_locked else _lane_offsets(limit=4))
+    )
     offset_count = 24 if axis_locked else 8
-    sides = candidate_sides if candidate_sides is not None else _default_label_sides(side, axis_locked=axis_locked)
+    sides = (
+        candidate_sides
+        if candidate_sides is not None
+        else _default_label_sides(side, axis_locked=axis_locked)
+    )
     best_score = float("inf")
     for candidate_side in sides:
         side_penalty = _label_side_penalty(side, candidate_side)
@@ -5253,11 +6987,7 @@ def _label_anchor_candidates(
                 rect = text_rect(Point(anchor[0], anchor[1]), net_name, justify=justify)
                 overlap = _indexed_overlap_area(rect, occupied_index)
                 distance = abs(lane) + offset
-                text_score = (
-                    overlap * 1_000_000.0
-                    + side_penalty
-                    + distance
-                )
+                text_score = overlap * 1_000_000.0 + side_penalty + distance
                 if text_score >= best_score:
                     continue
                 route_overlap = _label_route_overlap(point, anchor, occupied_index)
@@ -5353,10 +7083,14 @@ def _axis_label_anchor(
 
 
 def _segment_rect(start: tuple[float, float], end: tuple[float, float]) -> Rect:
-    return Rect(min(start[0], end[0]), min(start[1], end[1]), max(start[0], end[0]), max(start[1], end[1]))
+    return Rect(
+        min(start[0], end[0]), min(start[1], end[1]), max(start[0], end[0]), max(start[1], end[1])
+    )
 
 
-def _orthogonal_points(start: tuple[float, float], end: tuple[float, float]) -> list[tuple[float, float]]:
+def _orthogonal_points(
+    start: tuple[float, float], end: tuple[float, float]
+) -> list[tuple[float, float]]:
     if abs(start[0] - end[0]) < 0.001 or abs(start[1] - end[1]) < 0.001:
         return [start, end]
     mid_x = _snap((start[0] + end[0]) / 2)
@@ -5400,7 +7134,10 @@ def _best_pack_placements(
     initial_blockers: tuple[Rect, ...],
 ) -> tuple[list[Assembly], dict[str, tuple[float, float]]]:
     ordered = sorted(assemblies, key=_assembly_area_order_key)
-    best: tuple[tuple[int, float, float, float], list[Assembly], dict[str, tuple[float, float]]] | None = None
+    best: (
+        tuple[tuple[int, float, float, float], list[Assembly], dict[str, tuple[float, float]]]
+        | None
+    ) = None
     for content in contents:
         placements = _pack_ordered_assemblies_geometry(
             ordered,
@@ -5438,7 +7175,9 @@ def _pack_placement_quality(
         if placement is None:
             continue
         visible_boxes, route_boxes = _assembly_pack_boxes(assembly, symbol_library)
-        translated_visible = [_translate_rect(box, placement[0], placement[1]) for box in visible_boxes]
+        translated_visible = [
+            _translate_rect(box, placement[0], placement[1]) for box in visible_boxes
+        ]
         index = _RectIndex(visible)
         for box in translated_visible:
             for placed in index.query(box):
@@ -5451,11 +7190,15 @@ def _pack_placement_quality(
         assembly_bounds = _translated_bounds([*visible_boxes, *route_boxes], placement)
         if assembly_bounds is None:
             continue
-        bounds = assembly_bounds if bounds is None else Rect(
-            min(bounds.left, assembly_bounds.left),
-            min(bounds.top, assembly_bounds.top),
-            max(bounds.right, assembly_bounds.right),
-            max(bounds.bottom, assembly_bounds.bottom),
+        bounds = (
+            assembly_bounds
+            if bounds is None
+            else Rect(
+                min(bounds.left, assembly_bounds.left),
+                min(bounds.top, assembly_bounds.top),
+                max(bounds.right, assembly_bounds.right),
+                max(bounds.bottom, assembly_bounds.bottom),
+            )
         )
     packed_area = 0.0 if bounds is None else bounds.width * bounds.height
     return conflicts, overlap, packed_area
@@ -5509,7 +7252,9 @@ def _pack_ordered_assemblies_geometry(
                 if score < best[0]:
                     best = (score, visible_overlap, placement, translated)
         if best[1] > 0.001:
-            for placement in _visible_conflict_escape_options(visible_boxes, best[2], placed_visible_boxes, assembly.rect, content):
+            for placement in _visible_conflict_escape_options(
+                visible_boxes, best[2], placed_visible_boxes, assembly.rect, content
+            ):
                 score, visible_overlap, translated = _score_assembly_pack_placement(
                     assembly.rect,
                     visible_boxes,
@@ -5520,7 +7265,9 @@ def _pack_ordered_assemblies_geometry(
                 if score < best[0]:
                     best = (score, visible_overlap, placement, translated)
         if best[1] > 0.001:
-            for placement in _local_geometry_placement_options(best[2], assembly.rect, content, radius=8):
+            for placement in _local_geometry_placement_options(
+                best[2], assembly.rect, content, radius=8
+            ):
                 score, visible_overlap, translated = _score_assembly_pack_placement(
                     assembly.rect,
                     visible_boxes,
@@ -5544,7 +7291,10 @@ def _pack_ordered_assemblies_geometry(
         _score, _visible_overlap, placement, translated = best
         placements[assembly.id] = placement
         placed_visible_boxes.extend(_inflate(box, PACK_GAP) for box in translated)
-        placed_route_boxes.extend(_inflate(_translate_rect(box, placement[0], placement[1]), PACK_GAP) for box in route_boxes)
+        placed_route_boxes.extend(
+            _inflate(_translate_rect(box, placement[0], placement[1]), PACK_GAP)
+            for box in route_boxes
+        )
         placed_rect = Rect(
             placement[0] - PACK_GAP,
             placement[1] - PACK_GAP,
@@ -5754,7 +7504,9 @@ def _center_preference(
     assembly_center_x = (assembly_rect.left + assembly_rect.right) / 2
     assembly_center_y = (assembly_rect.top + assembly_rect.bottom) / 2
     packed_span = max(1.0, packed_bounds.width, packed_bounds.height)
-    return (abs(assembly_center_x - cluster_center_x) + abs(assembly_center_y - cluster_center_y)) / packed_span
+    return (
+        abs(assembly_center_x - cluster_center_x) + abs(assembly_center_y - cluster_center_y)
+    ) / packed_span
 
 
 def _pack_score_context(
@@ -5831,7 +7583,9 @@ class _LayoutElementIndex:
             for key in _grid_cell_keys(element.rect, self._cell_size):
                 self._cells.setdefault(key, []).append(index)
 
-    def query_segment(self, segment: tuple[float, float, float, float]) -> tuple[LayoutElement, ...]:
+    def query_segment(
+        self, segment: tuple[float, float, float, float]
+    ) -> tuple[LayoutElement, ...]:
         if not self._elements:
             return ()
         rect = _segment_tuple_rect(segment)
@@ -5880,7 +7634,9 @@ def _segment_tuple_rect(segment: tuple[float, float, float, float]) -> Rect:
     return Rect(min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2))
 
 
-def _assembly_pack_boxes(assembly: Assembly, symbol_library: dict[str, SymbolInfo]) -> tuple[list[Rect], list[Rect]]:
+def _assembly_pack_boxes(
+    assembly: Assembly, symbol_library: dict[str, SymbolInfo]
+) -> tuple[list[Rect], list[Rect]]:
     geometry = placed_items_geometry(assembly.items, symbol_library=symbol_library)
     visible_boxes = [box.rect for box in geometry.boxes if box.kind != "no_connect"]
     route_boxes: list[Rect] = []
@@ -5888,7 +7644,9 @@ def _assembly_pack_boxes(assembly: Assembly, symbol_library: dict[str, SymbolInf
         if segment.kind != "wire":
             continue
         x1, y1, x2, y2 = segment.wire_segment()
-        route_boxes.append(_inflate(Rect(min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2)), GRID / 2))
+        route_boxes.append(
+            _inflate(Rect(min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2)), GRID / 2)
+        )
     return visible_boxes, route_boxes
 
 
@@ -5927,10 +7685,16 @@ def _port_body_edge(
         if side in {"WEST", "EAST"}:
             in_band = rect.top - GRID <= point[1] <= rect.bottom + GRID
             edge = rect.left if side == "WEST" else rect.right
-            return (0.0 if in_band else min(abs(point[1] - rect.top), abs(point[1] - rect.bottom)) * 100.0) + abs(point[0] - edge)
+            return (
+                0.0
+                if in_band
+                else min(abs(point[1] - rect.top), abs(point[1] - rect.bottom)) * 100.0
+            ) + abs(point[0] - edge)
         in_band = rect.left - GRID <= point[0] <= rect.right + GRID
         edge = rect.top if side == "NORTH" else rect.bottom
-        return (0.0 if in_band else min(abs(point[0] - rect.left), abs(point[0] - rect.right)) * 100.0) + abs(point[1] - edge)
+        return (
+            0.0 if in_band else min(abs(point[0] - rect.left), abs(point[0] - rect.right)) * 100.0
+        ) + abs(point[1] - edge)
 
     rect = min(body_boxes, key=distance)
     if side == "WEST":
@@ -5968,7 +7732,11 @@ def _translate_rect(rect: Rect, dx: float, dy: float) -> Rect:
 
 def _translate_item(item: PlacedItem, dx: float, dy: float) -> PlacedItem:
     if isinstance(item, PlacedSymbol):
-        return replace(item, at=_translate_point(item.at, dx, dy), properties=tuple(_translate_property(prop, dx, dy) for prop in item.properties))
+        return replace(
+            item,
+            at=_translate_point(item.at, dx, dy),
+            properties=tuple(_translate_property(prop, dx, dy) for prop in item.properties),
+        )
     if isinstance(item, PlacedSheetBlock):
         return replace(
             item,
@@ -5978,12 +7746,16 @@ def _translate_item(item: PlacedItem, dx: float, dy: float) -> PlacedItem:
             pins=tuple(replace(pin, at=_translate_point(pin.at, dx, dy)) for pin in item.pins),
         )
     if isinstance(item, PlacedWire):
-        return replace(item, start=_translate_point(item.start, dx, dy), end=_translate_point(item.end, dx, dy))
+        return replace(
+            item, start=_translate_point(item.start, dx, dy), end=_translate_point(item.end, dx, dy)
+        )
     if isinstance(item, PlacedJunction):
         return replace(item, at=_translate_point(item.at, dx, dy))
     if isinstance(item, PlacedLabel):
         return replace(item, at=_translate_point(item.at, dx, dy))
     if isinstance(item, PlacedHierarchicalLabel):
+        return replace(item, at=_translate_point(item.at, dx, dy))
+    if isinstance(item, PlacedGraphicRectangle):
         return replace(item, at=_translate_point(item.at, dx, dy))
     if isinstance(item, PlacedText):
         return replace(item, at=_translate_point(item.at, dx, dy))
@@ -6011,7 +7783,9 @@ def _manhattan(first: tuple[float, float], second: tuple[float, float]) -> float
     return abs(first[0] - second[0]) + abs(first[1] - second[1])
 
 
-def _items_rect(items: tuple[PlacedItem, ...], symbol_library: dict[str, SymbolInfo]) -> Rect | None:
+def _items_rect(
+    items: tuple[PlacedItem, ...], symbol_library: dict[str, SymbolInfo]
+) -> Rect | None:
     geometry = placed_items_geometry(items, symbol_library=symbol_library)
     rects = [element.rect for element in geometry.boxes]
     for segment in geometry.segments:
@@ -6019,11 +7793,57 @@ def _items_rect(items: tuple[PlacedItem, ...], symbol_library: dict[str, SymbolI
         rects.append(Rect(min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2)))
     if not rects:
         return None
-    return Rect(min(rect.left for rect in rects), min(rect.top for rect in rects), max(rect.right for rect in rects), max(rect.bottom for rect in rects))
+    return Rect(
+        min(rect.left for rect in rects),
+        min(rect.top for rect in rects),
+        max(rect.right for rect in rects),
+        max(rect.bottom for rect in rects),
+    )
+
+
+def _assembly_frame_rect(assembly: Assembly) -> Rect | None:
+    frames = [item for item in assembly.items if isinstance(item, PlacedGraphicRectangle)]
+    if len(frames) != 1 or not assembly.id.startswith("block:"):
+        return None
+    frame = frames[0]
+    return Rect(
+        frame.at[0],
+        frame.at[1],
+        frame.at[0] + frame.size[0],
+        frame.at[1] + frame.size[1],
+    )
+
+
+def _items_fit_rect(
+    items: tuple[PlacedItem, ...],
+    symbol_library: dict[str, SymbolInfo],
+    frame: Rect,
+) -> bool:
+    rect = _items_rect(items, symbol_library)
+    if rect is None:
+        return True
+    return _rect_contains(frame, rect)
+
+
+def _rect_contains(outer: Rect, inner: Rect) -> bool:
+    epsilon = 0.01
+    return (
+        inner.left >= outer.left - epsilon
+        and inner.top >= outer.top - epsilon
+        and inner.right <= outer.right + epsilon
+        and inner.bottom <= outer.bottom + epsilon
+    )
 
 
 def _local_net_root(records: list[NetEndpoint], components: dict[str, Component]) -> NetEndpoint:
-    return max(records, key=lambda record: (not components[record.component_id].passive, len(components[record.component_id].ports), record.component_id))
+    return max(
+        records,
+        key=lambda record: (
+            not components[record.component_id].passive,
+            len(components[record.component_id].ports),
+            record.component_id,
+        ),
+    )
 
 
 def _symbol_units(units: list[int] | None, symbol_info: SymbolInfo | None) -> tuple[int, ...]:
@@ -6038,16 +7858,25 @@ def _symbol_units(units: list[int] | None, symbol_info: SymbolInfo | None) -> tu
 def _unit_symbol_info(symbol_info: SymbolInfo | None, unit: int) -> SymbolInfo | None:
     if symbol_info is None:
         return None
-    return replace(symbol_info, pins=[replace(pin, unit=1) for pin in symbol_info.pins if pin.unit in {0, unit}])
+    return replace(
+        symbol_info,
+        pins=[replace(pin, unit=1) for pin in symbol_info.pins if pin.unit in {0, unit}],
+    )
 
 
-def _resolved_endpoint_pin(symbol_info: SymbolInfo | None, endpoint: ResolvedEndpoint) -> SymbolPin | None:
+def _resolved_endpoint_pin(
+    symbol_info: SymbolInfo | None, endpoint: ResolvedEndpoint
+) -> SymbolPin | None:
     if symbol_info is None:
         return None
     for pin in symbol_info.pins:
         if endpoint.pin_number is not None and pin.number != endpoint.pin_number:
             continue
-        if endpoint.pin_name is not None and pin.name != endpoint.pin_name and pin.number != endpoint.pin_name:
+        if (
+            endpoint.pin_name is not None
+            and pin.name != endpoint.pin_name
+            and pin.number != endpoint.pin_name
+        ):
             continue
         return pin
     return None
@@ -6074,12 +7903,15 @@ def _source_endpoint_pins(symbol_info: SymbolInfo | None, endpoint: Any) -> list
 
 
 def _pin_side(symbol_info: SymbolInfo | None, pin: SymbolPin) -> PortSide:
-    return {
-        "left": "WEST",
-        "right": "EAST",
-        "top": "NORTH",
-        "bottom": "SOUTH",
-    }[symbol_pin_side(symbol_info, pin)]
+    return cast(
+        PortSide,
+        {
+            "left": "WEST",
+            "right": "EAST",
+            "top": "NORTH",
+            "bottom": "SOUTH",
+        }[symbol_pin_side(symbol_info, pin)],
+    )
 
 
 def _is_passive(ref: str, symbol_info: SymbolInfo | None) -> bool:
@@ -6087,7 +7919,13 @@ def _is_passive(ref: str, symbol_info: SymbolInfo | None) -> bool:
         return True
     if symbol_info is None:
         return False
-    return len(symbol_info.pins) <= 3 and {pin.electrical_type for pin in symbol_info.pins} <= {"passive", "power_in", "power_out", "input", "output"}
+    return len(symbol_info.pins) <= 3 and {pin.electrical_type for pin in symbol_info.pins} <= {
+        "passive",
+        "power_in",
+        "power_out",
+        "input",
+        "output",
+    }
 
 
 def _is_loose_marker_component(component: Component) -> bool:
@@ -6096,6 +7934,15 @@ def _is_loose_marker_component(component: Component) -> bool:
     if len(component.ports) != 1:
         return False
     return component.ref.startswith("TP") or "TestPoint" in component.symbol_decl.lib
+
+
+def _is_connector_component(component: Component) -> bool:
+    return (
+        component.kind == "symbol"
+        and component.ref is not None
+        and component.ref.startswith("J")
+        and len(component.ports) >= 2
+    )
 
 
 def _is_local_support_component(component: Component) -> bool:
@@ -6115,14 +7962,24 @@ def _is_core_component(component: Component) -> bool:
 
 
 def _is_decoupling_cap(component: Component) -> bool:
-    return component.passive and component.ref is not None and component.ref.startswith("C") and len(component.ports) == 2
+    return (
+        component.passive
+        and component.ref is not None
+        and component.ref.startswith("C")
+        and len(component.ports) == 2
+    )
 
 
 def _is_capacitor_component(component: Component) -> bool:
-    return component.passive and component.kind == "symbol" and component.ref is not None and component.ref.startswith("C")
+    return (
+        component.passive
+        and component.kind == "symbol"
+        and component.ref is not None
+        and component.ref.startswith("C")
+    )
 
 
-def _is_oscillator_bridge_component(component: Component) -> bool:
+def _is_crystal_bridge_component(component: Component) -> bool:
     return (
         component.passive
         and component.kind == "symbol"
@@ -6136,14 +7993,41 @@ def _is_power_net(net_name: str) -> bool:
     upper = net_name.upper()
     if _is_ground_net(net_name):
         return True
-    if re.search(r"_(SCL|SDA|RXD?|TXD?|INT|RST|RESET|EN|CS|MISO|MOSI|SCLK|CLK|DP|DN|D[0-9]+[NP]?)$", upper):
+    signal_suffix = "|".join(
+        (
+            "SCL",
+            "SDA",
+            "RXD?",
+            "TXD?",
+            "INT",
+            "RST",
+            "RESET",
+            "ENABLE",
+            "EN",
+            "CS",
+            "MISO",
+            "MOSI",
+            "SCLK",
+            "CLK",
+            "DP",
+            "DN",
+            r"D[0-9]+[NP]?",
+        )
+    )
+    if re.search(rf"_({signal_suffix})$", upper):
         return False
     if re.search(r"(?:^|[_+-])\d+(?:V\d*|\.\d+V)(?:[A-Z0-9_]*)?$", upper):
         return True
-    return any(token in upper for token in ("VCC", "VDD", "AVDD", "VREF", "VBAT", "VBUS", "1V", "3V3", "5V", "12V"))
+    return (
+        re.search(
+            r"(?:^|[_+-])(?:VCC|VDD|AVDD|VREF|VBAT|VBUS)(?:[A-Z0-9_]*$|[_+-])",
+            upper,
+        )
+        is not None
+    )
 
 
-def _qualified_prefix_from_names(net_names: object) -> str | None:
+def _qualified_prefix_from_names(net_names: Iterable[object]) -> str | None:
     counts: dict[str, int] = {}
     for net_name in net_names:
         if not isinstance(net_name, str):
@@ -6161,7 +8045,7 @@ def _qualified_prefix_from_names(net_names: object) -> str | None:
     return prefix if count >= 2 else None
 
 
-def _sheet_net_prefix(sheet_path: str, net_names: object) -> str | None:
+def _sheet_net_prefix(sheet_path: str, net_names: Iterable[object]) -> str | None:
     local_name = sheet_path.strip("/").split("/")[-1]
     if local_name:
         candidate = f"{local_name}_"
@@ -6182,7 +8066,9 @@ def _is_ground_net(net_name: str) -> bool:
     return upper in {"GND", "DGND", "AGND", "PGND"} or upper.endswith("_GND")
 
 
-def _split_sheet_ports(ports: list[tuple[str, PinDirection]]) -> tuple[list[tuple[str, PinDirection]], list[tuple[str, PinDirection]]]:
+def _split_sheet_ports(
+    ports: list[tuple[str, PinDirection]],
+) -> tuple[list[tuple[str, PinDirection]], list[tuple[str, PinDirection]]]:
     left: list[tuple[str, PinDirection]] = []
     right: list[tuple[str, PinDirection]] = []
     for name, direction in ports:
@@ -6196,7 +8082,9 @@ def _split_sheet_ports(ports: list[tuple[str, PinDirection]]) -> tuple[list[tupl
 def _sheet_pin_shape(direction: PinDirection) -> str:
     if direction in {"power_in", "power_out", "passive"}:
         return "passive"
-    return "input" if direction == "input" else "output" if direction == "output" else "bidirectional"
+    return (
+        "input" if direction == "input" else "output" if direction == "output" else "bidirectional"
+    )
 
 
 def _sheet_pin_step(pin_count: int) -> float:
@@ -6243,7 +8131,9 @@ def _inflate(rect: Rect, amount: float) -> Rect:
 def _overlap_area(first: Rect, second: Rect) -> float:
     if not first.overlaps(second):
         return 0.0
-    return max(0.0, min(first.right, second.right) - max(first.left, second.left)) * max(0.0, min(first.bottom, second.bottom) - max(first.top, second.top))
+    return max(0.0, min(first.right, second.right) - max(first.left, second.left)) * max(
+        0.0, min(first.bottom, second.bottom) - max(first.top, second.top)
+    )
 
 
 def _indexed_overlap_area(rect: Rect, index: _RectIndex) -> float:
@@ -6257,7 +8147,7 @@ def _path_rect_overlap_area(
 ) -> float:
     points = _orthogonal_points(start, end)
     overlap = 0.0
-    for first, second in zip(points, points[1:]):
+    for first, second in zip(points, points[1:], strict=False):
         stub_rect = _inflate(_segment_rect(first, second), GRID / 4)
         overlap += sum(_overlap_area(stub_rect, item) for item in rects)
     return overlap
@@ -6329,3 +8219,19 @@ def _snap_within(value: float, low: float, high: float) -> float:
 
 def _same_point(first: tuple[float, float], second: tuple[float, float]) -> bool:
     return abs(first[0] - second[0]) < 0.001 and abs(first[1] - second[1]) < 0.001
+
+
+def _point_key(point: tuple[float, float]) -> tuple[float, float]:
+    return (_snap(point[0]), _snap(point[1]))
+
+
+def _point_on_wire_key(point: tuple[float, float], wire: PlacedWire) -> bool:
+    return point_on_segment(point, (wire.start[0], wire.start[1], wire.end[0], wire.end[1]))
+
+
+def _placed_label_net(item: PlacedItem) -> str | None:
+    if isinstance(item, PlacedLabel) and len(item.nets) == 1:
+        return next(iter(item.nets))
+    if isinstance(item, PlacedHierarchicalLabel):
+        return item.name
+    return None

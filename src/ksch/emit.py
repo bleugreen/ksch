@@ -6,15 +6,8 @@ from typing import Any
 from sexpdata import Symbol  # type: ignore[import-untyped]
 
 from ksch.kicad.sexpr import atom, dump_sexpr, load_sexpr_file
-from ksch.power_flags import (
-    POWER_DRIVER_LIB_ID,
-    POWER_FLAG_LIB_ID,
-    POWER_PORT_LIB_ID,
-    power_driver_symbol_definition,
-    power_flag_symbol_definition,
-    power_port_symbol_definition,
-)
 from ksch.placed import (
+    PlacedGraphicRectangle,
     PlacedHierarchicalLabel,
     PlacedItem,
     PlacedJunction,
@@ -29,6 +22,14 @@ from ksch.placed import (
     PlacedSymbolPin,
     PlacedText,
     PlacedWire,
+)
+from ksch.power_flags import (
+    POWER_DRIVER_LIB_ID,
+    POWER_FLAG_LIB_ID,
+    POWER_PORT_LIB_ID,
+    power_driver_symbol_definition,
+    power_flag_symbol_definition,
+    power_port_symbol_definition,
 )
 
 
@@ -89,8 +90,9 @@ def _write_library_table(
 
 
 def _project_uses_internal_power_symbols(project: PlacedProject) -> bool:
+    internal_power_lib_ids = {POWER_DRIVER_LIB_ID, POWER_FLAG_LIB_ID, POWER_PORT_LIB_ID}
     return any(
-        isinstance(item, PlacedSymbol) and item.lib_id in {POWER_DRIVER_LIB_ID, POWER_FLAG_LIB_ID, POWER_PORT_LIB_ID}
+        isinstance(item, PlacedSymbol) and item.lib_id in internal_power_lib_ids
         for sheet in project.sheets
         for item in sheet.items
     )
@@ -162,9 +164,18 @@ def _format_sexpr(value: Any, *, indent: int = 0) -> str:
 
 
 def _effects(*, justify: str = "left", hidden: bool = False) -> list[Any]:
+    return _text_effects(size=(1.27, 1.27), justify=justify, hidden=hidden)
+
+
+def _text_effects(
+    *,
+    size: tuple[float, float],
+    justify: str = "left",
+    hidden: bool = False,
+) -> list[Any]:
     expr: list[Any] = [
         _a("effects"),
-        [_a("font"), [_a("size"), 1.27, 1.27]],
+        [_a("font"), [_a("size"), size[0], size[1]]],
         [_a("justify"), _a(justify)],
     ]
     if hidden:
@@ -294,11 +305,12 @@ def _junction_expr(junction: PlacedJunction) -> list[Any]:
 
 
 def _label_expr(label: PlacedLabel) -> list[Any]:
+    effects = _text_effects(size=label.size, justify=label.justify, hidden=label.hidden)
     return [
         _a("label"),
         label.name,
         [_a("at"), label.at[0], label.at[1], label.rotation],
-        _effects(justify=label.justify, hidden=label.hidden),
+        effects,
         [_a("uuid"), label.uuid],
     ]
 
@@ -322,12 +334,27 @@ def _hierarchical_label_expr(label: PlacedHierarchicalLabel) -> list[Any]:
     ]
 
 
+def _graphic_rectangle_expr(rectangle: PlacedGraphicRectangle) -> list[Any]:
+    return [
+        _a("rectangle"),
+        [_a("start"), rectangle.at[0], rectangle.at[1]],
+        [_a("end"), rectangle.at[0] + rectangle.size[0], rectangle.at[1] + rectangle.size[1]],
+        [
+            _a("stroke"),
+            [_a("width"), rectangle.stroke_width],
+            [_a("type"), _a(rectangle.stroke_type)],
+        ],
+        [_a("fill"), [_a("type"), _a("none")]],
+        [_a("uuid"), rectangle.uuid],
+    ]
+
+
 def _text_expr(text: PlacedText) -> list[Any]:
     return [
         _a("text"),
         text.text,
         [_a("at"), text.at[0], text.at[1], text.rotation],
-        _effects(justify=text.justify),
+        _text_effects(size=text.size, justify=text.justify),
         [_a("uuid"), text.uuid],
     ]
 
@@ -347,6 +374,8 @@ def _item_expr(item: PlacedItem) -> list[Any]:
         return _no_connect_expr(item)
     if isinstance(item, PlacedHierarchicalLabel):
         return _hierarchical_label_expr(item)
+    if isinstance(item, PlacedGraphicRectangle):
+        return _graphic_rectangle_expr(item)
     if isinstance(item, PlacedText):
         return _text_expr(item)
     raise TypeError(f"unknown placed item: {item!r}")
@@ -383,7 +412,10 @@ def write_project(
     _write_project_file(project, output_dir)
     symbol_libraries = dict(symbol_libraries or {})
     if _project_uses_internal_power_symbols(project):
-        symbol_libraries["power"] = _write_internal_power_library(output_dir, symbol_libraries.get("power"))
+        symbol_libraries["power"] = _write_internal_power_library(
+            output_dir,
+            symbol_libraries.get("power"),
+        )
     _write_library_table(
         symbol_libraries,
         output_dir,

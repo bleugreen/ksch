@@ -1,20 +1,24 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, replace
-from typing import Iterable, Literal
+from typing import Literal
 
 from ksch.geometry import (
     PinPoint,
-    Rect as TupleRect,
     WireSegment,
     sexpr_point,
     symbol_body_rect,
     symbol_pin_coordinate,
 )
+from ksch.geometry import (
+    Rect as TupleRect,
+)
 from ksch.kicad.sexpr import atom
 from ksch.kicad.symbols import SymbolInfo, SymbolPin, symbol_info_from_definition
 from ksch.layout import GEOMETRY_EPSILON, Point, Rect, snap_grid
 from ksch.placed import (
+    PlacedGraphicRectangle,
     PlacedHierarchicalLabel,
     PlacedItem,
     PlacedJunction,
@@ -27,11 +31,14 @@ from ksch.placed import (
     PlacedText,
     PlacedWire,
 )
+from ksch.resolver import ResolvedProject
 from ksch.segment_geometry import point_on_segment, segment_intersects_rect, segments_touch
 
 SCHEMATIC_GRID = 2.54
 PIN_LABEL_STUB = 5.08
 FIELD_CLEARANCE = 5.08
+PIN_TEXT_CHAR_WIDTH = 1.27
+PIN_TEXT_HALF_HEIGHT = 1.0
 
 
 @dataclass(frozen=True)
@@ -203,9 +210,15 @@ def _allowed_element_overlap(first: LayoutElement, second: LayoutElement) -> boo
         or (second.kind.startswith("pin_") and first.kind == "symbol_body")
     ):
         return True
-    if first.owner == second.owner and first.kind.startswith("pin_") and second.kind.startswith("pin_"):
+    if (
+        first.owner == second.owner
+        and first.kind.startswith("pin_")
+        and second.kind.startswith("pin_")
+    ):
         return True
     kinds = {first.kind, second.kind}
+    if "graphic_frame" in kinds:
+        return True
     if "no_connect" in kinds and any(kind.startswith("pin_") for kind in kinds):
         return _terminal_sets_related(first.terminals, second.terminals)
     return kinds == {"no_connect", "symbol_body"}
@@ -222,6 +235,8 @@ def segment_blocked_by_element(segment: LayoutSegment, box: LayoutElement) -> bo
         return False
     if box.kind == "no_connect":
         return False
+    if box.kind == "graphic_frame":
+        return False
     if box.owner == segment.owner:
         return False
     if _segment_has_terminal_for_box(segment, box):
@@ -232,10 +247,7 @@ def segment_blocked_by_element(segment: LayoutSegment, box: LayoutElement) -> bo
 
 
 def _same_layout_point(first: Point, second: Point) -> bool:
-    return (
-        abs(first.x - second.x) < GEOMETRY_EPSILON
-        and abs(first.y - second.y) < GEOMETRY_EPSILON
-    )
+    return abs(first.x - second.x) < GEOMETRY_EPSILON and abs(first.y - second.y) < GEOMETRY_EPSILON
 
 
 def _segment_has_terminal_for_box(segment: LayoutSegment, box: LayoutElement) -> bool:
@@ -331,7 +343,9 @@ def symbol_property_points(
     ref: str,
     symbol_rotation: int = 0,
 ) -> _SymbolPropertyPoints:
-    rect = _symbol_body_box(symbol_info, symbol_x, symbol_y, margin=1.27, symbol_rotation=symbol_rotation)
+    rect = _symbol_body_box(
+        symbol_info, symbol_x, symbol_y, margin=1.27, symbol_rotation=symbol_rotation
+    )
     if _uses_side_properties(symbol_info, symbol_rotation=symbol_rotation):
         x = _snap_grid(rect.left - FIELD_CLEARANCE)
         center_y = (rect.top + rect.bottom) / 2
@@ -368,31 +382,53 @@ def compact_symbol_property_points(
     if len(pins) < 2 or len(pins) > 3:
         return None
 
-    body = _symbol_body_box(symbol_info, symbol_x, symbol_y, margin=0.64, symbol_rotation=symbol_rotation)
+    body = _symbol_body_box(
+        symbol_info, symbol_x, symbol_y, margin=0.64, symbol_rotation=symbol_rotation
+    )
     sides = {_pin_side(symbol_info, pin, symbol_rotation=symbol_rotation) for pin in pins}
     center_x = (body.left + body.right) / 2
     center_y = (body.top + body.bottom) / 2
 
     if ref.startswith(("Y", "X")):
         return _SymbolPropertyPoints(
-            reference=Point(_snap_grid(body.left - SCHEMATIC_GRID / 2), _snap_grid(center_y - SCHEMATIC_GRID / 2)),
-            value=Point(_snap_grid(body.left - SCHEMATIC_GRID / 2), _snap_grid(center_y + SCHEMATIC_GRID / 2)),
-            footprint=Point(_snap_grid(body.left - SCHEMATIC_GRID), _snap_grid(body.bottom + SCHEMATIC_GRID)),
+            reference=Point(
+                _snap_grid(body.left - SCHEMATIC_GRID / 2),
+                _snap_grid(center_y - SCHEMATIC_GRID / 2),
+            ),
+            value=Point(
+                _snap_grid(body.left - SCHEMATIC_GRID / 2),
+                _snap_grid(center_y + SCHEMATIC_GRID / 2),
+            ),
+            footprint=Point(
+                _snap_grid(body.left - SCHEMATIC_GRID), _snap_grid(body.bottom + SCHEMATIC_GRID)
+            ),
             justify="right",
         )
 
     if "left" in sides and "right" in sides and not ({"top", "bottom"} & sides):
         return _SymbolPropertyPoints(
-            reference=Point(_centered_right_anchor_x(ref, center_x), _snap_grid(body.top - 2 * SCHEMATIC_GRID)),
-            value=Point(_centered_right_anchor_x(value, center_x), _snap_grid(body.top - SCHEMATIC_GRID)),
-            footprint=Point(_snap_grid(body.left - SCHEMATIC_GRID), _snap_grid(body.bottom + SCHEMATIC_GRID)),
+            reference=Point(
+                _centered_right_anchor_x(ref, center_x), _snap_grid(body.top - 2 * SCHEMATIC_GRID)
+            ),
+            value=Point(
+                _centered_right_anchor_x(value, center_x), _snap_grid(body.top - SCHEMATIC_GRID)
+            ),
+            footprint=Point(
+                _snap_grid(body.left - SCHEMATIC_GRID), _snap_grid(body.bottom + SCHEMATIC_GRID)
+            ),
             justify="right",
         )
 
     return _SymbolPropertyPoints(
-        reference=Point(_snap_grid(body.left - SCHEMATIC_GRID / 2), _snap_grid(center_y - SCHEMATIC_GRID / 2)),
-        value=Point(_snap_grid(body.left - SCHEMATIC_GRID / 2), _snap_grid(center_y + SCHEMATIC_GRID / 2)),
-        footprint=Point(_snap_grid(body.left - SCHEMATIC_GRID), _snap_grid(body.bottom + SCHEMATIC_GRID)),
+        reference=Point(
+            _snap_grid(body.left - SCHEMATIC_GRID / 2), _snap_grid(center_y - SCHEMATIC_GRID / 2)
+        ),
+        value=Point(
+            _snap_grid(body.left - SCHEMATIC_GRID / 2), _snap_grid(center_y + SCHEMATIC_GRID / 2)
+        ),
+        footprint=Point(
+            _snap_grid(body.left - SCHEMATIC_GRID), _snap_grid(body.bottom + SCHEMATIC_GRID)
+        ),
         justify="right",
     )
 
@@ -417,7 +453,7 @@ def _uses_side_properties(
 
 
 def resolved_symbol_readability_rects(
-    project: object,
+    project: ResolvedProject,
     sheet_path: str,
     ref: str,
     unit: int,
@@ -459,7 +495,7 @@ def resolved_symbol_readability_rects(
 
 
 def resolved_symbol_readability_elements(
-    project: object,
+    project: ResolvedProject,
     sheet_path: str,
     ref: str,
     unit: int,
@@ -489,9 +525,7 @@ def resolved_symbol_readability_elements(
 
 def placed_sheet_geometry(sheet: PlacedSheet) -> SchematicGeometry:
     symbol_definitions = {
-        str(definition[1]): definition
-        for definition in sheet.lib_symbols
-        if len(definition) > 1
+        str(definition[1]): definition for definition in sheet.lib_symbols if len(definition) > 1
     }
     return placed_items_geometry(sheet.items, symbol_definitions=symbol_definitions)
 
@@ -620,20 +654,21 @@ def placed_items_geometry(
             )
         elif isinstance(item, PlacedLabel):
             anchor = Point(item.at[0], item.at[1])
-            boxes.append(
-                LayoutElement(
-                    id=item.uuid,
-                    owner=_owner_from_nets(item.nets, default_owner=item.uuid),
-                    kind="label",
-                    rect=text_rect(
-                        anchor,
-                        item.name,
-                        justify=item.justify,
-                        rotation=item.rotation,
-                    ),
-                    nets=item.nets,
+            if not item.hidden:
+                boxes.append(
+                    LayoutElement(
+                        id=item.uuid,
+                        owner=_owner_from_nets(item.nets, default_owner=item.uuid),
+                        kind="label",
+                        rect=text_rect(
+                            anchor,
+                            item.name,
+                            justify=item.justify,
+                            rotation=item.rotation,
+                        ),
+                        nets=item.nets,
+                    )
                 )
-            )
             segments.append(
                 _layout_segment(
                     id=f"{item.uuid}:anchor",
@@ -669,6 +704,23 @@ def placed_items_geometry(
                     nets=nets,
                 )
             )
+        elif isinstance(item, PlacedGraphicRectangle):
+            x, y = item.at
+            width, height = item.size
+            boxes.append(
+                LayoutElement(
+                    id=item.uuid,
+                    owner=item.uuid,
+                    kind="graphic_frame",
+                    rect=Rect(
+                        left=min(x, x + width),
+                        top=min(y, y + height),
+                        right=max(x, x + width),
+                        bottom=max(y, y + height),
+                    ),
+                    nets=frozenset(),
+                )
+            )
         elif isinstance(item, PlacedText):
             boxes.append(
                 LayoutElement(
@@ -680,6 +732,8 @@ def placed_items_geometry(
                         item.text,
                         justify=item.justify,
                         rotation=item.rotation,
+                        char_width=item.size[0],
+                        half_height=item.size[1],
                     ),
                     nets=frozenset(),
                 )
@@ -847,15 +901,9 @@ def _segment_contact_point(first: LayoutSegment, second: LayoutSegment) -> Point
         ):
             return candidate
 
-    if (
-        abs(first.start.x - first.end.x) < 0.001
-        and abs(second.start.y - second.end.y) < 0.001
-    ):
+    if abs(first.start.x - first.end.x) < 0.001 and abs(second.start.y - second.end.y) < 0.001:
         return Point(first.start.x, second.start.y)
-    if (
-        abs(first.start.y - first.end.y) < 0.001
-        and abs(second.start.x - second.end.x) < 0.001
-    ):
+    if abs(first.start.y - first.end.y) < 0.001 and abs(second.start.x - second.end.x) < 0.001:
         return Point(second.start.x, first.start.y)
 
     return first.start
@@ -920,8 +968,8 @@ def _symbol_pin_text_boxes(
                     pin.name,
                     justify=name_justify,
                     rotation=name_rotation,
-                    char_width=0.9,
-                    half_height=1.0,
+                    char_width=PIN_TEXT_CHAR_WIDTH,
+                    half_height=PIN_TEXT_HALF_HEIGHT,
                 ),
                 terminal,
             )
@@ -957,8 +1005,8 @@ def _centered_text_rect(
     text: str,
     *,
     rotation: int = 0,
-    char_width: float = 0.9,
-    half_height: float = 1.0,
+    char_width: float = PIN_TEXT_CHAR_WIDTH,
+    half_height: float = PIN_TEXT_HALF_HEIGHT,
 ) -> Rect:
     width = max(char_width, len(text) * char_width)
     if rotation % 180 != 0:
@@ -981,11 +1029,7 @@ def _unit_symbol_info(symbol_info: SymbolInfo | None, unit: int) -> SymbolInfo |
         return None
     return replace(
         symbol_info,
-        pins=[
-            replace(pin, unit=1)
-            for pin in symbol_info.pins
-            if pin.unit in {0, unit}
-        ],
+        pins=[replace(pin, unit=1) for pin in symbol_info.pins if pin.unit in {0, unit}],
     )
 
 
@@ -1102,7 +1146,9 @@ def _symbol_body_boxes(
 ) -> tuple[Rect, ...]:
     local_rects = _symbol_graphic_rects(symbol_info)
     if not local_rects:
-        return (_symbol_body_box(symbol_info, x, y, margin=margin, symbol_rotation=symbol_rotation),)
+        return (
+            _symbol_body_box(symbol_info, x, y, margin=margin, symbol_rotation=symbol_rotation),
+        )
     return tuple(
         _rotate_rect_around_symbol(
             Rect(
