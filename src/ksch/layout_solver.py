@@ -1279,7 +1279,7 @@ class _AssemblySolver:
 
     def _passive_owners(self) -> dict[str, str]:
         owners: dict[str, str] = {}
-        shared_rail_cap_ids = self._shared_rail_cap_ids()
+        shared_rail_cap_ids = self._shared_decoupling_row_ids()
         for component_id, component in self.components.items():
             if not _is_local_support_component(component):
                 continue
@@ -1477,7 +1477,7 @@ class _AssemblySolver:
         wire_requests: list[_WireRequest] = []
 
         oscillator_items, oscillator_placed, oscillator_connected, oscillator_component_ids = (
-            self._oscillator_modules(
+            self._crystal_load_caps_stanza_modules(
                 root_id,
                 owned_ids,
                 placed_root,
@@ -1535,7 +1535,7 @@ class _AssemblySolver:
             for side, lanes in side_lanes.items()
         }
         for side in ("WEST", "EAST", "NORTH", "SOUTH"):
-            bank = self._place_side_passive_bank(
+            bank = self._place_side_stanza_support_bank(
                 side,
                 side_lanes[side],
                 placed_components,
@@ -1615,7 +1615,7 @@ class _AssemblySolver:
         items.extend(net_items)
         occupied.extend(_wire_avoid_rects(net_items))
         cap_bank_items, cap_bank_connected, cap_bank_component_ids = (
-            self._root_rail_cap_bank_modules(
+            self._root_decoupling_row_modules(
                 root_id,
                 placed_root,
                 occupied,
@@ -1636,7 +1636,7 @@ class _AssemblySolver:
             )
         )
 
-    def _oscillator_modules(
+    def _crystal_load_caps_stanza_modules(
         self,
         root_id: str,
         owned_ids: list[str],
@@ -1649,7 +1649,7 @@ class _AssemblySolver:
         component_ids: set[str] = set()
         base_items = list(placed_root.items)
         owned_set = set(owned_ids)
-        for module in self._oscillator_module_candidates(root_id, owned_set, placed_root):
+        for module in self._crystal_load_caps_stanza_candidates(root_id, owned_set, placed_root):
             if module.bridge_id in component_ids or any(
                 cap.component_id in component_ids for cap in module.caps
             ):
@@ -1670,7 +1670,7 @@ class _AssemblySolver:
             occupied.extend(_wire_avoid_rects(module_items))
         return items, placed, connected, component_ids
 
-    def _oscillator_module_candidates(
+    def _crystal_load_caps_stanza_candidates(
         self,
         root_id: str,
         owned_ids: set[str],
@@ -1701,7 +1701,7 @@ class _AssemblySolver:
             caps: list[_OscillatorCap] = []
             used_caps: set[str] = set()
             for net_name, _root_record, _bridge_record in links:
-                cap = self._oscillator_cap_for_net(net_name, owned_ids - {bridge_id} - used_caps)
+                cap = self._crystal_load_cap_for_net(net_name, owned_ids - {bridge_id} - used_caps)
                 if cap is None:
                     break
                 caps.append(cap)
@@ -1738,7 +1738,7 @@ class _AssemblySolver:
             )
         return modules
 
-    def _oscillator_cap_for_net(
+    def _crystal_load_cap_for_net(
         self,
         net_name: str,
         candidate_ids: set[str],
@@ -3069,7 +3069,7 @@ class _AssemblySolver:
         placed = self._place_component(component, Point(at[0], at[1]), rotation, compact_value=True)
         return placed.rect
 
-    def _place_side_passive_bank(
+    def _place_side_stanza_support_bank(
         self,
         side: PortSide,
         lanes: list[tuple[str, NetEndpoint, NetEndpoint]],
@@ -3108,7 +3108,7 @@ class _AssemblySolver:
             for state in states:
                 state_items = [*existing_items, *state.items]
                 state_occupied = [*occupied, *state.occupied]
-                candidates = self._passive_bank_candidates(
+                candidates = self._side_stanza_support_candidates(
                     component,
                     placed_components[peer_record.component_id],
                     peer_record,
@@ -3140,7 +3140,7 @@ class _AssemblySolver:
             states = sorted(next_states, key=lambda state: state.score)[:beam_width]
         return min(states, key=lambda state: state.score)
 
-    def _passive_bank_candidates(
+    def _side_stanza_support_candidates(
         self,
         component: Component,
         peer: PlacedComponent,
@@ -3261,7 +3261,7 @@ class _AssemblySolver:
             )
         return candidates
 
-    def _shared_rail_cap_ids(self) -> set[str]:
+    def _shared_decoupling_row_ids(self) -> set[str]:
         groups: dict[tuple[str, str], list[str]] = {}
         for component_id in sorted(self.components):
             rail_cap = self._rail_cap_record(component_id)
@@ -3274,13 +3274,13 @@ class _AssemblySolver:
             component_id for group in groups.values() if len(group) >= 2 for component_id in group
         }
 
-    def _root_rail_cap_bank_modules(
+    def _root_decoupling_row_modules(
         self,
         root_id: str,
         placed_root: PlacedComponent,
         occupied: list[Rect],
     ) -> tuple[list[PlacedItem], set[str], set[str]]:
-        shared_cap_ids = self._shared_rail_cap_ids()
+        shared_cap_ids = self._shared_decoupling_row_ids()
         groups: dict[tuple[str, str], list[_RailCap]] = {}
         for component_id in sorted(shared_cap_ids):
             if self._direct_owner(component_id) != root_id:
@@ -3300,7 +3300,7 @@ class _AssemblySolver:
         ):
             if len(group) < 2:
                 continue
-            assembly = self._shared_rail_cap_bank_assembly(rail_name, ground_name, group)
+            assembly = self._shared_decoupling_row_assembly(rail_name, ground_name, group)
             dx, dy = self._root_cap_bank_placement(assembly, placed_root, occupied)
             translated_items = [_translate_item(item, dx, dy) for item in assembly.items]
             items.extend(translated_items)
@@ -3383,7 +3383,7 @@ class _AssemblySolver:
         assert best is not None
         return best[1]
 
-    def _shared_rail_cap_bank_assemblies(self, placed: set[str]) -> list[Assembly]:
+    def _shared_decoupling_row_assemblies(self, placed: set[str]) -> list[Assembly]:
         groups: dict[tuple[str, str], list[_RailCap]] = {}
         for component_id in sorted(self.components):
             if component_id in placed:
@@ -3400,7 +3400,7 @@ class _AssemblySolver:
         ):
             if len(group) < 2:
                 continue
-            assemblies.append(self._shared_rail_cap_bank_assembly(rail_name, ground_name, group))
+            assemblies.append(self._shared_decoupling_row_assembly(rail_name, ground_name, group))
         return assemblies
 
     def _rail_cap_record(self, component_id: str) -> _RailCap | None:
@@ -3423,7 +3423,7 @@ class _AssemblySolver:
             return None
         return _RailCap(component_id, rail_records[0], ground_records[0])
 
-    def _shared_rail_cap_bank_assembly(
+    def _shared_decoupling_row_assembly(
         self,
         rail_name: str,
         ground_name: str,
@@ -4659,21 +4659,21 @@ class _AssemblySolver:
             )
         )
 
-    def _loose_marker_bank_assemblies(self, placed_ids: set[str]) -> list[Assembly]:
+    def _loose_marker_stanza_assemblies(self, placed_ids: set[str]) -> list[Assembly]:
         groups: dict[str, list[str]] = {}
         for component_id, component in sorted(self.components.items()):
             if component_id in placed_ids or not _is_loose_marker_component(component):
                 continue
-            groups.setdefault(self._loose_marker_bank_key(component_id), []).append(component_id)
+            groups.setdefault(self._loose_marker_stanza_key(component_id), []).append(component_id)
         return [
-            self._loose_marker_bank_assembly(
+            self._loose_marker_stanza_assembly(
                 key, tuple(sorted(component_ids, key=self._loose_marker_sort_key))
             )
             for key, component_ids in sorted(groups.items())
             if len(component_ids) >= 2
         ]
 
-    def _loose_marker_bank_key(self, component_id: str) -> str:
+    def _loose_marker_stanza_key(self, component_id: str) -> str:
         text = self._loose_marker_sort_key(component_id)
         tokens = [token for token in re.split(r"[^A-Za-z0-9]+", text.upper()) if token]
         if not tokens:
@@ -4697,7 +4697,7 @@ class _AssemblySolver:
             return component.symbol_decl.value
         return component.ref or component_id
 
-    def _loose_marker_bank_assembly(
+    def _loose_marker_stanza_assembly(
         self, bank_key: str, component_ids: tuple[str, ...]
     ) -> Assembly:
         items: list[PlacedItem] = []
@@ -4736,14 +4736,15 @@ class _AssemblySolver:
             )
         )
 
-    def _standalone_symbol_bank_assemblies(self, placed_ids: set[str]) -> list[Assembly]:
+    def _standalone_symbol_stanza_assemblies(self, placed_ids: set[str]) -> list[Assembly]:
         groups: dict[tuple[str, str, str], list[str]] = {}
         for component_id, component in sorted(self.components.items()):
             if component_id in placed_ids or not self._is_standalone_symbol(component_id):
                 continue
-            groups.setdefault(self._standalone_symbol_bank_key(component), []).append(component_id)
+            key = self._standalone_symbol_stanza_key(component)
+            groups.setdefault(key, []).append(component_id)
         return [
-            self._standalone_symbol_bank_assembly(
+            self._standalone_symbol_stanza_assembly(
                 key, tuple(sorted(component_ids, key=_component_ref_sort_key))
             )
             for key, component_ids in sorted(groups.items())
@@ -4762,7 +4763,7 @@ class _AssemblySolver:
             for record in records
         )
 
-    def _standalone_symbol_bank_key(self, component: Component) -> tuple[str, str, str]:
+    def _standalone_symbol_stanza_key(self, component: Component) -> tuple[str, str, str]:
         assert component.symbol_decl is not None
         return (
             component.symbol_decl.lib,
@@ -4770,7 +4771,7 @@ class _AssemblySolver:
             component.symbol_decl.footprint or "",
         )
 
-    def _standalone_symbol_bank_assembly(
+    def _standalone_symbol_stanza_assembly(
         self,
         bank_key: tuple[str, str, str],
         component_ids: tuple[str, ...],
@@ -5020,7 +5021,9 @@ class _AssemblySolver:
     def _framed_row_tile_placements(
         self, assemblies: list[Assembly], content: Rect
     ) -> tuple[list[Assembly], dict[str, tuple[float, float]]]:
-        if not assemblies or not all(_assembly_frame_rect(assembly) is not None for assembly in assemblies):
+        if not assemblies:
+            return [], {}
+        if not all(_assembly_frame_rect(assembly) is not None for assembly in assemblies):
             return [], {}
         placements: dict[str, tuple[float, float]] = {}
         cursor_x = content.left
