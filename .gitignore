@@ -9,3 +9,4 @@ snapshots/
 .DS_Store
 package-lock.json
 examples/*/kicad/
+.cairn/assets/

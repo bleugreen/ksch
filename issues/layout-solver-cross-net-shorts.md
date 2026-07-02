@@ -43,6 +43,17 @@ electrically fine (it blocked the cm5 2-stage PoC bias-T on a false `AP63200_FB�
 contact). Recommend aligning the checker with KiCad semantics (merge only at junctions /
 shared pins), and/or downgrading non-merging coincidences to a warning.
 
+## Finding 4 — dangling hierarchical-label stub emitted on a fan-out net  (pre-existing)
+Discovered 2026-07-01 while adding ESD arrays to `cm5hudsp`. A clean full regen emits a **dangling
+`CM5_3V3_OUT` hierarchical label** at (118.11, 152.40) on `lvds_display` — ERC `label_dangling`,
+"Label not connected to anything". Net-mate score is 0 (connectivity is correct), so it is a
+redundant/orphaned label the placer dropped without routing a wire to it, not an electrical fault.
+Independent of the ESD parts (A/B regen with/without the 2 new touch symbols → identical). Occurs on
+a high-fan-out net (CM5_3V3_OUT has ~14 label instances on the sheet). Likely the same emit path that
+places net-label stubs (cf. Finding 1) failing to attach a wire on one instance when the tap count is
+high. Low severity (ERC-only), but it means a clean regen never reaches 0 ERC errors. Acceptance gate
+if fixed: full-project regen of cm5hudsp → no `label_dangling` on driven fan-out nets, net-mate still 0.
+
 ## Repro quickref
 - compile with a given solver: `PYTHONPATH=<src> <tool-python> -c "from pathlib import Path; from ksch.cli import _compile_project; _compile_project(Path('ksch/project.ksch.yaml'), Path('<out>'), [])"` (cwd = cm5 project)
 - score: `python3 netmate_score.py <out_dir>` → wrong-pin count + affected nets
