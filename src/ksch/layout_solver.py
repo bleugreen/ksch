@@ -218,14 +218,14 @@ class _LabelAnchorCandidate:
 
 
 @dataclass(frozen=True)
-class _RailCap:
+class _DecouplingCap:
     component_id: str
     rail_record: NetEndpoint
     ground_record: NetEndpoint
 
 
 @dataclass(frozen=True)
-class _OscillatorCap:
+class _CrystalLoadCap:
     component_id: str
     net_name: str
     signal_record: NetEndpoint
@@ -233,11 +233,11 @@ class _OscillatorCap:
 
 
 @dataclass(frozen=True)
-class _OscillatorModule:
+class _CrystalLoadCapsMatch:
     bridge_id: str
     side: PortSide
     links: tuple[tuple[str, NetEndpoint, NetEndpoint], ...]
-    caps: tuple[_OscillatorCap, ...]
+    caps: tuple[_CrystalLoadCap, ...]
     ground_records: tuple[NetEndpoint, ...]
 
 
@@ -1476,18 +1476,18 @@ class _AssemblySolver:
         connected_endpoints: set[str] = set()
         wire_requests: list[_WireRequest] = []
 
-        oscillator_items, oscillator_placed, oscillator_connected, oscillator_component_ids = (
-            self._crystal_load_caps_stanza_modules(
+        root_template_items, root_template_placed, root_template_connected, root_template_component_ids = (
+            self._root_stanza_template_items(
                 root_id,
                 owned_ids,
                 placed_root,
                 occupied,
             )
         )
-        items.extend(oscillator_items)
-        placed_components.update(oscillator_placed)
-        component_ids.update(oscillator_component_ids)
-        connected_endpoints.update(oscillator_connected)
+        items.extend(root_template_items)
+        placed_components.update(root_template_placed)
+        component_ids.update(root_template_component_ids)
+        connected_endpoints.update(root_template_connected)
         remaining_owned_ids = [
             component_id for component_id in owned_ids if component_id not in component_ids
         ]
@@ -1636,7 +1636,7 @@ class _AssemblySolver:
             )
         )
 
-    def _crystal_load_caps_stanza_modules(
+    def _root_stanza_template_items(
         self,
         root_id: str,
         owned_ids: list[str],
@@ -1649,12 +1649,12 @@ class _AssemblySolver:
         component_ids: set[str] = set()
         base_items = list(placed_root.items)
         owned_set = set(owned_ids)
-        for module in self._crystal_load_caps_stanza_candidates(root_id, owned_set, placed_root):
+        for module in self._crystal_load_caps_root_matches(root_id, owned_set, placed_root):
             if module.bridge_id in component_ids or any(
                 cap.component_id in component_ids for cap in module.caps
             ):
                 continue
-            built = self._place_oscillator_module(
+            built = self._crystal_load_caps_assembly_items(
                 module, placed_root, occupied, [*base_items, *items]
             )
             if built is None:
@@ -1670,16 +1670,16 @@ class _AssemblySolver:
             occupied.extend(_wire_avoid_rects(module_items))
         return items, placed, connected, component_ids
 
-    def _crystal_load_caps_stanza_candidates(
+    def _crystal_load_caps_root_matches(
         self,
         root_id: str,
         owned_ids: set[str],
         placed_root: PlacedComponent,
-    ) -> list[_OscillatorModule]:
-        modules: list[_OscillatorModule] = []
+    ) -> list[_CrystalLoadCapsMatch]:
+        modules: list[_CrystalLoadCapsMatch] = []
         for bridge_id in sorted(owned_ids):
             bridge = self.components[bridge_id]
-            if not _is_oscillator_bridge_component(bridge):
+            if not _is_crystal_bridge_component(bridge):
                 continue
             links: list[tuple[str, NetEndpoint, NetEndpoint]] = []
             for net_name, records in sorted(self.net_records.items()):
@@ -1698,7 +1698,7 @@ class _AssemblySolver:
             side = root_sides[0]
             if side not in {"WEST", "EAST"} or any(candidate != side for candidate in root_sides):
                 continue
-            caps: list[_OscillatorCap] = []
+            caps: list[_CrystalLoadCap] = []
             used_caps: set[str] = set()
             for net_name, _root_record, _bridge_record in links:
                 cap = self._crystal_load_cap_for_net(net_name, owned_ids - {bridge_id} - used_caps)
@@ -1718,7 +1718,7 @@ class _AssemblySolver:
             if len(ground_records) < len(caps):
                 continue
             modules.append(
-                _OscillatorModule(
+                _CrystalLoadCapsMatch(
                     bridge_id=bridge_id,
                     side=side,
                     links=tuple(
@@ -1742,7 +1742,7 @@ class _AssemblySolver:
         self,
         net_name: str,
         candidate_ids: set[str],
-    ) -> _OscillatorCap | None:
+    ) -> _CrystalLoadCap | None:
         for component_id in sorted(candidate_ids, key=_component_ref_sort_key):
             component = self.components[component_id]
             if not _is_capacitor_component(component) or len(component.ports) != 2:
@@ -1759,17 +1759,17 @@ class _AssemblySolver:
                 if record.component_id == component_id and _is_ground_net(record.net_name)
             ]
             if len(signal_records) == 1 and len(ground_records) == 1:
-                return _OscillatorCap(component_id, net_name, signal_records[0], ground_records[0])
+                return _CrystalLoadCap(component_id, net_name, signal_records[0], ground_records[0])
         return None
 
-    def _place_oscillator_module(
+    def _crystal_load_caps_assembly_items(
         self,
-        module: _OscillatorModule,
+        module: _CrystalLoadCapsMatch,
         placed_root: PlacedComponent,
         occupied: list[Rect],
         existing_items: list[PlacedItem],
     ) -> tuple[list[PlacedItem], dict[str, PlacedComponent], set[str], set[str]] | None:
-        placed_bridge = self._place_oscillator_bridge(module, placed_root, occupied)
+        placed_bridge = self._place_crystal_load_bridge(module, placed_root, occupied)
         if placed_bridge is None:
             return None
 
@@ -1836,7 +1836,7 @@ class _AssemblySolver:
                     bridge_point,
                     root_record.terminal,
                     bridge_record.terminal,
-                    f"oscillator:{module.bridge_id}:{net_name}:root-bridge",
+                    f"stanza:crystal_load_caps:{module.bridge_id}:{net_name}:root-bridge",
                     placed_root.port_sides[root_record.endpoint_key],
                     placed_bridge.port_sides[bridge_record.endpoint_key],
                 )
@@ -1848,7 +1848,7 @@ class _AssemblySolver:
                     cap_point,
                     bridge_record.terminal,
                     cap.signal_record.terminal,
-                    f"oscillator:{module.bridge_id}:{cap.component_id}:{net_name}:load-cap",
+                    f"stanza:crystal_load_caps:{module.bridge_id}:{cap.component_id}:{net_name}:load-cap",
                     placed_bridge.port_sides[bridge_record.endpoint_key],
                     placed[cap.component_id].port_sides[cap.signal_record.endpoint_key],
                 )
@@ -1894,7 +1894,7 @@ class _AssemblySolver:
             "GND",
             [(rail_left, ground_y), *rail_points, (rail_right, ground_y)],
             set(),
-            f"oscillator:{module.bridge_id}:gnd-rail",
+            f"stanza:crystal_load_caps:{module.bridge_id}:gnd-rail",
         )
         items.extend(rail_items)
         for cap, pin_point in cap_ground_pins:
@@ -1906,7 +1906,7 @@ class _AssemblySolver:
                     [pin_point, anchor],
                     cap.ground_record.terminal,
                     None,
-                    f"oscillator:{module.bridge_id}:{cap.component_id}:gnd-stub",
+                    f"stanza:crystal_load_caps:{module.bridge_id}:{cap.component_id}:gnd-stub",
                 )
             )
             connected.add(cap.ground_record.endpoint_key)
@@ -1921,7 +1921,7 @@ class _AssemblySolver:
                     anchor,
                     record.terminal,
                     None,
-                    f"oscillator:{module.bridge_id}:{record.endpoint_key}:gnd-stub",
+                    f"stanza:crystal_load_caps:{module.bridge_id}:{record.endpoint_key}:gnd-stub",
                     _route_avoid_elements([*existing_items, *items], self.project.symbol_library),
                     [*existing_items, *items],
                     start_side=side,
@@ -1937,7 +1937,7 @@ class _AssemblySolver:
                     [point, symbol_point],
                     record.terminal,
                     None,
-                    f"oscillator:{module.bridge_id}:{record.endpoint_key}:top-gnd-stub",
+                    f"stanza:crystal_load_caps:{module.bridge_id}:{record.endpoint_key}:top-gnd-stub",
                 )
             )
             value_at, justify = _power_port_value_position(gnd_text, symbol_point, "NORTH")
@@ -1945,7 +1945,7 @@ class _AssemblySolver:
                 power_port_symbol(
                     self.sheet_path,
                     "GND",
-                    f"oscillator:{module.bridge_id}:{record.endpoint_key}:top-gnd",
+                    f"stanza:crystal_load_caps:{module.bridge_id}:{record.endpoint_key}:top-gnd",
                     Point(symbol_point[0], symbol_point[1]),
                     Point(value_at[0], value_at[1]),
                     value=gnd_text,
@@ -1960,7 +1960,7 @@ class _AssemblySolver:
                     power_driver_symbol(
                         self.sheet_path,
                         "GND",
-                        f"oscillator:{module.bridge_id}:{record.endpoint_key}:top-gnd",
+                        f"stanza:crystal_load_caps:{module.bridge_id}:{record.endpoint_key}:top-gnd",
                         Point(symbol_point[0], symbol_point[1]),
                         project_name=self.project.name,
                         sheet_instance_path=sheet_instance_path(self.sheet_path),
@@ -1979,7 +1979,7 @@ class _AssemblySolver:
             power_port_symbol(
                 self.sheet_path,
                 "GND",
-                f"oscillator:{module.bridge_id}:gnd",
+                f"stanza:crystal_load_caps:{module.bridge_id}:gnd",
                 Point(gnd_anchor[0], gnd_anchor[1]),
                 Point(value_at[0], value_at[1]),
                 value=gnd_text,
@@ -1994,7 +1994,7 @@ class _AssemblySolver:
                 power_driver_symbol(
                     self.sheet_path,
                     "GND",
-                    f"oscillator:{module.bridge_id}:gnd",
+                    f"stanza:crystal_load_caps:{module.bridge_id}:gnd",
                     Point(gnd_anchor[0], gnd_anchor[1]),
                     project_name=self.project.name,
                     sheet_instance_path=sheet_instance_path(self.sheet_path),
@@ -2002,9 +2002,9 @@ class _AssemblySolver:
             )
         return items, placed, connected, component_ids
 
-    def _place_oscillator_bridge(
+    def _place_crystal_load_bridge(
         self,
-        module: _OscillatorModule,
+        module: _CrystalLoadCapsMatch,
         placed_root: PlacedComponent,
         occupied: list[Rect],
     ) -> PlacedComponent | None:
@@ -3281,7 +3281,7 @@ class _AssemblySolver:
         occupied: list[Rect],
     ) -> tuple[list[PlacedItem], set[str], set[str]]:
         shared_cap_ids = self._shared_decoupling_row_ids()
-        groups: dict[tuple[str, str], list[_RailCap]] = {}
+        groups: dict[tuple[str, str], list[_DecouplingCap]] = {}
         for component_id in sorted(shared_cap_ids):
             if self._direct_owner(component_id) != root_id:
                 continue
@@ -3384,7 +3384,7 @@ class _AssemblySolver:
         return best[1]
 
     def _shared_decoupling_row_assemblies(self, placed: set[str]) -> list[Assembly]:
-        groups: dict[tuple[str, str], list[_RailCap]] = {}
+        groups: dict[tuple[str, str], list[_DecouplingCap]] = {}
         for component_id in sorted(self.components):
             if component_id in placed:
                 continue
@@ -3403,7 +3403,7 @@ class _AssemblySolver:
             assemblies.append(self._shared_decoupling_row_assembly(rail_name, ground_name, group))
         return assemblies
 
-    def _rail_cap_record(self, component_id: str) -> _RailCap | None:
+    def _rail_cap_record(self, component_id: str) -> _DecouplingCap | None:
         component = self.components[component_id]
         if not _is_decoupling_cap(component):
             return None
@@ -3421,18 +3421,18 @@ class _AssemblySolver:
         ground_records = [record for record in records if _is_ground_net(record.net_name)]
         if len(rail_records) != 1 or len(ground_records) != 1:
             return None
-        return _RailCap(component_id, rail_records[0], ground_records[0])
+        return _DecouplingCap(component_id, rail_records[0], ground_records[0])
 
     def _shared_decoupling_row_assembly(
         self,
         rail_name: str,
         ground_name: str,
-        group: list[_RailCap],
+        group: list[_DecouplingCap],
     ) -> Assembly:
         items: list[PlacedItem] = []
         occupied: list[Rect] = []
         placed: dict[str, PlacedComponent] = {}
-        profiles: list[tuple[_RailCap, int, Rect]] = []
+        profiles: list[tuple[_DecouplingCap, int, Rect]] = []
         for rail_cap in group:
             component = self.components[rail_cap.component_id]
             rotation = _rotation_between_sides(
@@ -3442,8 +3442,8 @@ class _AssemblySolver:
             span = self._component_span_for_port(component, rail_cap.rail_record, rotation)
             profiles.append((rail_cap, rotation, span))
 
-        rows: list[list[tuple[_RailCap, int, Rect]]] = []
-        row: list[tuple[_RailCap, int, Rect]] = []
+        rows: list[list[tuple[_DecouplingCap, int, Rect]]] = []
+        row: list[tuple[_DecouplingCap, int, Rect]] = []
         row_width = 0.0
         for profile in profiles:
             span = profile[2]
@@ -3508,7 +3508,7 @@ class _AssemblySolver:
                 rail_name,
                 [(left, rail_y), *taps],
                 set(taps),
-                f"shared-cap-bank:{rail_name}:trunk:{rail_y}",
+                f"stanza:decoupling_row:{rail_name}:trunk:{rail_y}",
             )
             items.extend(wire_items)
             occupied.extend(_wire_avoid_rects(wire_items))
@@ -3518,7 +3518,7 @@ class _AssemblySolver:
                 ground_name,
                 [*taps, (right, ground_y)],
                 set(taps),
-                f"shared-cap-bank:{rail_name}:gnd:{ground_y}",
+                f"stanza:decoupling_row:{rail_name}:gnd:{ground_y}",
             )
             items.extend(wire_items)
             occupied.extend(_wire_avoid_rects(wire_items))
@@ -3533,7 +3533,7 @@ class _AssemblySolver:
                     (left, rail_y),
                     "WEST",
                     occupied,
-                    f"shared-cap-bank:{rail_name}:row:{index}",
+                    f"stanza:decoupling_row:{rail_name}:row:{index}",
                     axis_locked=True,
                     driven=self._claim_implicit_power_driver(rail_name),
                     existing_items=items,
@@ -3550,7 +3550,7 @@ class _AssemblySolver:
                     (right, ground_y),
                     "EAST",
                     occupied,
-                    f"shared-cap-bank:{rail_name}:gnd:row:{index}",
+                    f"stanza:decoupling_row:{rail_name}:gnd:row:{index}",
                     axis_locked=True,
                     driven=self._claim_implicit_power_driver(ground_name),
                     existing_items=items,
@@ -3558,7 +3558,7 @@ class _AssemblySolver:
                 )
             )
         rect = _items_rect(tuple(items), self.project.symbol_library) or Rect(0.0, 0.0, 0.0, 0.0)
-        assembly_id = f"shared-cap-bank:{rail_name}:{ground_name}"
+        assembly_id = f"stanza:decoupling_row:{rail_name}:{ground_name}"
         component_ids = frozenset(cap.component_id for cap in group)
         return _normalize_assembly(
             Assembly(
@@ -7590,7 +7590,7 @@ def _is_capacitor_component(component: Component) -> bool:
     )
 
 
-def _is_oscillator_bridge_component(component: Component) -> bool:
+def _is_crystal_bridge_component(component: Component) -> bool:
     return (
         component.passive
         and component.kind == "symbol"
