@@ -654,20 +654,21 @@ def placed_items_geometry(
             )
         elif isinstance(item, PlacedLabel):
             anchor = Point(item.at[0], item.at[1])
-            boxes.append(
-                LayoutElement(
-                    id=item.uuid,
-                    owner=_owner_from_nets(item.nets, default_owner=item.uuid),
-                    kind="label",
-                    rect=text_rect(
-                        anchor,
-                        item.name,
-                        justify=item.justify,
-                        rotation=item.rotation,
-                    ),
-                    nets=item.nets,
+            if not item.hidden:
+                boxes.append(
+                    LayoutElement(
+                        id=item.uuid,
+                        owner=_owner_from_nets(item.nets, default_owner=item.uuid),
+                        kind="label",
+                        rect=text_rect(
+                            anchor,
+                            item.name,
+                            justify=item.justify,
+                            rotation=item.rotation,
+                        ),
+                        nets=item.nets,
+                    )
                 )
-            )
             segments.append(
                 _layout_segment(
                     id=f"{item.uuid}:anchor",
