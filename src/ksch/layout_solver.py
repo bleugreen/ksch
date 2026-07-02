@@ -5462,7 +5462,7 @@ def _placed_symbol(
         compact_symbol_property_points(
             at.x, at.y, symbol_info, ref=ref, value=value, symbol_rotation=rotation
         )
-        if compact_value
+        if compact_value and not ref.startswith("Y")
         else None
     )
     if props is None:
