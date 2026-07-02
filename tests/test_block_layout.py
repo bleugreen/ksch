@@ -245,7 +245,10 @@ def test_all_pin_attached_labels_are_flush_to_pin_termini() -> None:
     pin_points_by_net = _symbol_pin_points_by_net(project, sheet)
 
     distances: dict[str, float] = {}
-    for label in (item for item in sheet.items if isinstance(item, PlacedLabel) and not item.hidden):
+    visible_labels = (
+        item for item in sheet.items if isinstance(item, PlacedLabel) and not item.hidden
+    )
+    for label in visible_labels:
         candidates = [
             point
             for net_name in label.nets
