@@ -2,8 +2,10 @@ from pathlib import Path
 
 from ksch.compiler import build_placed_project
 from ksch.expand import load_project_ir
+from ksch.geometry import symbol_pin_coordinate
 from ksch.kicad.symbols import index_symbol_library
 from ksch.layout import Rect
+from ksch.layout_solver import _rotated_point
 from ksch.placed import (
     PlacedGraphicRectangle,
     PlacedLabel,
@@ -215,3 +217,47 @@ def test_labels_anchor_to_wires_or_pins_without_a_floating_channel_gap() -> None
             abs(label.at[0] - point[0]) + abs(label.at[1] - point[1]) <= 2.54 + 0.01
             for point in wire_points
         ), label
+
+
+U1_FLUSH_FANOUT_NETS = {
+    "CAN_INT": "9",
+    "CAN_RXD": "8",
+    "CAN_SPI_MISO": "2",
+    "CAN_SPI_MOSI": "1",
+    "CAN_SPI_SCLK": "4",
+    "CAN_TXD": "7",
+}
+
+
+def test_u1_pin_fanout_labels_are_flush_to_pin_termini() -> None:
+    project, sheet = _can_controller_sheet()
+    u1 = next(
+        item for item in sheet.items if isinstance(item, PlacedSymbol) and item.reference == "U1"
+    )
+    info = project.symbol_library[u1.lib_id]
+    pin_points = {}
+    for pin in info.pins:
+        if pin.unit not in (0, u1.unit):
+            continue
+        local = symbol_pin_coordinate(0.0, 0.0, pin)
+        rotated = _rotated_point(local, u1.rotation)
+        pin_points[pin.number] = (u1.at[0] + rotated[0], u1.at[1] + rotated[1])
+
+    distances = {}
+    for net_name, pin_number in U1_FLUSH_FANOUT_NETS.items():
+        pin_point = pin_points[pin_number]
+        label = min(
+            (
+                item
+                for item in sheet.items
+                if isinstance(item, PlacedLabel) and item.name == net_name
+            ),
+            key=lambda item: abs(item.at[0] - pin_point[0]) + abs(item.at[1] - pin_point[1]),
+        )
+        distances[net_name] = abs(label.at[0] - pin_point[0]) + abs(
+            label.at[1] - pin_point[1]
+        )
+
+    assert distances
+    assert max(distances.values()) <= 2.54 + 0.01
+    assert distances["CAN_TXD"] == 2.54
