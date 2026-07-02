@@ -199,7 +199,7 @@ def test_declared_block_frames_tile_in_reading_order_rows() -> None:
 def test_can_controller_label_count_is_below_rebased_template_baseline() -> None:
     _project, sheet = _can_controller_sheet()
 
-    labels = [item for item in sheet.items if isinstance(item, PlacedLabel)]
+    labels = [item for item in sheet.items if isinstance(item, PlacedLabel) and not item.hidden]
 
     assert len(labels) == 28
 
@@ -245,7 +245,7 @@ def test_all_pin_attached_labels_are_flush_to_pin_termini() -> None:
     pin_points_by_net = _symbol_pin_points_by_net(project, sheet)
 
     distances: dict[str, float] = {}
-    for label in (item for item in sheet.items if isinstance(item, PlacedLabel)):
+    for label in (item for item in sheet.items if isinstance(item, PlacedLabel) and not item.hidden):
         candidates = [
             point
             for net_name in label.nets
@@ -280,7 +280,9 @@ def test_label_text_boxes_stay_inside_their_owning_block_frame() -> None:
         if isinstance(item, PlacedGraphicRectangle)
     ]
     geometry = placed_items_geometry(sheet.items, symbol_library=project.symbol_library)
-    label_by_uuid = {item.uuid: item for item in sheet.items if isinstance(item, PlacedLabel)}
+    label_by_uuid = {
+        item.uuid: item for item in sheet.items if isinstance(item, PlacedLabel) and not item.hidden
+    }
 
     for box in geometry.boxes:
         if box.kind != "label" or box.id not in label_by_uuid:
