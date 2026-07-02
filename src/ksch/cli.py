@@ -388,7 +388,6 @@ def layout_report_command(
         layout_errors: list[str] = []
         placed_project = build_placed_project(
             resolved,
-            strict_geometry=False,
             layout_errors=layout_errors,
         )
         write_placed_project(
