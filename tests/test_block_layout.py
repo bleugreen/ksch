@@ -6,6 +6,7 @@ from ksch.geometry import symbol_pin_coordinate
 from ksch.kicad.symbols import index_symbol_library
 from ksch.layout import Rect
 from ksch.layout_solver import _rotated_point
+from ksch.model.endpoint import EndpointKind
 from ksch.placed import (
     PlacedGraphicRectangle,
     PlacedLabel,
@@ -203,20 +204,61 @@ def test_can_controller_label_count_is_below_rebased_template_baseline() -> None
     assert len(labels) == 28
 
 
-def test_labels_anchor_to_wires_or_pins_without_a_floating_channel_gap() -> None:
-    _project, sheet = _can_controller_sheet()
-    wire_points = {
-        point
-        for item in sheet.items
-        if isinstance(item, PlacedWire)
-        for point in (item.start, item.end)
-    }
+def _symbol_pin_points_by_net(
+    project: ResolvedProject, sheet: PlacedSheet
+) -> dict[str, list[tuple[str, str, tuple[float, float]]]]:
+    symbols = {item.reference: item for item in sheet.items if isinstance(item, PlacedSymbol)}
+    points: dict[str, list[tuple[str, str, tuple[float, float]]]] = {}
+    for net_name, endpoints in project.sheets["/"].nets.items():
+        for endpoint in endpoints:
+            if endpoint.kind is not EndpointKind.SYMBOL_PIN or endpoint.ref is None:
+                continue
+            symbol = symbols.get(endpoint.ref)
+            if symbol is None or endpoint.pin_number is None:
+                continue
+            symbol_info = project.symbol_library[symbol.lib_id]
+            pin = next(
+                (
+                    candidate
+                    for candidate in symbol_info.pins
+                    if candidate.number == endpoint.pin_number
+                    and candidate.unit in {0, symbol.unit}
+                ),
+                None,
+            )
+            if pin is None:
+                continue
+            points.setdefault(net_name, []).append(
+                (
+                    endpoint.ref,
+                    endpoint.pin_number,
+                    symbol_pin_coordinate(
+                        symbol.at[0], symbol.at[1], pin, symbol_rotation=symbol.rotation
+                    ),
+                )
+            )
+    return points
 
+
+def test_all_pin_attached_labels_are_flush_to_pin_termini() -> None:
+    project, sheet = _can_controller_sheet()
+    pin_points_by_net = _symbol_pin_points_by_net(project, sheet)
+
+    distances: dict[str, float] = {}
     for label in (item for item in sheet.items if isinstance(item, PlacedLabel)):
-        assert any(
-            abs(label.at[0] - point[0]) + abs(label.at[1] - point[1]) <= 2.54 + 0.01
-            for point in wire_points
-        ), label
+        candidates = [
+            point
+            for net_name in label.nets
+            for _ref, _pin_number, point in pin_points_by_net.get(net_name, [])
+        ]
+        assert candidates, label
+        distance = min(
+            abs(label.at[0] - point[0]) + abs(label.at[1] - point[1]) for point in candidates
+        )
+        distances[label.uuid] = distance
+
+    assert distances
+    assert max(distances.values()) <= 2.54 + 0.01
 
 
 U1_FLUSH_FANOUT_NETS = {
@@ -227,6 +269,88 @@ U1_FLUSH_FANOUT_NETS = {
     "CAN_SPI_SCLK": "4",
     "CAN_TXD": "7",
 }
+
+
+def test_label_text_boxes_stay_inside_their_owning_block_frame() -> None:
+    project, sheet = _can_controller_sheet()
+    frames = [
+        _rect_for_frame(item)
+        for item in sheet.items
+        if isinstance(item, PlacedGraphicRectangle)
+    ]
+    geometry = placed_items_geometry(sheet.items, symbol_library=project.symbol_library)
+    label_by_uuid = {item.uuid: item for item in sheet.items if isinstance(item, PlacedLabel)}
+
+    for box in geometry.boxes:
+        if box.kind != "label" or box.id not in label_by_uuid:
+            continue
+        label = label_by_uuid[box.id]
+        containing_anchor_frames = [frame for frame in frames if _contains_point(frame, label.at)]
+        if not containing_anchor_frames:
+            continue
+        assert any(_contains(frame, box.rect) for frame in containing_anchor_frames), label
+
+
+def test_vehicle_connector_uses_one_flush_label_per_net_without_body_crossing_wires() -> None:
+    project, sheet = _can_controller_sheet()
+    j2 = next(
+        item for item in sheet.items if isinstance(item, PlacedSymbol) and item.reference == "J2"
+    )
+    pin_points_by_net = _symbol_pin_points_by_net(project, sheet)
+    j2_points_by_net = {
+        net_name: [point for ref, _pin_number, point in points if ref == "J2"]
+        for net_name, points in pin_points_by_net.items()
+    }
+    j2_nets = {net_name for net_name, points in j2_points_by_net.items() if points}
+    labels_by_net = {
+        net_name: [
+            label
+            for label in sheet.items
+            if isinstance(label, PlacedLabel)
+            and label.name == net_name
+            and any(
+                abs(label.at[0] - point[0]) + abs(label.at[1] - point[1]) <= 0.01
+                for point in points
+            )
+        ]
+        for net_name, points in j2_points_by_net.items()
+        if points
+    }
+
+    assert j2_nets == {
+        "CANH",
+        "CANL",
+        "GND",
+        "VBAT_12V_RAW",
+        "VEH_ACC_12V",
+        "VEH_ILLUM_12V",
+        "VEH_REV_12V",
+    }
+    assert all(len(labels) == 1 for labels in labels_by_net.values())
+
+    geometry = placed_items_geometry(sheet.items, symbol_library=project.symbol_library)
+    j2_body = next(
+        box.rect
+        for box in geometry.boxes
+        if box.owner == "J2" and box.kind == "symbol_body" and box.id.endswith(":body")
+    )
+    for segment in geometry.segments:
+        if segment.kind != "wire" or not segment.terminals:
+            continue
+        if not any(terminal.startswith("J2.") for terminal in segment.terminals):
+            continue
+        wire = segment.wire_segment()
+        wire_rect = Rect(
+            min(wire[0], wire[2]), min(wire[1], wire[3]), max(wire[0], wire[2]), max(wire[1], wire[3])
+        )
+        assert not wire_rect.overlaps(j2_body), segment
+
+    pin_name_boxes = [
+        box.rect for box in geometry.boxes if box.owner == "J2" and box.kind == "pin_name"
+    ]
+    for index, box in enumerate(pin_name_boxes):
+        for other in pin_name_boxes[index + 1 :]:
+            assert not box.overlaps(other)
 
 
 def test_u1_pin_fanout_labels_are_flush_to_pin_termini() -> None:

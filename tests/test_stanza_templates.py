@@ -68,3 +68,18 @@ def test_repeated_series_clamp_stanzas_are_translation_identical() -> None:
     signatures = [_relative_symbol_signature(group, symbols) for group in SENSE_GROUPS]
 
     assert signatures[0] == signatures[1] == signatures[2]
+
+
+def test_crystal_load_caps_template_matches_can_controller_oscillator() -> None:
+    _project, sheet = _can_controller_sheet()
+    labels = [item for item in sheet.items if isinstance(item, PlacedLabel)]
+    wires = [item for item in sheet.items if isinstance(item, PlacedWire)]
+    symbols = _symbols_by_ref(sheet.items)
+
+    assert {"Y1", "C1", "C2"}.issubset(symbols)
+    assert sum(label.name == "CAN_XTAL1" for label in labels) <= 1
+    assert sum(label.name == "CAN_XTAL2" for label in labels) <= 1
+    assert any("CAN_XTAL1" in wire.nets for wire in wires)
+    assert any("CAN_XTAL2" in wire.nets for wire in wires)
+    assert any("GND" in wire.nets for wire in wires)
+    assert symbols["C1"].at[0] < symbols["Y1"].at[0] < symbols["C2"].at[0]
