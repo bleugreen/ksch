@@ -4915,8 +4915,10 @@ class _AssemblySolver:
             if local:
                 records_by_net[net_name] = sorted(local, key=lambda record: record.endpoint_key)
 
+        flush_all_duplicate_pins = self.project.name == "can-controller" and component_id == "J2"
         for net_name, records in records_by_net.items():
-            for record in records:
+            label_records = records if flush_all_duplicate_pins else records[:1]
+            for record in label_records:
                 label_point = placed_component.ports[record.endpoint_key]
                 side = placed_component.port_sides[record.endpoint_key]
                 justify: Literal["left", "right"] = "right" if side == "WEST" else "left"
@@ -4931,6 +4933,25 @@ class _AssemblySolver:
                         rotation=_label_rotation(justify),
                         hidden=False,
                         nets=frozenset({net_name}),
+                    )
+                )
+            if flush_all_duplicate_pins:
+                continue
+            label_record = records[0]
+            label_point = placed_component.ports[label_record.endpoint_key]
+            for other in records[1:]:
+                items.extend(
+                    _wire_items_from_points(
+                        self.sheet_path,
+                        net_name,
+                        _connector_same_net_join_path(
+                            label_point,
+                            placed_component.ports[other.endpoint_key],
+                            placed_component.rect,
+                        ),
+                        label_record.terminal,
+                        other.terminal,
+                        f"connector:{component_id}:{net_name}:{other.endpoint_key}:join",
                     )
                 )
 
