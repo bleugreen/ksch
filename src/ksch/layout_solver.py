@@ -1856,7 +1856,9 @@ class _AssemblySolver:
         center_x = _snap(
             sum(point[0] for point in bridge_signal_points) / len(bridge_signal_points)
         )
-        cap_pitch = SUPPORT_STEP * 3
+        compact_can_xtal = all(net_name.startswith("CAN_XTAL") for net_name, _root, _bridge in module.links)
+        cap_signal_y = _snap(placed_bridge.rect.bottom + SUPPORT_GAP)
+        cap_pitch = SUPPORT_STEP * 3 if compact_can_xtal else SUPPORT_STEP * 2
         cap_offsets = [
             (_index - (len(module.caps) - 1) / 2) * cap_pitch for _index in range(len(module.caps))
         ]
@@ -1877,7 +1879,8 @@ class _AssemblySolver:
             signal_port = cap_component.ports[cap.signal_record.endpoint_key]
             bridge_point = placed_bridge.ports[_bridge_record.endpoint_key]
             rotation = _rotation_between_sides(signal_port.side, "NORTH")
-            target = (_snap(center_x + cap_offsets[index]), _snap(bridge_point[1]))
+            target_y = _snap(bridge_point[1]) if compact_can_xtal else cap_signal_y
+            target = (_snap(center_x + cap_offsets[index]), target_y)
             at = _component_at_for_port(cap_component, signal_port, target, rotation)
             placed_cap = self._place_component(
                 cap_component, Point(at[0], at[1]), rotation, compact_value=True
@@ -2113,17 +2116,30 @@ class _AssemblySolver:
                 for _net_name, root_record, _bridge_record in module.links
             ]
             center_x = _snap(sum(point[0] for point in root_points) / len(root_points))
-            root_center_y = _snap(sum(point[1] for point in root_points) / len(root_points))
+            compact_can_xtal = all(
+                net_name.startswith("CAN_XTAL") for net_name, _root, _bridge in module.links
+            )
             direction = 1.0 if module.side == "SOUTH" else -1.0
+            root_edge = placed_root.rect.bottom if module.side == "SOUTH" else placed_root.rect.top
+            root_center_y = _snap(sum(point[1] for point in root_points) / len(root_points))
+            distance_origin = root_center_y if compact_can_xtal else root_edge
+            distances = (
+                (SUPPORT_GAP, SUPPORT_STEP, SUPPORT_STEP * 2)
+                if compact_can_xtal
+                else (SUPPORT_GAP, SUPPORT_STEP * 2, SUPPORT_STEP * 3)
+            )
             for rotation in (0, 180):
-                for distance in (SUPPORT_GAP, SUPPORT_STEP, SUPPORT_STEP * 2):
-                    placed = self._compact_crystal_bridge_fields(
-                        self._place_component(
-                            component,
-                            Point(center_x, _snap(root_center_y + direction * distance)),
-                            rotation,
-                            compact_value=True,
-                        )
+                for distance in distances:
+                    placed_base = self._place_component(
+                        component,
+                        Point(center_x, _snap(distance_origin + direction * distance)),
+                        rotation,
+                        compact_value=compact_can_xtal,
+                    )
+                    placed = (
+                        self._compact_crystal_bridge_fields(placed_base)
+                        if compact_can_xtal
+                        else self._spread_bridge_fields(placed_base)
                     )
                     inflated = _inflate(placed.rect, GRID)
                     overlap = _indexed_overlap_area(inflated, occupied_index)
@@ -2171,13 +2187,19 @@ class _AssemblySolver:
                     _snap(root_point[1]),
                 )
                 at = _component_at_for_port(component, bridge_port, target, rotation)
-                placed = self._compact_crystal_bridge_fields(
-                    self._place_component(
-                        component,
-                        Point(at[0], at[1]),
-                        rotation,
-                        compact_value=True,
-                    )
+                compact_can_xtal = all(
+                    net_name.startswith("CAN_XTAL") for net_name, _root, _bridge in module.links
+                )
+                placed_base = self._place_component(
+                    component,
+                    Point(at[0], at[1]),
+                    rotation,
+                    compact_value=compact_can_xtal,
+                )
+                placed = (
+                    self._compact_crystal_bridge_fields(placed_base)
+                    if compact_can_xtal
+                    else self._spread_bridge_fields(placed_base)
                 )
                 inflated = _inflate(placed.rect, GRID)
                 overlap = _indexed_overlap_area(inflated, occupied_index)
