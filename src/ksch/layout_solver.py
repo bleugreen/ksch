@@ -177,6 +177,25 @@ class _RouteCandidate:
 
 
 @dataclass(frozen=True)
+class _SinglePullCandidate:
+    placed: PlacedComponent
+    wire_request: _WireRequest | None
+    occupied: tuple[Rect, ...]
+    score: float
+
+
+@dataclass(frozen=True)
+class _SinglePullState:
+    score: float
+    items: tuple[PlacedItem, ...]
+    occupied: tuple[Rect, ...]
+    placed: tuple[PlacedComponent, ...]
+    wire_requests: tuple[_WireRequest, ...]
+    connected: frozenset[str]
+    component_ids: frozenset[str]
+
+
+@dataclass(frozen=True)
 class _LabelRequest:
     net_name: str
     label_text: str
@@ -1519,6 +1538,26 @@ class _AssemblySolver:
             side: [lane for lane in lanes if lane[0] not in rail_component_ids]
             for side, lanes in side_lanes.items()
         }
+        (
+            single_pull_items,
+            single_pull_placed,
+            single_pull_connected,
+            single_pull_component_ids,
+        ) = self._root_stanza_template_items(
+            root_id,
+            remaining_owned_ids,
+            placed_root,
+            occupied,
+            template_ids=("single_pull",),
+            placed_ids=component_ids,
+            placed_components=placed_components,
+            side_lanes=side_lanes,
+            existing_items=items,
+        )
+        items.extend(single_pull_items)
+        placed_components.update(single_pull_placed)
+        component_ids.update(single_pull_component_ids)
+        connected_endpoints.update(single_pull_connected)
         progress = True
         while progress:
             progress = False
@@ -1618,6 +1657,9 @@ class _AssemblySolver:
         *,
         template_ids: tuple[str, ...] = ("crystal_load_caps", "decoupling_row"),
         placed_ids: set[str] | None = None,
+        placed_components: dict[str, PlacedComponent] | None = None,
+        side_lanes: dict[PortSide, list[tuple[str, NetEndpoint, NetEndpoint]]] | None = None,
+        existing_items: list[PlacedItem] | None = None,
     ) -> tuple[list[PlacedItem], dict[str, PlacedComponent], set[str], set[str]]:
         items: list[PlacedItem] = []
         placed: dict[str, PlacedComponent] = {}
@@ -1651,6 +1693,29 @@ class _AssemblySolver:
                     )
                 )
                 occupied.extend(_wire_avoid_rects(module_items))
+        if (
+            "single_pull" in template_ids
+            and placed_components is not None
+            and side_lanes is not None
+            and existing_items is not None
+        ):
+            for side in ("WEST", "EAST", "NORTH", "SOUTH"):
+                lanes = [lane for lane in side_lanes[side] if lane[0] not in already_placed]
+                state = self._single_pull_root_template(
+                    side,
+                    lanes,
+                    placed_components,
+                    occupied,
+                    existing_items,
+                )
+                items.extend(state.items)
+                occupied.extend(state.occupied)
+                connected.update(state.connected)
+                component_ids.update(state.component_ids)
+                for placed_component in state.placed:
+                    placed[placed_component.component.id] = placed_component
+                    placed_components[placed_component.component.id] = placed_component
+                existing_items.extend(state.items)
         if "decoupling_row" in template_ids:
             row_items, row_connected, row_component_ids = self._decoupling_row_root_items(
                 root_id,
@@ -3079,6 +3144,198 @@ class _AssemblySolver:
         at = _component_at_for_port(component, port, (0.0, 0.0), rotation)
         placed = self._place_component(component, Point(at[0], at[1]), rotation, compact_value=True)
         return placed.rect
+
+    def _single_pull_root_template(
+        self,
+        side: PortSide,
+        lanes: list[tuple[str, NetEndpoint, NetEndpoint]],
+        placed_components: dict[str, PlacedComponent],
+        occupied: list[Rect],
+        existing_items: list[PlacedItem],
+    ) -> _SinglePullState:
+        if not lanes:
+            return _SinglePullState(
+                0.0,
+                (),
+                (),
+                (),
+                (),
+                frozenset(),
+                frozenset(),
+            )
+
+        side_count = len(lanes)
+        states = [
+            _SinglePullState(
+                0.0,
+                (),
+                (),
+                (),
+                (),
+                frozenset(),
+                frozenset(),
+            )
+        ]
+        beam_width = 8
+        candidate_limit = 6
+        for component_id, peer_record, passive_record in lanes:
+            component = self.components[component_id]
+            next_states: list[_SinglePullState] = []
+            for state in states:
+                state_items = [*existing_items, *state.items]
+                state_occupied = [*occupied, *state.occupied]
+                candidates = self._single_pull_root_candidates(
+                    component,
+                    placed_components[peer_record.component_id],
+                    peer_record,
+                    passive_record,
+                    side,
+                    side_count,
+                    state_occupied,
+                    existing_items=state_items,
+                    prior_wire_requests=state.wire_requests,
+                    limit=candidate_limit,
+                )
+                for candidate in candidates:
+                    connected = set(state.connected)
+                    wire_requests = list(state.wire_requests)
+                    if candidate.wire_request is not None:
+                        wire_requests.append(candidate.wire_request)
+                        connected.update({peer_record.endpoint_key, passive_record.endpoint_key})
+                    next_states.append(
+                        _SinglePullState(
+                            state.score + candidate.score,
+                            (*state.items, *candidate.placed.items),
+                            (*state.occupied, *candidate.occupied),
+                            (*state.placed, candidate.placed),
+                            tuple(wire_requests),
+                            frozenset(connected),
+                            frozenset((*state.component_ids, component_id)),
+                        )
+                    )
+            states = sorted(next_states, key=lambda state: state.score)[:beam_width]
+        return min(states, key=lambda state: state.score)
+
+    def _single_pull_root_candidates(
+        self,
+        component: Component,
+        peer: PlacedComponent,
+        peer_record: NetEndpoint,
+        passive_record: NetEndpoint,
+        side: PortSide,
+        side_count: int,
+        occupied: list[Rect],
+        *,
+        existing_items: list[PlacedItem] | None = None,
+        prior_wire_requests: tuple[_WireRequest, ...] = (),
+        limit: int | None = None,
+    ) -> list[_SinglePullCandidate]:
+        placed_root = peer
+        peer_point = placed_root.ports[peer_record.endpoint_key]
+        passive_port = component.ports[passive_record.endpoint_key]
+        raw_candidates: list[tuple[float, tuple[float, float], int, _WireRequest | None]] = []
+        max_columns = 3 if side_count > 6 else 2
+        axis_limit = 4 if side_count <= 8 else 6
+        shunt_support = self._has_power_return(component.id, passive_record.endpoint_key)
+        existing_segments = _existing_wire_segments(existing_items or [])
+        occupied_index = _RectIndex(occupied)
+        rotation = _rotation_between_sides(passive_port.side, _opposite_side(side))
+        port_edge = _port_body_edge(
+            placed_root,
+            peer_record.endpoint_key,
+            side,
+            self.project.symbol_library,
+        )
+        for column in range(max_columns):
+            for axis_delta in _port_axis_offsets(limit=axis_limit):
+                if side == "WEST":
+                    target = (
+                        _snap(port_edge - SUPPORT_GAP - column * BANK_COLUMN_STEP),
+                        _snap(peer_point[1] + axis_delta),
+                    )
+                elif side == "EAST":
+                    target = (
+                        _snap(port_edge + SUPPORT_GAP + column * BANK_COLUMN_STEP),
+                        _snap(peer_point[1] + axis_delta),
+                    )
+                elif side == "NORTH":
+                    target = (
+                        _snap(peer_point[0] + axis_delta),
+                        _snap(port_edge - SUPPORT_GAP - column * BANK_COLUMN_STEP),
+                    )
+                else:
+                    target = (
+                        _snap(peer_point[0] + axis_delta),
+                        _snap(port_edge + SUPPORT_GAP + column * BANK_COLUMN_STEP),
+                    )
+                at = _component_at_for_port(component, passive_port, target, rotation)
+                placed = self._candidate_component_geometry(
+                    component, Point(at[0], at[1]), rotation, compact_value=True
+                )
+                inflated = _inflate(placed.rect, GRID)
+                overlap = _indexed_overlap_area(inflated, occupied_index)
+                passive_point = placed.ports[passive_record.endpoint_key]
+                distance = _manhattan(peer_point, passive_point)
+                route_score = 0.0
+                wire_request: _WireRequest | None = None
+                if (
+                    existing_items is not None
+                    and not _is_power_net(passive_record.net_name)
+                    and passive_record.net_name not in self.sheet.interface
+                    and _direct_support_wire_allowed(
+                        placed_root,
+                        placed,
+                        passive_record.net_name,
+                        peer_point,
+                        passive_point,
+                    )
+                ):
+                    wire_request = _WireRequest(
+                        passive_record.net_name,
+                        peer_point,
+                        passive_point,
+                        peer_record.terminal,
+                        passive_record.terminal,
+                        f"assembly:{peer.component.id}:{component.id}:{passive_record.net_name}",
+                        placed_root.port_sides[peer_record.endpoint_key],
+                        placed.port_sides[passive_record.endpoint_key],
+                    )
+                    route_score = _provisional_wire_score(
+                        prior_wire_requests,
+                        wire_request,
+                        existing_segments=tuple(existing_segments),
+                    )
+                column_score = (
+                    abs(column - 1) * 2_000.0
+                    if shunt_support and max_columns > 1
+                    else column * 2_000.0
+                )
+                score = (
+                    overlap * 100_000.0
+                    + route_score
+                    + abs(axis_delta) * 100.0
+                    + distance * 10.0
+                    + column_score
+                )
+                raw_candidates.append((score, at, rotation, wire_request))
+        candidates: list[_SinglePullCandidate] = []
+        for score, at, rotation, wire_request in sorted(
+            raw_candidates, key=lambda candidate: candidate[0]
+        )[:limit]:
+            placed = self._place_component(
+                component, Point(at[0], at[1]), rotation, compact_value=True
+            )
+            candidates.append(
+                _SinglePullCandidate(
+                    placed,
+                    wire_request,
+                    tuple(
+                        _occupied_rects(placed.items, self.project.symbol_library, margin=GRID / 2)
+                    ),
+                    score,
+                )
+            )
+        return candidates
 
     def _decoupling_row_component_ids(self) -> set[str]:
         groups: dict[tuple[str, str], list[str]] = {}
