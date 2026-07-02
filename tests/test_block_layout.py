@@ -307,6 +307,7 @@ def test_vehicle_connector_uses_one_flush_label_per_net_without_body_crossing_wi
             label
             for label in sheet.items
             if isinstance(label, PlacedLabel)
+            and not label.hidden
             and label.name == net_name
             and any(
                 abs(label.at[0] - point[0]) + abs(label.at[1] - point[1]) <= 0.01
