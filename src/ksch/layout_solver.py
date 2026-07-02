@@ -2980,12 +2980,17 @@ class _AssemblySolver:
                     )
                     inflated = _inflate(placed.rect, GRID)
                     overlap = _indexed_overlap_area(inflated, occupied_index)
+                    acceptable_support_sides = {_opposite_side(side)}
+                    if component.passive and len(links) == 2 and len(component.ports) == 2:
+                        acceptable_support_sides = (
+                            {"NORTH", "SOUTH"} if side in {"WEST", "EAST"} else {"WEST", "EAST"}
+                        )
                     side_mismatch = len(
                         [
                             None
                             for _net_name, _root_record, support_record in links
                             if placed.port_sides[support_record.endpoint_key]
-                            != _opposite_side(side)
+                            not in acceptable_support_sides
                         ]
                     )
                     link_distance = sum(
