@@ -145,3 +145,27 @@ def test_compiler_build_is_emit_always_not_validation_gated() -> None:
     assert "legalize_sheet_geometry(" not in compiler_source
     assert "return placed_project" in compiler_source
     assert "validate_placed_project(" not in Path("src/ksch/emit.py").read_text(encoding="utf-8")
+
+
+def test_bespoke_motif_method_names_are_subsumed_by_stanza_templates() -> None:
+    production_source = "\n".join(
+        path.read_text(encoding="utf-8") for path in Path("src/ksch").glob("*.py")
+    )
+
+    for forbidden in (
+        "def _oscillator_modules",
+        "def _oscillator_module_candidates",
+        "def _oscillator_cap_for_net",
+        "def _root_rail_cap_bank_modules",
+        "def _shared_rail_cap_bank_assemblies",
+        "def _shared_rail_cap_bank_assembly",
+        "def _place_side_passive_bank",
+        "def _passive_bank_candidates",
+        "def _loose_marker_bank_assemblies",
+        "def _loose_marker_bank_assembly",
+        "def _standalone_symbol_bank_assemblies",
+        "def _standalone_symbol_bank_assembly",
+    ):
+        assert forbidden not in production_source
+    assert "_stanza_template_assemblies" in production_source
+    assert "_series_clamp_assembly" in production_source

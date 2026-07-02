@@ -171,3 +171,47 @@ def test_undeclared_sheet_path_emits_no_block_frames_and_keeps_netlist_parity() 
     assert report["layout_errors"] == 0
     assert report["out_of_bounds"] == 0
     assert mates[("J1", "1")] == frozenset({("U1", "1"), ("C1", "1")})
+
+
+def test_declared_block_frames_tile_in_reading_order_rows() -> None:
+    _project, sheet = _can_controller_sheet()
+    frames = [
+        _rect_for_frame(item)
+        for item in sheet.items
+        if isinstance(item, PlacedGraphicRectangle)
+    ]
+
+    rows: dict[float, list[Rect]] = {}
+    for frame in frames:
+        rows.setdefault(round(frame.top, 2), []).append(frame)
+
+    assert len(rows) >= 2
+    assert any(len(row) >= 2 for row in rows.values())
+    assert max(frame.right for frame in frames) - min(frame.left for frame in frames) > 300.0
+    for row in rows.values():
+        ordered = sorted(row, key=lambda frame: frame.left)
+        assert ordered == row or len(row) == 1
+
+
+def test_can_controller_label_count_is_below_rebased_template_baseline() -> None:
+    _project, sheet = _can_controller_sheet()
+
+    labels = [item for item in sheet.items if isinstance(item, PlacedLabel)]
+
+    assert len(labels) == 28
+
+
+def test_labels_anchor_to_wires_or_pins_without_a_floating_channel_gap() -> None:
+    _project, sheet = _can_controller_sheet()
+    wire_points = {
+        point
+        for item in sheet.items
+        if isinstance(item, PlacedWire)
+        for point in (item.start, item.end)
+    }
+
+    for label in (item for item in sheet.items if isinstance(item, PlacedLabel)):
+        assert any(
+            abs(label.at[0] - point[0]) + abs(label.at[1] - point[1]) <= 2.54 + 0.01
+            for point in wire_points
+        ), label
