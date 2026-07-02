@@ -242,6 +242,23 @@ class _OscillatorModule:
 
 
 @dataclass(frozen=True)
+class _StanzaMatch:
+    template_id: str
+    component_ids: tuple[str, ...]
+    key: tuple[Any, ...]
+    input_record: NetEndpoint | None = None
+    node_records: tuple[NetEndpoint, ...] = ()
+    return_records: tuple[NetEndpoint, ...] = ()
+    branch_records: tuple[NetEndpoint, ...] = ()
+
+
+@dataclass(frozen=True)
+class _StanzaSolved:
+    assembly: Assembly
+    placed: dict[str, PlacedComponent]
+
+
+@dataclass(frozen=True)
 class _PackScoreContext:
     visible_index: _RectIndex
     route_index: _RectIndex
@@ -1333,13 +1350,7 @@ class _AssemblySolver:
             assembly = self._root_assembly(root_id, root_owned.get(root_id, []))
             assemblies.append(assembly)
             placed.update(assembly.component_ids)
-        for assembly in self._shared_rail_cap_bank_assemblies(placed):
-            assemblies.append(assembly)
-            placed.update(assembly.component_ids)
-        for assembly in self._loose_marker_bank_assemblies(placed):
-            assemblies.append(assembly)
-            placed.update(assembly.component_ids)
-        for assembly in self._standalone_symbol_bank_assemblies(placed):
+        for assembly in self._stanza_template_assemblies(placed):
             assemblies.append(assembly)
             placed.update(assembly.component_ids)
         for component_ids in self._unplaced_components(placed):
@@ -4223,6 +4234,344 @@ class _AssemblySolver:
                 record
             )
         return {key: group for key, group in groups.items() if len(group) >= 2}
+
+    def _stanza_template_assemblies(self, placed_ids: set[str]) -> list[Assembly]:
+        matches = self._stanza_template_matches(placed_ids)
+        groups: dict[tuple[Any, ...], list[_StanzaMatch]] = {}
+        for match in matches:
+            groups.setdefault(match.key, []).append(match)
+        assemblies: list[Assembly] = []
+        for key, group in sorted(groups.items(), key=lambda item: str(item[0])):
+            solved = [self._solve_stanza_template(match) for match in group]
+            if not solved:
+                continue
+            if len(solved) == 1:
+                assemblies.append(solved[0].assembly)
+                continue
+            pitch = _snap(
+                max(item.assembly.rect.width for item in solved) + SUPPORT_STEP * 2
+            )
+            stamped_items: list[PlacedItem] = []
+            stamped_ports: dict[str, tuple[float, float]] = {}
+            stamped_sides: dict[str, PortSide] = {}
+            stamped_ids: set[str] = set()
+            for index, item in enumerate(solved):
+                dx = _snap(index * pitch - item.assembly.rect.left)
+                dy = _snap(-item.assembly.rect.top)
+                stamped_items.extend(
+                    _translate_item(placed_item, dx, dy)
+                    for placed_item in item.assembly.items
+                )
+                stamped_ports.update(
+                    {
+                        key: _translate_point(point, dx, dy)
+                        for key, point in item.assembly.ports.items()
+                    }
+                )
+                stamped_sides.update(item.assembly.port_sides)
+                stamped_ids.update(item.assembly.component_ids)
+            rect = _items_rect(tuple(stamped_items), self.project.symbol_library) or Rect(
+                0.0, 0.0, 0.0, 0.0
+            )
+            assemblies.append(
+                _normalize_assembly(
+                    Assembly(
+                        f"stanza:{key}",
+                        tuple(stamped_items),
+                        rect,
+                        stamped_ports,
+                        stamped_sides,
+                        frozenset(stamped_ids),
+                    )
+                )
+            )
+        return assemblies
+
+    def _stanza_template_matches(self, placed_ids: set[str]) -> list[_StanzaMatch]:
+        available = {
+            component_id
+            for component_id, component in self.components.items()
+            if component_id not in placed_ids and _is_local_support_component(component)
+        }
+        matches: list[_StanzaMatch] = []
+        used: set[str] = set()
+        for node_net, records in sorted(self.net_records.items()):
+            if _is_ground_net(node_net) or _is_power_net(node_net):
+                continue
+            local = [record for record in records if record.component_id in available - used]
+            if len(local) < 3:
+                continue
+            match = self._series_clamp_match(node_net, local, available - used)
+            if match is None:
+                continue
+            matches.append(match)
+            used.update(match.component_ids)
+        return matches
+
+    def _series_clamp_match(
+        self,
+        node_net: str,
+        node_records: list[NetEndpoint],
+        available: set[str],
+    ) -> _StanzaMatch | None:
+        series: tuple[NetEndpoint, NetEndpoint] | None = None
+        branches: list[tuple[NetEndpoint, NetEndpoint]] = []
+        for node_record in node_records:
+            component = self.components[node_record.component_id]
+            records = [
+                record
+                for records in self.net_records.values()
+                for record in records
+                if record.component_id == node_record.component_id
+            ]
+            if len(records) != 2:
+                return None
+            other = next(
+                record
+                for record in records
+                if record.endpoint_key != node_record.endpoint_key
+            )
+            if other.component_id not in available:
+                return None
+            if _is_ground_net(other.net_name):
+                branches.append((node_record, other))
+            elif (
+                series is None
+                and component.symbol_decl is not None
+                and component.symbol_decl.lib.endswith(":R")
+            ):
+                series = (node_record, other)
+            else:
+                return None
+        if series is None or len(branches) < 2:
+            return None
+        component_ids = tuple(sorted({record.component_id for record in node_records}))
+        values = tuple(
+            sorted(
+                (
+                    component.symbol_decl.lib if component.symbol_decl else "",
+                    component.symbol_decl.value if component.symbol_decl else "",
+                    len(component.ports),
+                )
+                for component in (self.components[component_id] for component_id in component_ids)
+            )
+        )
+        branch_libs: list[str] = []
+        for node, _return in branches:
+            decl = self.components[node.component_id].symbol_decl
+            if decl is not None:
+                branch_libs.append(decl.lib)
+        role_signature = ("series_clamp", len(branches), tuple(sorted(branch_libs)))
+        return _StanzaMatch(
+            "series_clamp",
+            component_ids,
+            ("series_clamp", values, role_signature),
+            input_record=series[1],
+            node_records=tuple([series[0], *(node for node, _return in branches)]),
+            return_records=tuple(_return for _node, _return in branches),
+            branch_records=tuple(node for node, _return in branches),
+        )
+
+    def _solve_stanza_template(self, match: _StanzaMatch) -> _StanzaSolved:
+        if match.template_id == "series_clamp":
+            return self._series_clamp_assembly(match)
+        raise AssertionError(match.template_id)
+
+    def _series_clamp_assembly(self, match: _StanzaMatch) -> _StanzaSolved:
+        assert match.input_record is not None
+        node_records = {record.component_id: record for record in match.node_records}
+        series_id = match.input_record.component_id
+        node_y = 15.24
+        branch_y = 35.56
+        branch_step = 17.78
+        items: list[PlacedItem] = []
+        occupied: list[Rect] = []
+        placed: dict[str, PlacedComponent] = {}
+
+        series_component = self.components[series_id]
+        series_node_record = node_records[series_id]
+        series_port = series_component.ports[series_node_record.endpoint_key]
+        series_at = _component_at_for_port(series_component, series_port, (0.0, node_y), 270)
+        placed_series = self._place_component(
+            series_component,
+            Point(series_at[0], series_at[1]),
+            270,
+            compact_value=True,
+        )
+        placed[series_id] = placed_series
+        items.extend(placed_series.items)
+        occupied.extend(
+            _occupied_rects(placed_series.items, self.project.symbol_library, margin=GRID / 2)
+        )
+
+        def branch_sort_key(component_id: str) -> tuple[str, str]:
+            component = self.components[component_id]
+            decl = component.symbol_decl
+            return (decl.lib if decl is not None else "", component.ref or component_id)
+
+        branch_ids = sorted(
+            (component_id for component_id in match.component_ids if component_id != series_id),
+            key=branch_sort_key,
+        )
+        left = -branch_step * (len(branch_ids) - 1) / 2
+        for index, component_id in enumerate(branch_ids):
+            component = self.components[component_id]
+            node_record = node_records[component_id]
+            node_port = component.ports[node_record.endpoint_key]
+            x = _snap(left + index * branch_step)
+            rotation = _rotation_between_sides(node_port.side, "NORTH")
+            at = _component_at_for_port(component, node_port, (x, branch_y), rotation)
+            placed_component = self._place_component(
+                component,
+                Point(at[0], at[1]),
+                rotation,
+                compact_value=True,
+            )
+            placed[component_id] = placed_component
+            items.extend(placed_component.items)
+            occupied.extend(
+                _occupied_rects(
+                    placed_component.items, self.project.symbol_library, margin=GRID / 2
+                )
+            )
+
+        node_bus_y = node_y
+        branch_xs = [
+            placed[component_id].ports[node_records[component_id].endpoint_key][0]
+            for component_id in branch_ids
+        ]
+        node_taps = {(0.0, node_bus_y), *{(x, node_bus_y) for x in branch_xs}}
+        node_rail_points = sorted(node_taps, key=lambda point: point[0])
+        items.extend(
+            _rail_wire_items(
+                self.sheet_path,
+                match.node_records[0].net_name,
+                node_rail_points,
+                node_taps,
+                f"stanza:{':'.join(match.component_ids)}:node",
+            )
+        )
+        for component_id in branch_ids:
+            top = placed[component_id].ports[node_records[component_id].endpoint_key]
+            items.extend(
+                _wire_items_from_points(
+                    self.sheet_path,
+                    match.node_records[0].net_name,
+                    [top, (top[0], node_bus_y)],
+                    node_records[component_id].terminal,
+                    None,
+                    f"stanza:{component_id}:node-stub",
+                )
+            )
+        series_node = placed_series.ports[series_node_record.endpoint_key]
+        items.extend(
+            _wire_items_from_points(
+                self.sheet_path,
+                match.node_records[0].net_name,
+                [series_node, (0.0, node_bus_y)],
+                series_node_record.terminal,
+                None,
+                f"stanza:{series_id}:node-stub",
+            )
+        )
+        return_points = [
+            placed[record.component_id].ports[record.endpoint_key]
+            for record in match.return_records
+        ]
+        return_y = _snap(max(point[1] for point in return_points))
+        return_xs = [point[0] for point in return_points]
+        return_net = match.return_records[0].net_name
+        return_taps = {(x, return_y) for x in return_xs}
+        return_rail_points = sorted(return_taps, key=lambda point: point[0])
+        items.extend(
+            _rail_wire_items(
+                self.sheet_path,
+                return_net,
+                return_rail_points,
+                return_taps,
+                f"stanza:{':'.join(match.component_ids)}:return",
+            )
+        )
+        for record, point in zip(match.return_records, return_points, strict=True):
+            items.extend(
+                _wire_items_from_points(
+                    self.sheet_path,
+                    return_net,
+                    [point, (point[0], return_y)],
+                    record.terminal,
+                    None,
+                    f"stanza:{record.component_id}:return-stub",
+                )
+            )
+        input_point = placed_series.ports[match.input_record.endpoint_key]
+        input_label_point = (input_point[0], _snap(input_point[1] - LABEL_GAP))
+        items.extend(
+            _wire_items_from_points(
+                self.sheet_path,
+                match.input_record.net_name,
+                [input_point, input_label_point],
+                match.input_record.terminal,
+                None,
+                f"stanza:{series_id}:input-label-stub",
+            )
+        )
+        items.append(
+            PlacedLabel(
+                name=self._label_text(match.input_record.net_name, "local"),
+                at=input_label_point,
+                uuid=stable_uuid(f"{self.sheet_path}:stanza:{series_id}:{match.input_record.net_name}:label"),
+                justify="left",
+                nets=frozenset({match.input_record.net_name}),
+            )
+        )
+        sense_label_point = (_snap(max(branch_xs + [0.0]) + LABEL_GAP), node_bus_y)
+        items.extend(
+            _wire_items_from_points(
+                self.sheet_path,
+                match.node_records[0].net_name,
+                [(max(branch_xs + [0.0]), node_bus_y), sense_label_point],
+                None,
+                None,
+                f"stanza:{series_id}:sense-label-stub",
+            )
+        )
+        items.append(
+            PlacedLabel(
+                name=self._label_text(match.node_records[0].net_name, "local"),
+                at=sense_label_point,
+                uuid=stable_uuid(f"{self.sheet_path}:stanza:{series_id}:{match.node_records[0].net_name}:label"),
+                justify="left",
+                nets=frozenset({match.node_records[0].net_name}),
+            )
+        )
+        items.extend(
+            _power_port_items(
+                self.project,
+                self.sheet_path,
+                return_net,
+                self._label_text(return_net, "local"),
+                (min(return_xs), return_y),
+                "SOUTH",
+                occupied,
+                f"stanza:{series_id}:return",
+                axis_locked=True,
+                hard_occupied=occupied,
+                existing_items=items,
+                symbol_library=self.project.symbol_library,
+            )
+        )
+        rect = _items_rect(tuple(items), self.project.symbol_library) or Rect(0.0, 0.0, 0.0, 0.0)
+        assembly = _normalize_assembly(
+            Assembly(
+                f"stanza:series_clamp:{':'.join(match.component_ids)}",
+                tuple(items),
+                rect,
+                _ports_for(placed),
+                _port_sides_for(placed),
+                frozenset(match.component_ids),
+            )
+        )
+        return _StanzaSolved(assembly, placed)
 
     def _floating_assembly(self, component_ids: tuple[str, ...]) -> Assembly:
         items: list[PlacedItem] = []
