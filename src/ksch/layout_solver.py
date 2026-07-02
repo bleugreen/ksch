@@ -2032,8 +2032,10 @@ class _AssemblySolver:
                     _snap(root_point[1]),
                 )
                 at = _component_at_for_port(component, bridge_port, target, rotation)
-                placed = self._place_component(
-                    component, Point(at[0], at[1]), rotation, compact_value=False
+                placed = self._spread_bridge_fields(
+                    self._place_component(
+                        component, Point(at[0], at[1]), rotation, compact_value=False
+                    )
                 )
                 inflated = _inflate(placed.rect, GRID)
                 overlap = _indexed_overlap_area(inflated, occupied_index)
@@ -2052,6 +2054,22 @@ class _AssemblySolver:
                 if best is None or score < best[0]:
                     best = (score, placed)
         return best[1] if best is not None else None
+
+    def _spread_bridge_fields(self, placed: PlacedComponent) -> PlacedComponent:
+        if not placed.items or not isinstance(placed.items[0], PlacedSymbol):
+            return placed
+        symbol = placed.items[0]
+        properties: list[PlacedProperty] = []
+        for prop in symbol.properties:
+            if prop.name == "Reference":
+                properties.append(replace(prop, at=(prop.at[0], _snap(prop.at[1] - GRID * 2))))
+            elif prop.name == "Value":
+                properties.append(replace(prop, at=(prop.at[0], _snap(prop.at[1] + GRID * 2))))
+            else:
+                properties.append(prop)
+        items = (replace(symbol, properties=tuple(properties)), *placed.items[1:])
+        rect = _items_rect(items, self.project.symbol_library) or placed.rect
+        return replace(placed, items=items, rect=rect)
 
     def _place_indirect_support_component(
         self,
