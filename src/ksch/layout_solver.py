@@ -2059,20 +2059,19 @@ class _AssemblySolver:
                         nets=frozenset({net_name}),
                     )
                 )
-                if not net_name.startswith("CAN_XTAL"):
-                    items.append(
-                        PlacedLabel(
-                            name=net_name,
-                            at=junction_point,
-                            uuid=stable_uuid(
-                                f"{self.sheet_path}:stanza:crystal_load_caps:{module.bridge_id}:{net_name}:net-assertion"
-                            ),
-                            justify="left",
-                            hidden=True,
-                            nets=frozenset({net_name}),
-                            size=(1.27, 1.27),
-                        )
+                items.append(
+                    PlacedLabel(
+                        name=net_name,
+                        at=junction_point,
+                        uuid=stable_uuid(
+                            f"{self.sheet_path}:stanza:crystal_load_caps:{module.bridge_id}:{net_name}:net-assertion"
+                        ),
+                        justify="left",
+                        hidden=True,
+                        nets=frozenset({net_name}),
+                        size=(0.0, 0.0) if net_name.startswith("CAN_XTAL") else (1.27, 1.27),
                     )
+                )
 
         gnd_anchor = (rail_left, ground_y)
         value_at, justify = _power_port_value_position(gnd_text, gnd_anchor, "WEST")
