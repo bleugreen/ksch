@@ -1567,7 +1567,7 @@ class _AssemblySolver:
                 component,
                 Point(placed_root.rect.right + SUPPORT_STEP, placed_root.rect.top),
                 0,
-                compact_value=True,
+                compact_value=not _is_crystal_bridge_component(component),
             )
             placed_components[component_id] = placed
             component_ids.add(component_id)
