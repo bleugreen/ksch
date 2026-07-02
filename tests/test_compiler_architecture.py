@@ -169,3 +169,28 @@ def test_bespoke_motif_method_names_are_subsumed_by_stanza_templates() -> None:
         assert forbidden not in production_source
     assert "_stanza_template_assemblies" in production_source
     assert "_series_clamp_assembly" in production_source
+    assert "oscillator:" not in production_source
+    assert "shared-cap-bank" not in production_source
+
+
+def _function_source(source: str, name: str) -> str:
+    marker = f"    def {name}"
+    start = source.index(marker)
+    next_def = source.find("\n    def ", start + len(marker))
+    return source[start:] if next_def == -1 else source[start:next_def]
+
+
+def test_stanza_templates_are_the_live_grouped_motif_entrypoints() -> None:
+    source = Path("src/ksch/layout_solver.py").read_text(encoding="utf-8")
+    build_assemblies = _function_source(source, "_build_assemblies")
+    root_assembly = _function_source(source, "_root_assembly")
+    stanza_entry = _function_source(source, "_stanza_template_assemblies")
+    root_entry = _function_source(source, "_root_stanza_template_items")
+
+    assert "self._stanza_template_assemblies(placed)" in build_assemblies
+    assert "_decoupling_row_template_assemblies" in stanza_entry
+    assert "_loose_marker_template_assemblies" in stanza_entry
+    assert "_standalone_symbol_template_assemblies" in stanza_entry
+    assert "self._root_stanza_template_items(" in root_assembly
+    assert "_decoupling_row_root_items" not in root_assembly
+    assert "_decoupling_row_root_items" in root_entry
