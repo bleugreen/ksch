@@ -3786,6 +3786,8 @@ class _AssemblySolver:
                 root_point = placed[root_record.component_id].ports[root_record.endpoint_key]
                 local_support_net = self._local_support_net(local)
                 if local_support_net:
+                    if not unconnected:
+                        continue
                     connected_local = [
                         record for record in local if record.endpoint_key in connected_endpoints
                     ]
