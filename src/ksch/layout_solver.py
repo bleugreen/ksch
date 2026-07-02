@@ -1380,7 +1380,7 @@ class _AssemblySolver:
         for root_id, root in sorted(self.components.items()):
             if root.passive or root.kind == "power" or root_id in placed:
                 continue
-            if _is_connector_component(root):
+            if self._framed_block_scope and _is_connector_component(root):
                 assembly = self._connector_only_assembly(root_id)
             else:
                 assembly = self._root_assembly(root_id, root_owned.get(root_id, []))
@@ -4753,7 +4753,11 @@ class _AssemblySolver:
         return _StanzaSolved(assembly, placed)
 
     def _floating_assembly(self, component_ids: tuple[str, ...]) -> Assembly:
-        if len(component_ids) == 1 and _is_connector_component(self.components[component_ids[0]]):
+        if (
+            self._framed_block_scope
+            and len(component_ids) == 1
+            and _is_connector_component(self.components[component_ids[0]])
+        ):
             return self._connector_only_assembly(component_ids[0])
         items: list[PlacedItem] = []
         occupied: list[Rect] = []
