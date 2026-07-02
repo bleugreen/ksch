@@ -1856,7 +1856,9 @@ class _AssemblySolver:
         center_x = _snap(
             sum(point[0] for point in bridge_signal_points) / len(bridge_signal_points)
         )
-        compact_can_xtal = all(net_name.startswith("CAN_XTAL") for net_name, _root, _bridge in module.links)
+        compact_can_xtal = all(
+            net_name.startswith("CAN_XTAL") for net_name, _root, _bridge in module.links
+        )
         cap_signal_y = _snap(placed_bridge.rect.bottom + SUPPORT_GAP)
         cap_pitch = SUPPORT_STEP * 3 if compact_can_xtal else SUPPORT_STEP * 2
         cap_offsets = [
