@@ -90,7 +90,6 @@ class PlacedLabel:
     hidden: bool = False
     nets: frozenset[str] = frozenset()
     size: PlacedPoint = (1.27, 1.27)
-    export_hidden: bool | None = None
 
 
 @dataclass(frozen=True)

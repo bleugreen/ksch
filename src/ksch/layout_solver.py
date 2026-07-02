@@ -2070,7 +2070,6 @@ class _AssemblySolver:
                         hidden=True,
                         nets=frozenset({net_name}),
                         size=(0.01, 0.01) if net_name.startswith("CAN_XTAL") else (1.27, 1.27),
-                        export_hidden=False if net_name.startswith("CAN_XTAL") else None,
                     )
                 )
 
