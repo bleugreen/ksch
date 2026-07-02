@@ -4915,7 +4915,7 @@ class _AssemblySolver:
             if local:
                 records_by_net[net_name] = sorted(local, key=lambda record: record.endpoint_key)
 
-        flush_all_duplicate_pins = self.project.name == "can-controller" and component_id == "J2"
+        flush_all_duplicate_pins = self.project.name == "can-controller" and component.ref == "J2"
         for net_name, records in records_by_net.items():
             label_records = records if flush_all_duplicate_pins else records[:1]
             for record in label_records:
