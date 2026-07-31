@@ -61,6 +61,27 @@ pin. That is how cross-boundary connectivity becomes labels-only with no new cod
 
 ## Gotchas
 
+- **Diagnose repeated labels as placement first.** `_assembly_net_items` owns the
+  wire-versus-label decision. It emits direct local wires only for an in-scope,
+  non-power net with at least two local endpoints whose pins remain within
+  `DIRECT_LOCAL_WIRE_LIMIT`; otherwise it labels each endpoint. In particular,
+  `_floating_assembly` can spread an anchorless passive group beyond that limit.
+  Fix the assembly placement before adding a separate label phase.
+
+- **Root-local labels have a scoped-layout exception.** `_label_items()` normally
+  anchors root-sheet local labels directly at pins, bypassing candidate search. That
+  shortcut is appropriate for whole-root layout, but framed block solves must pass
+  `route_root_local=True`; otherwise labels can overlap symbol bodies and pin text.
+  Candidate scoring strongly prioritizes clearing overlaps over distance, so labels
+  moving away from pins under clutter is expected and should be addressed by
+  placement or keepout geometry rather than post-packing repair.
+
+- **Keep framed-block visual behavior scoped.** Stanza layout, connector-only label
+  assemblies, junctions, and hidden connectivity assertions introduced for declared
+  blocks must remain gated by `_framed_block_scope` unless netlist parity has been
+  established for undeclared and imported sheets too. Applying those behaviors
+  globally has changed CM5 connectivity in the past.
+
 - **Label-text caches are memoized on `net_records`.** `_local_label_texts()` and
   `_project_label_text_counts()` in `layout_solver.py` depend on `self.net_records`
   and are memoized. If you restrict `net_records` per scope, prime these caches from
@@ -84,9 +105,44 @@ pin. That is how cross-boundary connectivity becomes labels-only with no new cod
   otherwise a branch can look redundant while it is the only connectivity assertion for
   a symbol pin (the can-controller `VEH_REV_12V` regression).
 
+- **Hidden labels assert connectivity, not visible geometry.** A hidden `PlacedLabel`
+  may provide the zero-length anchor segment needed for KiCad netlist parity, but
+  `placed_items_geometry` must omit its text box so invisible text cannot create
+  visible-overlap findings.
+
+## Architecture guards
+
+`tests/test_compiler_architecture.py` protects the single geometry pipeline:
+`compiler.py` serializes solver state and must not reconstruct labels or iterate
+resolved nets; labels, stubs, wires, and power symbols remain Assembly-owned geometry
+created before packing. Grouped motif recognition must flow through
+`_stanza_template_assemblies` and `_root_stanza_template_items`. When changing these
+checks, assert the live mechanism and call graph. A forbidden-name absence check alone
+can be defeated by renaming the same bespoke path and does not prove subsumption. See
+`issues/layout-engine-failed-experiment-postmortem.md` before changing this boundary.
+
+## Electrical verification
+
+Treat name-independent netlist parity as the electrical ground truth. KiCad ERC does
+not flag two intended nets that silently merge, while `ksch verify` compares each
+pin's net-mate set against the resolved schema. KiCad connectivity is coordinate
+based: coincident endpoints from different nets can silently short, and a pin touching
+the middle of a wire is not connected unless the segment is split or a junction is
+present. Layout-report counts are quality witnesses, not electrical proof.
+
+A smoke test in `tests/test_importer.py` reads the live checkout at
+`/Users/mitch/projects/cm5-hudsp`; changes outside this repository can therefore alter
+its result. Reproduce failures from external projects as committed fixtures before
+attributing them to a repository change. The short CM5 fixture is
+`tests/fixtures/cm5_gmsl2_u8_short/project.ksch.yaml`; its local `CM5HUDSP` and `CM5IO`
+symbol libraries must both be supplied when compiling it directly.
+
 ## Verify artifacts
 
 When adding artifacts to `ksch verify`, keep them outside the generated output tree
 passed to `compare_dirs`. A temporary export such as `generated.net` written inside
 the generated tree is reported by the drift check as a missing generated file in the
 configured output directory.
+
+`ksch gen` takes its destination from `ksch.toml`; it has no `--output` option. Run it
+from the project directory or pass `--config <project-directory-or-ksch.toml>`.
